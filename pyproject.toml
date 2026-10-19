@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "damlforge-fuzz"
+version = "0.1.0"
+description = "A fuzzer for the DamlForge compiler, forge"
+readme = "README.md"
+requires-python = ">=3.11"
+# forge (DamlForge) is deliberately not listed. The PyPI project named "forge" is an
+# unrelated Django tool, so pip would install the wrong package. Install DamlForge
+# first, as README.md shows.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+damlforge-fuzz = "damlforge_fuzz.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# A warning that escapes compile_and_sort fails a test, and the seeds must still
+# sort OK under this filter.
+filterwarnings = ["error"]

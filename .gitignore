@@ -1,0 +1,11 @@
+.venv/
+reports/
+build/
+*.dar
+.daml/
+# `forge dar` writes the generated Daml next to the seeds.
+contracts/**/*.daml
+contracts/**/*.map.json
+__pycache__/
+*.egg-info/
+.pytest_cache/
