@@ -1,50 +1,57 @@
 # damlforge-fuzz
 
-damlforge-fuzz is a fuzzer for the DamlForge compiler, `forge`, which compiles `.vy` files to Daml.
-The fuzzer takes a few seed contracts, makes small random edits to them, runs `forge` on each edited copy, and reports crashes.
+A mutation fuzzer for `forge`, the DamlForge compiler that compiles `.vy` contracts to Daml.
 
-**Status.** This is unit 6. The `damlforge-fuzz check` command compiles `.vy` files and sorts each result. The `damlforge-fuzz run` command makes random edits to the seeds, counts the results, and writes a report of the crashes, with a shrunk copy of each crashing input. The `damlforge-fuzz shrink` command shrinks one crashing file. With `--damlc`, `run` and `check` also build the Daml that forge writes with `damlc` and report the Daml that `damlc` rejects.
+damlforge-fuzz takes a few seed contracts and makes small random edits to them.
+It compiles each edited copy with `forge`, groups the crashes, shrinks each crashing input to a few lines, and writes a report.
+With `--damlc`, it also builds the Daml that `forge` writes, and reports the Daml that the Daml compiler rejects.
 
-For a step-by-step guide with real command output, open [`docs/guide.html`](docs/guide.html) in a browser.
-The plan for units 2 to 6 is in [`docs/plan.html`](docs/plan.html).
-[`docs/progress.md`](docs/progress.md) records where the work stands and what comes next.
+## Contents
 
-## Layout
+- [Features](#features)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Usage](#usage)
+- [Reports](#reports)
+- [Change rules](#change-rules)
+- [Seeds](#seeds)
+- [Development](#development)
 
-```
-damlforge-fuzz/
-├── README.md
-├── .gitignore
-├── pyproject.toml
-├── src/damlforge_fuzz/     the Python package and the damlforge-fuzz command
-├── tests/                  pytest tests
-└── contracts/              one folder per seed, each its own Daml project
-    ├── asset_proposal/
-    │   ├── asset_proposal.vy
-    │   └── daml.yaml       Daml SDK 3.5.2, package damlforge-fuzz-asset-proposal
-    ├── ballot/
-    ├── escrow/
-    └── iou/
-```
+## Features
 
-Every seed folder has one `.vy` file and a `daml.yaml` with `source: .`.
-Separate projects let the fuzzer run on the seeds you choose.
+- **Repeatable runs.** One random seed fixes every copy and its changes. The same random seed always gives the same copies in the same order.
+- **Line-level change rules.** Ten rules each change one line: they delete it, copy it, insert a line above it, or replace or delete one word.
+- **Crash groups.** Crashes with the same exception at the same forge file and line are one group.
+- **Shrinking.** The run cuts the first input of each group down to the lines that cause the crash.
+- **Daml checks.** With `--damlc`, the run builds the Daml that `forge` writes with `damlc`, and groups the Daml that `damlc` rejects.
+- **Reports** in JSON and Markdown, with one folder for each group. You can compile each saved input again.
 
-## Install DamlForge
+## Requirements
 
-DamlForge needs Python 3.11 or newer.
-Install it into a virtual environment:
+| Requirement | Version | Needed for |
+| --- | --- | --- |
+| Python | 3.11 or newer | All commands |
+| DamlForge (`forge`) | Tested with `0.0.7` and `0.0.11` | All commands |
+| dpm and the Daml SDK | SDK 3.5.2 | Only `--damlc` and the second [seed check](#check-the-seeds) |
+
+## Install
+
+### Create a virtual environment
 
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
 ```
 
-Do not run `pip install forge`.
-The `forge` package on PyPI is a different project, a Django tool.
+### Install DamlForge
+
+> [!WARNING]
+> Do not run `pip install forge`.
+> The `forge` package on PyPI is a different project, a Django tool.
 
 The DamlForge repository, `noders-team/damlforge`, is private.
-To use the release wheel or the git install, you need GitHub access to that repository.
+For the release wheel and the git install, you need GitHub access to that repository.
 Use one of these three methods:
 
 - Install the release wheel. The latest release is `v0.0.7`.
@@ -66,16 +73,28 @@ Use one of these three methods:
   pip install -e /path/to/damlforge
   ```
 
-  While this folder is inside the DamlForge repository, the checkout is the parent folder, so run `pip install -e ..`.
-
 To check the install, run `forge --help`.
 The output lists the `daml`, `dar`, `json`, and `stubs` commands.
 
-## Install dpm and the Daml SDK
+### Install damlforge-fuzz
+
+Install the fuzzer into the virtual environment that has DamlForge.
+Run this command from the root of this repository:
+
+```sh
+pip install -e ".[test]"
+```
+
+The `test` extra also installs pytest.
+
+### Install dpm and the Daml SDK
+
+This step is optional.
+You need dpm and the Daml SDK only for `--damlc` and for the second [seed check](#check-the-seeds).
 
 dpm is the Daml package manager.
 It installs the Daml SDK, which has the `damlc` compiler.
-The `--damlc` option of `run` and `check`, and the second check in [Check the seeds](#check-the-seeds), need dpm and the SDK version in the seeds' `daml.yaml` files, 3.5.2.
+Install the SDK version that the seeds' `daml.yaml` files use, 3.5.2:
 
 ```sh
 curl -sSL https://get.digitalasset.com/install | sh
@@ -86,39 +105,212 @@ If your shell does not find `dpm` after the install, add `~/.dpm/bin` to your `P
 `forge dar` looks for `dpm` on your `PATH` and then in `~/.dpm/bin`.
 These commands are the same as in `.devcontainer/post-create.sh` in the DamlForge repository.
 
-## Use
+## Quick start
 
-Install the fuzzer into the virtual environment that has DamlForge.
-Run the commands from this folder.
+> [!NOTE]
+> All example output in this README is real output from DamlForge 0.0.11, the commit after the `v0.0.10` tag.
+> Another forge version gives other counts and other forge line numbers.
 
-```sh
-pip install -e ".[test]"
+Run these commands from the root of this repository.
+
+1. Compile the seeds. Every seed must be `OK`.
+
+   ```
+   $ damlforge-fuzz check contracts
+   OK       emit   contracts/asset_proposal/asset_proposal.vy
+   OK       emit   contracts/ballot/ballot.vy
+   OK       emit   contracts/escrow/escrow.vy
+   OK       emit   contracts/iou/iou.vy
+   ```
+
+2. Fuzz the seeds for 60 seconds:
+
+   ```
+   $ damlforge-fuzz run --seconds 60
+   random seed 756405, 4 seeds, 60 seconds
+   random seed 756405: 70051 inputs, 13183 OK, 47799 rejected, 3990 crash, 5079 skipped
+   15 crash groups, report in reports/2026-10-19T19-20-19Z
+   ```
+
+3. Open `report.md` in the report folder.
+   It has one table row for each crash group, and the shrunk input of each group.
+
+4. Compile a saved crash input again.
+   This example uses the report that is in the repository:
+
+   ```
+   $ damlforge-fuzz check reports/2026-10-19T18-45-34Z/groups/g01/iou.vy
+   CRASH    lower  reports/2026-10-19T18-45-34Z/groups/g01/iou.vy  CompilerPanic lower_stmt: unsupported statement node Import at forge/ir/lower.py:314
+   ```
+
+## Usage
+
+```
+damlforge-fuzz check [--damlc] PATH [PATH ...]
+damlforge-fuzz run [SEED_FOLDER ...] (--seconds N | --count N) [--random-seed S] [--reports DIR] [--damlc]
+damlforge-fuzz shrink FILE
 ```
 
-`damlforge-fuzz check` compiles each `.vy` file with `forge` and prints one line per file.
-A folder argument means every `.vy` file under it.
+| Command | What it does |
+| --- | --- |
+| `check` | Compiles `.vy` files with `forge` and prints one result for each file. |
+| `run` | Makes changed copies of the seeds, compiles each copy with `forge`, and writes a report. |
+| `shrink` | Deletes lines of a crashing `.vy` file while it still crashes in the same way. |
+
+### `damlforge-fuzz check`
+
+`check` compiles each `.vy` file with `forge` and prints one line for each file.
+
+| Argument | Meaning |
+| --- | --- |
+| `PATH` | A `.vy` file, or a folder. For a folder, `check` uses every `.vy` file under it. |
+| `--damlc` | Also build the Daml of the `OK` files with `damlc`. See [Check the Daml with damlc](#check-the-daml-with-damlc). |
+
+For example, `bitand.vy` has these two lines:
+
+```python
+def f(count: int) -> int:
+    return count & 1
+```
 
 ```
-$ damlforge-fuzz check contracts
-OK       emit   contracts/asset_proposal/asset_proposal.vy
-OK       emit   contracts/ballot/ballot.vy
-OK       emit   contracts/escrow/escrow.vy
-OK       emit   contracts/iou/iou.vy
 $ damlforge-fuzz check bitand.vy
 CRASH    lower  bitand.vy  KeyError 'BitAnd' at forge/ir/lower.py:289
 ```
 
-`bitand.vy` has two lines, `def f(count: int) -> int:` and `    return count & 1`.
 forge has no entry for `&` in its table of operators.
-The forge line depends on the forge version: it is `forge/ir/lower.py:244` in DamlForge `v0.0.7` and `forge/ir/lower.py:289` in `v0.0.10`.
+In DamlForge `v0.0.7`, the same crash is at `forge/ir/lower.py:244`.
 
-The first column is the result:
+Each line has the [result](#results), the [stage](#stages), and the file.
+A `REJECTED`, `CRASH`, or `BAD_DAML` line ends with the error.
 
-- `OK`: forge wrote Daml.
-- `REJECTED`: forge reported an error in the input, such as `DF1213`.
-- `CRASH`: forge failed with an error that is not its own. This is a bug in forge, and the line ends with the forge file and line where it failed.
+### `damlforge-fuzz run`
 
-The second column is the forge step that was running, the stage. forge runs four stages, in this order:
+`run` makes changed copies of the seeds and compiles each copy with `forge`.
+Each copy starts from one seed and gets 1 to 4 random changes.
+[Change rules](#change-rules) lists the changes.
+
+| Argument | Meaning |
+| --- | --- |
+| `SEED_FOLDER` | A seed folder or a `.vy` file. Without it, the run uses every seed in `contracts/`. |
+| `--seconds N` | Run for N seconds. Give `--seconds` or `--count`, not both. |
+| `--count N` | Make N copies. |
+| `--random-seed S` | The number that decides every copy and its changes. Without it, the run picks a new number and prints it. |
+| `--reports DIR` | The folder for the report folders. The default is `reports`. |
+| `--damlc` | Also build the Daml of the `OK` copies with `damlc`. See [Check the Daml with damlc](#check-the-daml-with-damlc). |
+
+```
+$ damlforge-fuzz run contracts/iou --count 2000 --random-seed 1
+random seed 1, 1 seed, 2000 inputs
+random seed 1: 2000 inputs, 336 OK, 1391 rejected, 110 crash, 163 skipped
+9 crash groups, report in reports/2026-10-19T19-19-57Z
+```
+
+The first line prints when the run starts.
+The second line prints when the run has made all the copies:
+
+- `inputs`: the number of copies that the run made, including the skipped copies.
+- `skipped`: copies whose changes left the text as it was. The run does not compile them.
+- `OK`, `rejected`, and `crash`: the same [results](#results) as for `check`.
+
+The last line gives the number of crash groups and the [report](#reports) folder.
+
+A run has these steps:
+
+1. With `--damlc`, build the Daml of the unchanged seeds.
+2. Make the copies, and compile each copy with `forge`.
+3. With `--damlc`, build the Daml of the `OK` copies.
+4. Shrink the first input of each crash group.
+5. Write the report.
+
+#### Repeat a run
+
+The same random seed and the same seed folders always give the same copies in the same order.
+To repeat a run exactly, give its random seed and its number of inputs.
+For example, this command repeats the 60-second run in [Quick start](#quick-start):
+
+```sh
+damlforge-fuzz run --count 70051 --random-seed 756405
+```
+
+Do not use `--seconds` to repeat a run.
+The number of copies in a time limit changes with the speed of the machine.
+
+### `damlforge-fuzz shrink`
+
+`shrink` deletes lines of a `.vy` file that crashes forge.
+It keeps a deletion only when the file still crashes with the same exception at the same forge line.
+It writes the result to `shrunk/` next to FILE, with the same file name, and prints it:
+
+```
+$ damlforge-fuzz shrink reports/2026-10-19T18-45-34Z/groups/g02/escrow.vy
+shrunk reports/2026-10-19T18-45-34Z/groups/g02/escrow.vy from 42 to 3 lines: reports/2026-10-19T18-45-34Z/groups/g02/shrunk/escrow.vy
+@template
+class Escrow:
+    tuple[int, str]: EscrowTerms
+```
+
+`run` already shrinks the first input of each crash group.
+Use `shrink` for other crashing files.
+[Shrunk inputs](#shrunk-inputs) tells how the shrinker works.
+
+### Check the Daml with damlc
+
+forge says `OK` when it writes Daml, but the Daml can still be wrong.
+With `--damlc`, `run` and `check` also build the Daml of the `OK` inputs with `damlc`.
+`BAD_DAML` means that forge wrote Daml, but `damlc` rejects that Daml.
+That is a bug in forge: its check stage let through a program that it then translated to wrong Daml.
+
+`--damlc` needs dpm and the Daml SDK. [Install dpm and the Daml SDK](#install-dpm-and-the-daml-sdk) shows how to install them.
+
+```
+$ damlforge-fuzz run --damlc --count 2000 --random-seed 1
+random seed 1, 4 seeds, 2000 inputs
+random seed 1: 2000 inputs, 369 OK, 1356 rejected, 128 crash, 147 skipped
+damlc: 200 Daml texts, 157 bad, 22 bad Daml groups
+11 crash groups, report in reports/2026-10-19T19-20-07Z
+```
+
+The `damlc:` line comes before the last line:
+
+- `Daml texts`: the number of different Daml texts among the `OK` copies. Many copies give the same Daml, so the run builds each text only once.
+- `bad`: the texts that `damlc` rejects.
+- `bad Daml groups`: the number of groups of bad texts. Texts whose first `damlc` error is the same, after the names in the error are hidden, are one group.
+  For example, `Variable not in scope: str : Int -> t` and `Variable not in scope: x : [a0]` are one group.
+  So a group is one kind of `damlc` error, and it can hold more than one forge bug.
+
+With `check --damlc`, a file whose Daml `damlc` rejects is `BAD_DAML`.
+The line ends with the first line of the first `damlc` error:
+
+```
+$ damlforge-fuzz check --damlc reports/2026-10-19T18-45-34Z/groups/d02/iou.vy
+BAD_DAML emit   reports/2026-10-19T18-45-34Z/groups/d02/iou.vy  Variable not in scope: x : [a0]
+```
+
+How a run uses `damlc`:
+
+- Before the first copy, the run builds the Daml of the unchanged seeds.
+  If dpm or the SDK is missing, or the Daml of a seed does not build, the run prints one line to stderr and exits with 2.
+- After the last copy, the run puts up to 500 Daml texts into one temporary Daml project, and runs one `dpm build` for them.
+  A build of 500 texts takes about 5 seconds, so a 60-second run takes about 40 seconds more.
+  The temporary projects are in your system's temporary folder, and the run deletes them.
+- The run does not shrink the bad Daml inputs, because each try needs its own `dpm build`, which takes about 0.7 seconds.
+
+### Results
+
+The first column of a `check` line is the result:
+
+| Result | Meaning |
+| --- | --- |
+| `OK` | forge wrote Daml. |
+| `REJECTED` | forge reported an error in the input, such as `DF1213`. |
+| `CRASH` | forge failed with an error that is not its own. This is a bug in forge. The line ends with the exception and the forge file and line where it failed. |
+| `BAD_DAML` | Only with `--damlc`. forge wrote Daml, but `damlc` rejects it. This is also a bug in forge. |
+
+### Stages
+
+The second column is the forge step that was running, the stage.
+forge runs four stages, in this order:
 
 | Stage | What forge does |
 | --- | --- |
@@ -129,181 +321,109 @@ The second column is the forge step that was running, the stage. forge runs four
 
 The stage is the step that was running, not the folder of the forge file.
 So a crash can have stage `check` and a line in `forge/ir/lower.py`.
-`STAGE_TEXT` in `src/damlforge_fuzz/compiler.py` has the same texts, and `report.md` uses them.
 
-The command exits with 0 when every file is `OK`, 1 when any file is `REJECTED` or `CRASH`, and 2 for a usage error, such as a missing path.
+### Exit codes
 
-`damlforge-fuzz run` makes changed copies of the seeds and compiles each copy with `forge`.
-Each copy starts from one seed and gets 1 to 4 random changes.
-Give a time limit with `--seconds` or a number of copies with `--count`.
-Without a folder argument, the run uses every seed in `contracts/`.
+| Code | `check` | `run` | `shrink` |
+| --- | --- | --- | --- |
+| `0` | Every file is `OK`. | No copy crashed, and no Daml text is bad. | The command wrote the shrunk file. |
+| `1` | A file is `REJECTED`, `CRASH`, or `BAD_DAML`. | A copy crashed, or a Daml text is bad. | FILE does not crash forge. The command writes nothing. |
+| `2` | Usage error. | Usage error. | Usage error. |
+| `130` | — | You pressed Ctrl-C. See [Stop a run with Ctrl-C](#stop-a-run-with-ctrl-c). | You pressed Ctrl-C. The command writes nothing. |
 
-```
-$ damlforge-fuzz run --seconds 60
-random seed 513055, 4 seeds, 60 seconds
-random seed 513055: 70287 inputs, 13029 OK, 48025 rejected, 4069 crash, 5164 skipped
-15 crash groups, report in reports/2026-10-19T15-30-49Z
-$ damlforge-fuzz run contracts/iou --count 2000 --random-seed 1
-random seed 1, 1 seed, 2000 inputs
-random seed 1: 2000 inputs, 338 OK, 1388 rejected, 111 crash, 163 skipped
-9 crash groups, report in reports/2026-10-19T15-32-05Z
-```
+A usage error prints one line to stderr.
+These are the usage errors:
 
-This output is from DamlForge `v0.0.7`. Another forge version gives other counts.
-The first line prints when the run starts. The second line prints when it ends.
-A third line names the report folder. [The report](#the-report) shows it.
+- For all commands: a missing path, a folder with no `.vy` file, a file that cannot be read, or DamlForge is not installed.
+- With `--damlc`: a file with no `daml.yaml`, dpm or its SDK is missing, or dpm fails.
+- For `run`: a `--reports` folder that cannot be made, or a report that cannot be written.
+- For `shrink`: a FILE that is a folder, or a FILE that is already in a `shrunk/` folder.
 
-- `inputs`: the number of copies the run made, including the skipped copies.
-- `skipped`: copies whose changes left the text as it was. The run does not compile them.
-- `OK`, `rejected`, and `crash` mean the same as for `check`.
+## Reports
 
-The random seed decides every copy and its changes.
-Without `--random-seed`, the run picks a new one and prints it.
-The same random seed and the same seed folders always give the same copies in the same order.
-To repeat a run exactly, pass its random seed and its number of inputs, for example `--count 70287 --random-seed 513055`.
-A second `--seconds` run can make a different number of copies, because the speed of the machine changes.
-
-The command exits with 0 when no copy crashed, 1 when any copy crashed, 2 for a usage error, and 130 when you press Ctrl-C.
-
-### The report
-
-Every run writes a report folder.
-Crashes with the same exception at the same forge file and line are one crash group.
-The third line of the output gives the number of groups and the folder:
-
-```
-$ damlforge-fuzz run --count 2000 --random-seed 1
-random seed 1, 4 seeds, 2000 inputs
-random seed 1: 2000 inputs, 369 OK, 1356 rejected, 128 crash, 147 skipped
-11 crash groups, report in reports/2026-10-19T15-27-46Z
-```
-
-This output is from DamlForge `v0.0.10`. The folder name is an example: it is the UTC time when the run started.
+Every run writes a report folder in `reports/`.
+The folder name is the UTC time when the run started, such as `reports/2026-10-19T19-20-07Z`.
 If a folder with that name exists, the run adds `-2`, `-3`, and so on.
-The folder is in `reports/`. To use another folder, give `--reports DIR`.
-Git does not ignore `reports/`. Commit the reports that you want to keep, and delete the others.
-The repository has one report: `reports/2026-10-19T18-45-34Z/`.
-It comes from `damlforge-fuzz run --damlc --count 20000 --random-seed 1` on DamlForge `v0.0.10` (one commit later, which reports version `0.0.11`).
-It has 14 crash groups and 30 bad Daml groups.
+To put the report folders in a different folder, give `--reports DIR`.
 
-The folder has these files:
+Git does not ignore `reports/`.
+Commit the reports that you want to keep, and delete the others.
+The reports in git are in [`reports/`](reports/).
 
-- `report.json`: the full report. It has the run settings, the counts, the counts after each second of the run, and one entry for each group. A group entry has the exception, the forge file and line, the stage, the number of crashes, the first input that crashed, and the full text of that input.
-- `report.md`: a short summary of `report.json`, with one table row for each group. It also explains the stages of the groups, and shows each shrunk input.
-- `groups/g01/`, `groups/g02/`, and so on: one folder for each group, numbered in the order the run found them. Each folder has the first crashing input, with the file name of its seed, such as `iou.vy`, and a copy of the seed's `daml.yaml`.
-- `groups/g01/shrunk/iou.vy`: the shrunk input of the group. [Shrunk inputs](#shrunk-inputs) explains it.
+### Report files
 
-To see a crash again, run `check` on the saved file:
+A report folder has these files.
+The example is the report in the repository.
+Its `analysis.md` file and its `analysis/` folder are not part of the report: they were written by hand.
 
 ```
-$ damlforge-fuzz check reports/2026-10-19T15-27-46Z/groups/g01/iou.vy
-CRASH    lower  reports/2026-10-19T15-27-46Z/groups/g01/iou.vy  CompilerPanic lower_stmt: unsupported statement node Import at forge/ir/lower.py:314
+reports/2026-10-19T18-45-34Z/
+├── report.json
+├── report.md
+└── groups/
+    ├── g01/               crash group 1
+    │   ├── iou.vy         the first input that crashed
+    │   ├── daml.yaml      a copy of the seed's daml.yaml
+    │   └── shrunk/
+    │       └── iou.vy     the shrunk input
+    ├── ...
+    ├── d01/               bad Daml group 1 (only with --damlc)
+    │   ├── ballot.vy      the first input with this damlc error
+    │   ├── daml.yaml      a copy of the seed's daml.yaml
+    │   └── Ballot.daml    the Daml that forge wrote for the input
+    └── ...
 ```
 
-When you press Ctrl-C, the run writes the report for the copies so far, and `report.json` has `"interrupted": true`.
+- `report.json` is the full report. It has the run settings, the counts, the counts after each second of the run, and one entry for each group.
+  A crash group entry has the exception, the forge file and line, the stage, the number of crashes, the first input that crashed, and the full text of that input.
+  It also has the shrunk text in `"shrunk"` and the shrunk file in `"shrunk_file"`.
+  The `damlc` entry has the counts and the time that `damlc` took. Without `--damlc`, `damlc` is `null`.
+- `report.md` is a short summary of `report.json`.
+  It has one table row for each group, with a `Shrunk` column, such as `3 of 42 lines`, and a code block with each shrunk input.
+  It also tells what the stages of the groups mean.
+  With `--damlc`, it has a `Bad Daml` section with a table of the groups and the first error line of each group.
+- `groups/g01/`, `groups/g02/`, and so on are the crash groups, in the order that the run found them.
+- `groups/d01/`, `groups/d02/`, and so on are the bad Daml groups, in the order that the run found them.
+
+### See a group again
+
+To see a crash again, run `check` on the input in the group folder.
+A folder argument also checks the shrunk input:
+
+```
+$ damlforge-fuzz check reports/2026-10-19T18-45-34Z/groups/g02
+CRASH    check  reports/2026-10-19T18-45-34Z/groups/g02/escrow.vy  AttributeError 'Subscript' object has no attribute 'id' at forge/semantics/analysis/types.py:644
+CRASH    check  reports/2026-10-19T18-45-34Z/groups/g02/shrunk/escrow.vy  AttributeError 'Subscript' object has no attribute 'id' at forge/semantics/analysis/types.py:644
+```
+
+To see a `damlc` error again without the fuzzer, run `dpm build` in the bad Daml group folder.
 
 ### Shrunk inputs
 
 A crashing input has 30 to 45 lines, but usually only a few of them cause the crash.
-After the last copy, the run shrinks the first input of each group.
-The shrinker deletes lines, first in large blocks, then one line or one indented block at a time.
-It keeps a deletion only when the text still crashes with the same exception at the same forge line.
-It stops when it cannot delete one more line.
+After the last copy, the run shrinks the first input of each crash group:
+
+1. The shrinker deletes lines, first in large blocks, then one line or one indented block at a time.
+2. It keeps a deletion only when the text still crashes with the same exception at the same forge line.
+3. It stops when it cannot delete one more line.
+
 The shrunk input has only lines of the full input, in the same order, and no line is changed.
 For the 11 groups of a 2000-copy run, shrinking took less than half a second, and the shrunk inputs have 2 to 12 lines.
 
-The shrunk input is in `groups/g02/shrunk/escrow.vy`, next to the full input, with the same file name.
-The same name keeps the Daml module name. The shrunk file uses the `daml.yaml` of the group folder above it.
-`report.json` has the text in `"shrunk"` and the file in `"shrunk_file"`.
-`report.md` has a `Shrunk` column, such as `3 of 42 lines`, and a code block with each shrunk input.
+The shrunk input is in `shrunk/` in the group folder, with the same file name as the full input.
+The same file name keeps the Daml module name.
+The shrunk file uses the `daml.yaml` of the group folder.
 
-```
-$ damlforge-fuzz check reports/2026-10-19T15-36-34Z/groups/g02
-CRASH    check  reports/2026-10-19T15-36-34Z/groups/g02/escrow.vy  AttributeError 'Subscript' object has no attribute 'id' at forge/semantics/analysis/types.py:644
-CRASH    check  reports/2026-10-19T15-36-34Z/groups/g02/shrunk/escrow.vy  AttributeError 'Subscript' object has no attribute 'id' at forge/semantics/analysis/types.py:644
-```
+### Stop a run with Ctrl-C
 
-The first Ctrl-C stops the copies, and the run still shrinks.
-A second Ctrl-C, while the run shrinks, stops the shrinking.
-The groups that are not shrunk yet have `"shrunk": null`, and `report.md` shows `not shrunk`.
+When you press Ctrl-C, the run stops the step that is running and continues with the next steps.
+In each of these cases, the run writes the report and exits with 130:
 
-To shrink any `.vy` file that crashes forge, run `damlforge-fuzz shrink FILE`:
-
-```
-$ damlforge-fuzz shrink reports/2026-10-19T15-36-34Z/groups/g02/escrow.vy
-shrunk reports/2026-10-19T15-36-34Z/groups/g02/escrow.vy from 42 to 3 lines: reports/2026-10-19T15-36-34Z/groups/g02/shrunk/escrow.vy
-@template
-class Escrow:
-    tuple[int, str]: EscrowTerms
-```
-
-The command writes the shrunk file to `shrunk/` next to FILE and prints it.
-It exits with 0 when it writes the file.
-It exits with 1 and writes nothing when FILE does not crash forge.
-It exits with 2 for a usage error, such as a missing file, a folder, or a file that is already in a `shrunk/` folder.
-It exits with 130 and writes nothing when you press Ctrl-C.
-This output is from DamlForge `v0.0.10`.
-
-### Check the Daml with damlc
-
-forge says `OK` when it writes Daml. But the Daml can still be wrong.
-With `--damlc`, the run also builds the Daml of the `OK` copies with `damlc`, the Daml compiler.
-`BAD_DAML` means that forge said `OK` and wrote Daml, but `damlc` rejects that Daml.
-That is a bug in forge: its check stage let through a program that it then translated to wrong Daml.
-
-```
-$ damlforge-fuzz run --damlc --count 2000 --random-seed 1
-random seed 1, 4 seeds, 2000 inputs
-random seed 1: 2000 inputs, 369 OK, 1356 rejected, 128 crash, 147 skipped
-damlc: 200 Daml texts, 157 bad, 22 bad Daml groups
-11 crash groups, report in reports/2026-10-19T17-32-10Z
-```
-
-This output is from DamlForge `v0.0.10`.
-The first two lines and the last line are the same as without `--damlc`.
-The new line comes before the last line:
-
-- `Daml texts`: the number of different Daml texts among the `OK` copies. Many copies give the same Daml, so the run builds each text only once.
-- `bad`: the texts that `damlc` rejects.
-- `bad Daml groups`: texts whose first `damlc` error is the same, after the names in the error are hidden, are one group. For example, `Variable not in scope: str : Int -> t` and `Variable not in scope: x : [a0]` are one group.
-  So a group is one kind of `damlc` error, and it can hold more than one forge bug. The report shows the full error of the group's first copy.
-
-`--damlc` needs dpm and the Daml SDK. [Install dpm and the Daml SDK](#install-dpm-and-the-daml-sdk) shows how.
-Before the first copy, the run builds the Daml of the unchanged seeds.
-If dpm or the SDK is missing, or a seed's Daml does not build, the run prints one line to stderr and exits with 2.
-
-The run builds the Daml after the last copy and before it shrinks the crash inputs.
-It puts up to 500 texts into one temporary Daml project and runs one `dpm build` for them.
-A build of 500 texts takes about 5 seconds, so a 60-second run adds about 40 seconds.
-The temporary projects are in your system's temporary folder, and the run deletes them.
-
-The report has the bad Daml groups after the crash groups.
-Their folders are `groups/d01/`, `groups/d02/`, and so on, in the order the run found them.
-Each folder has the first copy with that error, such as `iou.vy`, a copy of the seed's `daml.yaml`, and the Daml that forge wrote for the copy, such as `Iou.daml`.
-To see the error again without the fuzzer, run `dpm build` in the folder.
-`report.json` has a `damlc` entry with the counts and the time that `damlc` took. Without `--damlc`, it is `null`.
-`report.md` has a `Bad Daml` section with a table of the groups and the first error line of each group.
-
-`check --damlc` also builds the Daml of the files that are `OK`, and prints `BAD_DAML` for the files whose Daml `damlc` rejects:
-
-```
-$ damlforge-fuzz check --damlc reports/2026-10-19T17-32-10Z/groups/d02/iou.vy
-BAD_DAML emit   reports/2026-10-19T17-32-10Z/groups/d02/iou.vy  Variable not in scope: x : [a0]
-```
-
-The line ends with the first line of the first `damlc` error.
-`check --damlc` exits with 1 when any file is `BAD_DAML`, and with 2 when a file has no `daml.yaml` or dpm cannot build.
-
-With `--damlc`, `run` exits with 1 when any copy crashed or any Daml text is bad.
-When you press Ctrl-C while `damlc` builds, the run keeps the texts that it built, still shrinks the crash inputs, writes the report, and exits with 130.
-`report.json` then has `"interrupted": true` in `damlc`.
-
-The run does not shrink the bad Daml inputs, because each try needs its own `dpm build`, which takes about 0.7 seconds.
-
-To see each copy, its changes, and its result, run `python scripts/show_inputs.py contracts/iou --count 5 --random-seed 1`.
-It makes the same copies as `damlforge-fuzz run` with the same folders and random seed.
-
-To run the tests, run `pytest`.
+| When you press Ctrl-C | What the run does |
+| --- | --- |
+| While it makes copies | Stops the copies. With `--damlc`, it still builds the Daml. It still shrinks. `report.json` has `"interrupted": true`. |
+| While `damlc` builds | Keeps the texts that it built, and stops the `damlc` step. It still shrinks. The `damlc` entry in `report.json` has `"interrupted": true`. |
+| While it shrinks | Stops the shrinking. The groups that are not shrunk yet have `"shrunk": null`, and `report.md` shows `not shrunk`. |
 
 ## Change rules
 
@@ -326,34 +446,52 @@ The examples are real changes to `contracts/iou/iou.vy`.
 | `delete_word` | Deletes one word. | `self, new_owner: Party` becomes `self, : Party` |
 
 The rules take their new words from five lists in `src/damlforge_fuzz/mutate.py`: `_OPERATORS`, `_LITERALS`, `_TYPES`, `_EXPRESSIONS`, and `_STATEMENTS`.
+A rule can change only its own line. It cannot, for example, swap two lines.
 
 ### Add a word or a rule
 
-Every change to the rules or the word lists changes some copies of every random seed.
-So a result from before the change and a result after it do not use the same copies.
-Write the change in `docs/progress.md`.
+> [!IMPORTANT]
+> Every change to the rules or the word lists changes some copies of every random seed.
+> So a result from before the change and a result from after it do not use the same copies.
+> Record the change in `docs/progress.md`.
 
 To add a word, add it at the end of its list in `mutate.py`.
 
 To add a rule:
 
 1. In `mutate.py`, write a function that takes `(rng, line, ctx)` and returns the lines that replace `line`.
-   Return `[]` to delete the line, `[new_line]` to change it, or `[inserted_line, line]` to insert a line above it.
-   Return `None` when the rule does not fit the line.
-   Use `rng` for every random choice. `ctx.lines` is the whole text, and `ctx.donor_lines` holds the lines of all the run's seeds.
+   - Return `[]` to delete the line.
+   - Return `[new_line]` to change the line.
+   - Return `[inserted_line, line]` to insert a line above it.
+   - Return `None` when the rule does not fit the line.
+
+   Use `rng` for every random choice.
+   `ctx.lines` is the whole text, and `ctx.donor_lines` holds the lines of all the run's seeds.
 2. Add a row `_Rule("your_rule", your_function)` at the end of `_RULES`.
    Do not put it first or in the middle.
    In a test, a rule added last kept 1608 of the first 2000 copies the same, and the same rule added first kept 86.
-3. Add a row for the rule to the table above. A test checks that the table and `_RULES` list the same rules in the same order.
+3. Add a row for the rule at the end of the table in [Change rules](#change-rules).
+   A test checks that the table and `_RULES` list the same rules in the same order.
 4. Run `pytest`.
 
-A rule can change only its own line. It cannot, for example, swap two lines.
+## Seeds
 
-## Check the seeds
+The seeds are in `contracts/`.
+Each seed folder is its own Daml project, with one `.vy` file and a `daml.yaml` with `source: .`.
+Separate projects let the fuzzer run on the seeds that you choose.
+
+| Seed | Templates | Choices |
+| --- | --- | --- |
+| `contracts/asset_proposal/` | `Asset`, `AssetProposal` | `Give`, `Accept`, `Reject` |
+| `contracts/ballot/` | `Ballot` | `CastVote`, `Close` |
+| `contracts/escrow/` | `Payout`, `Escrow` | `Release`, `Refund` |
+| `contracts/iou/` | `Iou` | `Transfer`, `Split` |
+
+### Check the seeds
 
 Every seed must pass two checks.
-Run both from this folder.
-Each command below runs the check on every seed folder and stops at the first seed that fails.
+Run both checks from the root of this repository.
+Each command runs the check on every seed folder, and stops at the first seed that fails.
 
 1. Compile the seeds to Daml with `forge`:
 
@@ -361,8 +499,8 @@ Each command below runs the check on every seed folder and stops at the first se
    for p in contracts/*/; do forge daml --no-i "$p" -o "build/daml/$(basename "$p")" || break; done
    ```
 
-   For each seed, this writes a `.daml` file to `build/daml/<seed>/`, such as `build/daml/iou/Iou.daml`.
-   Keep `--no-i`. Without it, `forge daml` logs an error for a broken seed but still exits with code 0.
+   For each seed, this command writes a `.daml` file to `build/daml/<seed>/`, such as `build/daml/iou/Iou.daml`.
+   Keep `--no-i`. Without it, `forge daml` logs an error for a broken seed, but still exits with code 0.
 
 2. Build the seeds with `damlc`:
 
@@ -374,32 +512,61 @@ Each command below runs the check on every seed folder and stops at the first se
    It writes one `.dar` file for each seed to `build/`, such as `build/iou.dar`.
    Git ignores the generated files.
 
-To check one seed, run the command inside a loop by hand, for example `forge dar contracts/iou -o build/iou.dar`.
+To check one seed, run the command in the loop yourself, for example `forge dar contracts/iou -o build/iou.dar`.
 
-## Add a seed
+### Add a seed
 
 1. Make a folder for the seed in `contracts/`, for example `contracts/vault/`.
-2. Copy `contracts/iou/daml.yaml` into the new folder and change its `name` line to `damlforge-fuzz-vault`.
+2. Copy `contracts/iou/daml.yaml` into the new folder, and change its `name` line to `damlforge-fuzz-vault`.
 3. Put the `.vy` file in the new folder.
 4. Run both checks in [Check the seeds](#check-the-seeds).
 
 A seed that fails a check is a bug in the seed.
-Fix the seed before you use it, so that every crash the fuzzer finds comes from an edit and not from the seed.
+Fix the seed before you use it, so that every crash that the fuzzer finds comes from an edit and not from the seed.
 
-## Move this folder to its own repository
+## Development
 
-From the root of the DamlForge repository, copy this folder and its history to a new branch:
+### Project layout
 
-```sh
-git subtree split --prefix=damlforge-fuzz -b damlforge-fuzz
+```
+damlforge-fuzz/
+├── src/damlforge_fuzz/
+│   ├── cli.py            the damlforge-fuzz command
+│   ├── compiler.py       compiles one .vy text with forge and sorts the result
+│   ├── mutate.py         the change rules, and the sequence of inputs of a random seed
+│   ├── runner.py         the fuzz loop
+│   ├── report.py         crash groups, report.json, report.md, and the group folders
+│   ├── shrinker.py       the shrinker
+│   └── damlc.py          builds the Daml with damlc, through dpm build
+├── tests/                pytest tests
+├── scripts/
+│   └── show_inputs.py    prints each copy of a run, its changes, and its result
+├── contracts/            the seeds, one Daml project for each seed
+├── reports/              the reports that are kept in git
+├── docs/                 design notes and the progress log
+└── pyproject.toml
 ```
 
-The `damlforge-fuzz` branch has only the files of this folder, at its root.
-Push that branch to the new repository:
+`compiler.py` is the only module that imports forge.
+`mutate.py` and `damlc.py` do not import forge.
+
+If you change the text of a stage in [Stages](#stages), also change `STAGE_TEXT` in `src/damlforge_fuzz/compiler.py`.
+`report.md` uses the texts in `STAGE_TEXT`.
+
+### Run the tests
 
 ```sh
-git push <new-repository-url> damlforge-fuzz:main
+pytest
 ```
 
-After the move, `pip install -e ..` no longer finds DamlForge.
-Use the path to your DamlForge checkout instead.
+The tests that need dpm skip when dpm or the Daml SDK is missing.
+
+### Show the inputs of a run
+
+To see each copy, its changes, and its result, run `scripts/show_inputs.py`:
+
+```sh
+python scripts/show_inputs.py contracts/iou --count 5 --random-seed 1
+```
+
+The script makes the same copies as `damlforge-fuzz run` with the same seed folders and random seed.
