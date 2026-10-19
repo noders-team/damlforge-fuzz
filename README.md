@@ -3,7 +3,7 @@
 damlforge-fuzz is a fuzzer for the DamlForge compiler, `forge`, which compiles `.vy` files to Daml.
 The fuzzer takes a few seed contracts, makes small random edits to them, runs `forge` on each edited copy, and reports crashes.
 
-**Status.** This is unit 3. The `damlforge-fuzz check` command compiles `.vy` files and sorts each result. The `damlforge-fuzz run` command makes random edits to the seeds and counts the results. Crash reports come next.
+**Status.** This is unit 4. The `damlforge-fuzz check` command compiles `.vy` files and sorts each result. The `damlforge-fuzz run` command makes random edits to the seeds, counts the results, and writes a report of the crashes. Shrinking the crashing inputs comes next.
 
 For a step-by-step guide with real command output, open [`docs/guide.html`](docs/guide.html) in a browser.
 The plan for units 2 to 6 is in [`docs/plan.html`](docs/plan.html).
@@ -128,15 +128,18 @@ Without a folder argument, the run uses every seed in `contracts/`.
 
 ```
 $ damlforge-fuzz run --seconds 60
-random seed 202216, 4 seeds, 60 seconds
-random seed 202216: 68222 inputs, 12625 OK, 46725 rejected, 3902 crash, 4970 skipped
+random seed 513055, 4 seeds, 60 seconds
+random seed 513055: 70287 inputs, 13029 OK, 48025 rejected, 4069 crash, 5164 skipped
+15 crash groups, report in reports/2026-10-19T15-30-49Z
 $ damlforge-fuzz run contracts/iou --count 2000 --random-seed 1
 random seed 1, 1 seed, 2000 inputs
 random seed 1: 2000 inputs, 338 OK, 1388 rejected, 111 crash, 163 skipped
+9 crash groups, report in reports/2026-10-19T15-32-05Z
 ```
 
 This output is from DamlForge `v0.0.7`. Another forge version gives other counts.
 The first line prints when the run starts. The second line prints when it ends.
+A third line names the report folder. [The report](#the-report) shows it.
 
 - `inputs`: the number of copies the run made, including the skipped copies.
 - `skipped`: copies whose changes left the text as it was. The run does not compile them.
@@ -145,10 +148,43 @@ The first line prints when the run starts. The second line prints when it ends.
 The random seed decides every copy and its changes.
 Without `--random-seed`, the run picks a new one and prints it.
 The same random seed and the same seed folders always give the same copies in the same order.
-To repeat a run exactly, pass its random seed and its number of inputs, for example `--count 68222 --random-seed 202216`.
+To repeat a run exactly, pass its random seed and its number of inputs, for example `--count 70287 --random-seed 513055`.
 A second `--seconds` run can make a different number of copies, because the speed of the machine changes.
 
 The command exits with 0 when no copy crashed, 1 when any copy crashed, 2 for a usage error, and 130 when you press Ctrl-C.
+
+### The report
+
+Every run writes a report folder.
+Crashes with the same exception at the same forge file and line are one crash group.
+The third line of the output gives the number of groups and the folder:
+
+```
+$ damlforge-fuzz run --count 2000 --random-seed 1
+random seed 1, 4 seeds, 2000 inputs
+random seed 1: 2000 inputs, 369 OK, 1356 rejected, 128 crash, 147 skipped
+11 crash groups, report in reports/2026-10-19T15-27-46Z
+```
+
+This output is from DamlForge `v0.0.10`. The folder name is an example: it is the UTC time when the run started.
+If a folder with that name exists, the run adds `-2`, `-3`, and so on.
+The folder is in `reports/`. To use another folder, give `--reports DIR`.
+Git ignores `reports/`.
+
+The folder has these files:
+
+- `report.json`: the full report. It has the run settings, the counts, the counts after each second of the run, and one entry for each group. A group entry has the exception, the forge file and line, the stage, the number of crashes, the first input that crashed, and the full text of that input.
+- `report.md`: a short summary of `report.json`, with one table row for each group.
+- `groups/g01/`, `groups/g02/`, and so on: one folder for each group, numbered in the order the run found them. Each folder has the first crashing input, with the file name of its seed, such as `iou.vy`, and a copy of the seed's `daml.yaml`.
+
+To see a crash again, run `check` on the saved file:
+
+```
+$ damlforge-fuzz check reports/2026-10-19T15-27-46Z/groups/g01/iou.vy
+CRASH    lower  reports/2026-10-19T15-27-46Z/groups/g01/iou.vy  CompilerPanic lower_stmt: unsupported statement node Import at forge/ir/lower.py:314
+```
+
+When you press Ctrl-C, the run writes the report for the copies so far, and `report.json` has `"interrupted": true`.
 
 To see each copy, its changes, and its result, run `python scripts/show_inputs.py contracts/iou --count 5 --random-seed 1`.
 It makes the same copies as `damlforge-fuzz run` with the same folders and random seed.

@@ -28,6 +28,11 @@ def test_each_seed_is_ok_with_the_daml_forge_daml_writes(path, tmp_path):
     assert outcome.daml == forge_daml_output(path, tmp_path, outcome.module_name)
 
 
+def test_a_seed_keeps_the_daml_yaml_forge_read_or_none(write_vy):
+    assert Seed.load(CONTRACTS / "iou" / "iou.vy").daml_yaml == CONTRACTS / "iou" / "daml.yaml"
+    assert Seed.load(write_vy("alone.vy", "")).daml_yaml is None
+
+
 def test_daml_yaml_build_options_reach_forge(tmp_path):
     project = tmp_path / "escrow"
     shutil.copytree(CONTRACTS / "escrow", project)

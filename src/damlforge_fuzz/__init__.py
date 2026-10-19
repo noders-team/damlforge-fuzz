@@ -25,6 +25,17 @@ Unit 3 makes the inputs and runs them. input_sequence needs no forge::
     for tried in fuzz([seed], random_seed=1, limit=Count(2000)):
         totals.add(tried)
 
+Unit 4 groups the crashes and writes the run folder (report.json, report.md,
+and one saved input per group)::
+
+    from damlforge_fuzz import Report
+
+    report = Report.open([seed], 1, Count(2000), reports=Path("reports"))
+    for tried in fuzz([seed], random_seed=1, limit=Count(2000)):
+        report.add(tried)
+    report.write()  # report.folder is reports/2026-10-19T13-50-00Z
+    report.groups   # {CrashKey: Group}, in first-seen order
+
 Import from this package only. The modules behind it are not part of the API.
 """
 
@@ -33,6 +44,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from damlforge_fuzz.compiler import (
+        FORGE_VERSION,
         Crash,
         CrashKey,
         ForgeLine,
@@ -44,18 +56,20 @@ if TYPE_CHECKING:
         compile_and_sort,
     )
     from damlforge_fuzz.mutate import RULE_NAMES, Change, Input, input_sequence
+    from damlforge_fuzz.report import FirstSeen, Group, Report, Run, Tick
     from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried, fuzz
 
 _HOME = {
     **dict.fromkeys(
-        ["Crash", "CrashKey", "ForgeLine", "Ok", "Outcome", "Rejected", "Seed", "Stage"]
+        ["FORGE_VERSION", "Crash", "CrashKey", "ForgeLine", "Ok", "Outcome", "Rejected", "Seed", "Stage"]
         + ["compile_and_sort"],
         "compiler",
     ),
     **dict.fromkeys(["Change", "Input", "RULE_NAMES", "input_sequence"], "mutate"),
     **dict.fromkeys(["Count", "Limit", "Seconds", "Totals", "Tried", "fuzz"], "runner"),
+    **dict.fromkeys(["FirstSeen", "Group", "Report", "Run", "Tick"], "report"),
 }
-"""The module that holds each public name. compiler and runner load forge; mutate does not."""
+"""The module that holds each public name. compiler, runner, and report load forge; mutate does not."""
 
 __all__ = sorted(_HOME)
 

@@ -1,4 +1,4 @@
-"""The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`.
+"""The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`; unit 4 adds its report.
 
     damlforge-fuzz check PATH [PATH ...]
 
@@ -16,19 +16,26 @@ file, or DamlForge not installed). A usage error prints no result lines: every
 path is loaded before anything compiles.
 
     damlforge-fuzz run [SEED_FOLDER ...] (--seconds N | --count N) [--random-seed S]
+                       [--reports DIR]
 
 `run` changes copies of the seeds at random and compiles each copy. Without a
 SEED_FOLDER it uses contracts/. Without --random-seed it picks one. It prints
-two lines, the second when the run ends (the numbers are examples):
+three lines, the last two when the run ends (the numbers are examples):
 
     random seed 48213, 4 seeds, 60 seconds
     random seed 48213: 31200 inputs, 7300 OK, 21000 rejected, 1900 crash, 1000 skipped
+    14 crash groups, report in reports/2026-10-19T13-50-00Z
 
-No time is printed, so two --count runs with one random seed print the same
-text. `--count 31200 --random-seed 48213` repeats the 60-second run above.
+The first two lines hold no time, so two --count runs with one random seed
+print the same first two lines. `--count 31200 --random-seed 48213` repeats
+the 60-second run above. The third line names the run folder, which every run
+makes under --reports (default: reports): report.json, report.md, and one
+folder per crash group with the group's first input.
 
 Exit status: 0 when no input crashed, 1 when any input crashed, 2 for a usage
-error (as for check), 130 on Ctrl-C, after the second line for the inputs so far.
+error (as for check, and a --reports folder that cannot be made, or a report
+that cannot be written), 130 on Ctrl-C, after all three lines and the report
+for the inputs so far.
 """
 
 from __future__ import annotations
@@ -87,10 +94,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="S",
         help="the number that fixes the sequence of inputs (default: a new one, printed)",
     )
+    run.add_argument(
+        "--reports",
+        type=Path,
+        default=Path("reports"),
+        metavar="DIR",
+        help="the folder that gets one run folder per run (default: reports)",
+    )
     args = parser.parse_args(argv)
     if args.command == "check":
         return _check(args.paths)
-    return _run(args.seed_folders, args.seconds, args.count, args.random_seed)
+    return _run(args.seed_folders, args.seconds, args.count, args.random_seed, args.reports)
 
 
 def _check(paths: Sequence[Path]) -> int:
@@ -118,9 +132,10 @@ def _run(
     seconds: float | None,
     count: int | None,
     random_seed: int | None,
+    reports: Path,
 ) -> int:
     try:
-        from damlforge_fuzz import Count, Seconds, Seed, Totals, fuzz
+        from damlforge_fuzz import Count, Report, Seconds, Seed, fuzz
     except ImportError as error:
         print(f"damlforge-fuzz: {error}", file=sys.stderr)
         return 2
@@ -133,16 +148,27 @@ def _run(
         # Short enough to retype from the screen.
         random_seed = secrets.randbelow(1_000_000)
     limit = Count(count) if count is not None else Seconds(seconds)
+    try:
+        report = Report.open(seeds, random_seed, limit, reports)
+    except OSError as error:
+        print(f"damlforge-fuzz run: cannot make a run folder in {reports}: {error}", file=sys.stderr)
+        return 2
     print(_start_line(random_seed, len(seeds), limit), flush=True)
-    totals = Totals()
     try:
         for tried in fuzz(seeds, random_seed, limit):
-            totals.add(tried)
+            report.add(tried)
     except KeyboardInterrupt:
-        print(_final_line(random_seed, totals))
+        report.interrupt()
+    print(_final_line(random_seed, report.totals), flush=True)
+    try:
+        report.write()
+    except OSError as error:
+        print(f"damlforge-fuzz run: cannot write the report: {error}", file=sys.stderr)
+        return 2
+    print(f"{_plural(len(report.groups), 'crash group')}, report in {report.folder}")
+    if report.run.interrupted:
         return 130
-    print(_final_line(random_seed, totals))
-    return 1 if totals.crash else 0
+    return 1 if report.totals.crash else 0
 
 
 def _start_line(random_seed: int, seed_count: int, limit: Limit) -> str:

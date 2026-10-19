@@ -37,6 +37,10 @@ except ImportError as error:
     ) from error
 
 
+FORGE_VERSION: Final[str] = forge.__version__
+"""The installed DamlForge version, such as "0.0.11". Reports record it."""
+
+
 class Stage(enum.StrEnum):
     """The forge step that was running. Members are in pipeline order.
 
@@ -105,6 +109,12 @@ class Seed:
     """The file's text at load time. Mutations start from it."""
     module_name: str
     """The Daml module name forge derives from the file name: iou.vy -> Iou."""
+    daml_yaml: Path | None
+    """The daml.yaml forge took the settings from, or None when forge found none.
+
+    A report copies it next to a saved input, so the input compiles with the
+    seed's settings wherever the report folder is.
+    """
     _resolved: Path = field(repr=False)
     _settings: DamlCodegenSettings = field(repr=False, compare=False)
 
@@ -121,8 +131,10 @@ class Seed:
         # forge's own private loaders, so a seed compiles exactly as `forge daml`
         # compiles it. A rename in forge fails at import instead of letting the
         # two tools disagree silently.
-        settings = _load_codegen_settings(_find_project_dir(resolved))
-        return cls(path, text, daml_module_name(resolved.stem), resolved, settings)
+        project = _find_project_dir(resolved)
+        settings = _load_codegen_settings(project)
+        daml_yaml = project / "daml.yaml" if (project / "daml.yaml").is_file() else None
+        return cls(path, text, daml_module_name(resolved.stem), daml_yaml, resolved, settings)
 
 
 @dataclass(frozen=True, slots=True)

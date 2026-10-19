@@ -95,13 +95,14 @@ def test_folder_without_vy_files_returns_2(tmp_path, capsys):
         (["check"], 2, "stderr", "usage: damlforge-fuzz check"),
         (["check", "x.vy"], 2, "stderr", "Install DamlForge first"),
         (["run", "--help"], 0, "stdout", "--random-seed"),
+        (["run", "--help"], 0, "stdout", "--reports DIR"),
         (["run"], 2, "stderr", "one of the arguments --seconds --count is required"),
         (["run", "--count", "5", "--seconds", "5"], 2, "stderr", "not allowed with"),
         (["run", "--count", "0"], 2, "stderr", "argument --count: '0' is not a whole number"),
         (["run", "--count", "5"], 2, "stderr", "Install DamlForge first"),
     ],
-    ids=["help", "usage-error", "check", "run-help", "run-no-limit", "run-two-limits",
-         "run-count-0", "run"],  # fmt: skip
+    ids=["help", "usage-error", "check", "run-help", "run-help-reports", "run-no-limit",
+         "run-two-limits", "run-count-0", "run"],  # fmt: skip
 )
 def test_command_works_without_forge_installed(argv, status, stream, expected):
     hide_forge = (

@@ -1,0 +1,306 @@
+"""The run folder that `damlforge-fuzz run` writes: report.json, report.md, and groups/.
+
+No test names a crash that one DamlForge version gives, such as an exception,
+a forge line, or a group count. forge fixes bugs between versions (v0.0.10
+compiles `a // b`), and such a test would break on the next fix. The tests
+check relations instead: the report against the printed lines, against
+`check`, and against the input sequence.
+"""
+
+import contextlib
+import datetime
+import io
+import itertools
+import json
+import re
+import time
+from pathlib import Path
+
+import forge
+import pytest
+from conftest import CONTRACTS, PROJECT
+
+from damlforge_fuzz import (
+    Count,
+    Crash,
+    ForgeLine,
+    Ok,
+    Report,
+    Seed,
+    Stage,
+    fuzz,
+    input_sequence,
+)
+from damlforge_fuzz.cli import main
+
+FINAL_LINE = re.compile(
+    r"random seed (\d+): (\d+) inputs, (\d+) OK, (\d+) rejected, (\d+) crash, (\d+) skipped"
+)
+REPORT_LINE = re.compile(r"(\d+) crash groups?, report in (.+)")
+SEEDS = [
+    "contracts/asset_proposal/asset_proposal.vy",
+    "contracts/ballot/ballot.vy",
+    "contracts/escrow/escrow.vy",
+    "contracts/iou/iou.vy",
+]
+COUNTS = ["inputs", "ok", "rejected", "crash", "skipped"]
+
+
+def run(capsys, reports, *argv):
+    """main(["run", *argv, "--reports", reports]): status, stdout lines, run folder, report.json."""
+    status = main(["run", *argv, "--reports", str(reports)])
+    return _result(status, capsys.readouterr().out)
+
+
+def _result(status, out):
+    lines = out.splitlines()
+    folder = Path(REPORT_LINE.fullmatch(lines[-1]).group(2))
+    return status, lines, folder, json.loads((folder / "report.json").read_text())
+
+
+def _groups(n):
+    return "1 crash group" if n == 1 else f"{n} crash groups"
+
+
+@pytest.fixture(scope="module")
+def counted(tmp_path_factory):
+    """One `run --count 400 --random-seed 1` over contracts/, shared by the read-only tests."""
+    reports = tmp_path_factory.mktemp("reports")
+    out = io.StringIO()
+    with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
+        patch.chdir(PROJECT)
+        status = main(["run", "--count", "400", "--random-seed", "1", "--reports", str(reports)])
+    result = _result(status, out.getvalue())
+    assert result[3]["groups"], "400 inputs should crash forge at least once"
+    return result
+
+
+def test_report_json_has_every_field_with_its_type(counted):
+    status, lines, folder, doc = counted
+
+    assert set(doc) == {"schema", "run", "totals", "timeline", "groups"}
+    assert doc["schema"] == 1
+    run = doc["run"]
+    assert set(run) == {
+        "started", "random_seed", "seconds", "count", "seeds", "forge_version", "interrupted"
+    }  # fmt: skip
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", run["started"])
+    assert (run["random_seed"], run["seconds"], run["count"]) == (1, None, 400)
+    assert run["seeds"] == SEEDS
+    assert run["forge_version"] == forge.__version__
+    assert run["interrupted"] is False
+    assert set(doc["totals"]) == set(COUNTS)
+    assert all(type(value) is int for value in doc["totals"].values())
+    for tick in doc["timeline"]:
+        assert set(tick) == {"second", *COUNTS}
+        assert all(type(value) is int for value in tick.values())
+    for group in doc["groups"]:
+        assert set(group) == {
+            "id", "kind", "exception", "where", "stage", "message", "count", "first_seen",
+            "seed", "input", "input_file",
+        }  # fmt: skip
+        assert group["kind"] == "crash"
+        assert re.fullmatch(r"\w+", group["exception"])
+        assert group["where"] is None or re.fullmatch(r"forge/[\w/]+\.py:\d+", group["where"])
+        assert group["stage"] in {stage.value for stage in Stage}
+        assert type(group["message"]) is str
+        assert type(group["count"]) is int and group["count"] >= 1
+        assert set(group["first_seen"]) == {"second", "input"}
+        assert type(group["first_seen"]["input"]) is int
+        assert type(group["first_seen"]["second"]) in (int, float)
+        assert group["seed"] in SEEDS
+        assert group["input_file"] == f"groups/{group['id']}/{Path(group['seed']).name}"
+
+
+def test_group_counts_add_up_to_the_printed_crash_count(counted):
+    status, (start, final, report_line), folder, doc = counted
+
+    assert start == "random seed 1, 4 seeds, 400 inputs"
+    printed = dict(zip(COUNTS, map(int, FINAL_LINE.fullmatch(final).groups()[1:])))
+    assert printed == doc["totals"]
+    assert sum(group["count"] for group in doc["groups"]) == printed["crash"]
+    assert status == 1
+    assert report_line == f"{_groups(len(doc['groups']))}, report in {folder}"
+
+
+def test_each_saved_input_crashes_again_in_its_group(counted, capsys):
+    _, _, folder, doc = counted
+
+    for group in doc["groups"]:
+        path = str(folder / group["input_file"])
+        assert main(["check", path]) == 1
+        [line] = capsys.readouterr().out.splitlines()
+        assert line.startswith(f"CRASH    {group['stage']:<7}{path}  {group['exception']}"), line
+        if group["where"] is not None:
+            assert line.endswith(f" at {group['where']}"), line
+
+
+def test_each_saved_input_is_the_input_its_random_seed_and_number_make(counted):
+    _, _, folder, doc = counted
+    texts = [(PROJECT / seed).read_text() for seed in doc["run"]["seeds"]]
+
+    for group in doc["groups"]:
+        number = group["first_seen"]["input"]
+        made = next(itertools.islice(input_sequence(texts, 1), number - 1, None))
+        assert (made.number, SEEDS[made.seed]) == (number, group["seed"])
+        assert group["input"] == made.text
+        saved = folder / group["input_file"]
+        assert saved.read_text() == made.text
+        seed_yaml = (PROJECT / group["seed"]).parent / "daml.yaml"
+        assert (saved.parent / "daml.yaml").read_bytes() == seed_yaml.read_bytes()
+
+
+def test_group_ids_follow_the_first_input_and_the_timeline_ends_at_the_totals(counted):
+    _, _, folder, doc = counted
+    groups = doc["groups"]
+
+    assert [g["id"] for g in groups] == [f"g{n:02d}" for n in range(1, len(groups) + 1)]
+    firsts = [g["first_seen"]["input"] for g in groups]
+    assert firsts == sorted(firsts)
+    assert len(set(firsts)) == len(firsts)
+    assert sorted(path.name for path in (folder / "groups").iterdir()) == [g["id"] for g in groups]
+    assert [tick["second"] for tick in doc["timeline"]] == list(
+        range(1, len(doc["timeline"]) + 1)
+    )
+    assert {key: doc["timeline"][-1][key] for key in COUNTS} == doc["totals"]
+
+
+def test_report_md_lists_every_group(counted):
+    _, _, folder, doc = counted
+    md = (folder / "report.md").read_text().splitlines()
+
+    assert md[0] == f"# damlforge-fuzz run {doc['run']['started']}"
+    assert f"## {_groups(len(doc['groups']))}" in md
+    for group in doc["groups"]:
+        [row] = [line for line in md if line.startswith(f"| {group['id']} |")]
+        name = Path(group["input_file"]).name
+        assert row.startswith(f"| {group['id']} | {group['count']} | {group['exception']}")
+        assert row.endswith(f" | [{name}]({group['input_file']}) |"), row
+
+
+def test_two_counted_runs_with_one_random_seed_write_the_same_report(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(PROJECT)
+
+    def stable(doc):
+        del doc["run"]["started"], doc["timeline"]
+        for group in doc["groups"]:
+            del group["first_seen"]["second"]
+        return doc
+
+    first = run(capsys, tmp_path, "contracts/iou", "--count", "300", "--random-seed", "2")
+    second = run(capsys, tmp_path, "contracts/iou", "--count", "300", "--random-seed", "2")
+    assert first[2] != second[2]
+    assert stable(first[3]) == stable(second[3])
+
+
+def test_the_run_folder_is_named_after_the_start_and_never_reused(tmp_path, monkeypatch, capsys):
+    start = datetime.datetime(2026, 10, 19, 13, 50, 0, tzinfo=datetime.UTC)
+    monkeypatch.setattr("damlforge_fuzz.report._now", lambda: start)
+    monkeypatch.chdir(PROJECT)
+
+    folders = [
+        run(capsys, tmp_path, "contracts/iou", "--count", "1", "--random-seed", "1")[2]
+        for _ in range(3)
+    ]
+    assert folders == [
+        tmp_path / "2026-10-19T13-50-00Z",
+        tmp_path / "2026-10-19T13-50-00Z-2",
+        tmp_path / "2026-10-19T13-50-00Z-3",
+    ]
+    doc = json.loads((folders[2] / "report.json").read_text())
+    assert doc["run"]["started"] == "2026-10-19T13:50:00Z"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "status", "third_line"),
+    [
+        (Ok("", "Iou"), 0, "0 crash groups, report in {}"),
+        (Crash(Stage.LOWER, "KeyError", "'x'", ForgeLine("forge/x.py", 1)), 1,
+         "1 crash group, report in {}"),
+    ],
+    ids=["no-crash", "one-key"],
+)  # fmt: skip
+def test_the_third_line_counts_the_groups(
+    outcome, status, third_line, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr("damlforge_fuzz.runner.compile_and_sort", lambda text, seed: outcome)
+    monkeypatch.chdir(PROJECT)
+
+    result_status, lines, folder, doc = run(
+        capsys, tmp_path, "contracts/iou", "--count", "50", "--random-seed", "1"
+    )
+    assert result_status == status
+    assert lines[2] == third_line.format(folder)
+    assert len(doc["groups"]) == status
+
+
+def test_a_reports_path_that_is_a_file_returns_2_and_prints_nothing(
+    tmp_path, monkeypatch, capsys
+):
+    (tmp_path / "taken").write_text("")
+    monkeypatch.chdir(PROJECT)
+
+    assert main(["run", "--count", "1", "--reports", str(tmp_path / "taken")]) == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert "taken" in err
+
+
+def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, capsys):
+    from damlforge_fuzz import compile_and_sort
+
+    calls = itertools.count(1)
+
+    def interrupted_at_call_100(text, seed):
+        if next(calls) == 100:
+            raise KeyboardInterrupt
+        return compile_and_sort(text, seed)
+
+    monkeypatch.setattr("damlforge_fuzz.runner.compile_and_sort", interrupted_at_call_100)
+    monkeypatch.chdir(PROJECT)
+
+    status, (_, final, _), folder, doc = run(
+        capsys, tmp_path, "--count", "400", "--random-seed", "1"
+    )
+    assert status == 130
+    assert doc["run"]["interrupted"] is True
+    printed = dict(zip(COUNTS, map(int, FINAL_LINE.fullmatch(final).groups()[1:])))
+    assert printed == doc["totals"]
+    assert printed["inputs"] - printed["skipped"] == 99
+    assert sum(group["count"] for group in doc["groups"]) == printed["crash"]
+    assert "- Stopped early by Ctrl-C. The report covers the inputs so far." in (
+        (folder / "report.md").read_text().splitlines()
+    )
+
+
+def test_the_timeline_has_one_tick_per_second(tmp_path, monkeypatch, capsys):
+    def slow(text, seed):
+        time.sleep(0.25)
+        return Ok("", seed.module_name)
+
+    monkeypatch.setattr("damlforge_fuzz.runner.compile_and_sort", slow)
+    monkeypatch.chdir(PROJECT)
+
+    _, _, _, doc = run(capsys, tmp_path, "contracts/iou", "--count", "10", "--random-seed", "1")
+    timeline = doc["timeline"]
+    assert len(timeline) >= 2
+    assert [tick["second"] for tick in timeline] == list(range(1, len(timeline) + 1))
+    for before, after in itertools.pairwise(timeline):
+        assert all(before[key] <= after[key] for key in COUNTS)
+    assert {key: timeline[-1][key] for key in COUNTS} == doc["totals"]
+
+
+def test_writing_again_leaves_no_stale_group_folder(tmp_path):
+    seed = Seed.load(CONTRACTS / "iou" / "iou.vy")
+    report = Report.open([seed], 1, Count(300), tmp_path)
+    for tried in fuzz([seed], 1, Count(300)):
+        report.add(tried)
+    report.write()
+    (report.folder / "groups" / "g99").mkdir(parents=True)
+
+    report.write()
+    assert sorted(path.name for path in (report.folder / "groups").iterdir()) == [
+        group.id for group in report.groups.values()
+    ]
