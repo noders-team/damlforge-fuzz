@@ -55,6 +55,19 @@ class Stage(enum.StrEnum):
     EMIT = "emit"  # forge.codegen.generate_daml
 
 
+STAGE_TEXT: Final[dict[Stage, str]] = {
+    Stage.PARSE: "forge reads the .vy text and makes a syntax tree (forge.ast.parse_to_ast). "
+    "A crash here means forge failed while it read the code.",
+    Stage.CHECK: "forge checks names, types, imports, and the rules for templates and choices "
+    "(forge.semantics.analyze_module). Wrong code must stop here with a DF error.",
+    Stage.LOWER: "forge changes the checked program into its internal form, IR "
+    "(forge.ir.lower_module). A crash here usually means that check let through code "
+    "that forge cannot translate.",
+    Stage.EMIT: "forge writes the Daml code from the IR (forge.codegen.generate_daml).",
+}
+"""What each stage does, in plain English, for readers of report.md and the README."""
+
+
 @dataclass(frozen=True, slots=True)
 class ForgeLine:
     """A line in forge's source, such as forge/ir/lower.py:244.

@@ -36,6 +36,15 @@ and one saved input per group)::
     report.write()  # report.folder is reports/2026-10-19T13-50-00Z
     report.groups   # {CrashKey: Group}, in first-seen order
 
+Unit 5 shrinks each crashing input: it deletes lines while the text still
+crashes with the same key. Report.shrink() does this for every group, and
+write() saves each result under groups/gNN/shrunk/::
+
+    from damlforge_fuzz import shrink, shrunk_path
+
+    small = shrink(text, seed, crash.key)  # a subsequence of text's lines
+    shrunk_path(path)                      # groups/g02/escrow.vy -> groups/g02/shrunk/escrow.vy
+
 Import from this package only. The modules behind it are not part of the API.
 """
 
@@ -45,6 +54,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from damlforge_fuzz.compiler import (
         FORGE_VERSION,
+        STAGE_TEXT,
         Crash,
         CrashKey,
         ForgeLine,
@@ -58,16 +68,18 @@ if TYPE_CHECKING:
     from damlforge_fuzz.mutate import RULE_NAMES, Change, Input, input_sequence
     from damlforge_fuzz.report import FirstSeen, Group, Report, Run, Tick
     from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried, fuzz
+    from damlforge_fuzz.shrinker import shrink, shrunk_path
 
 _HOME = {
     **dict.fromkeys(
         ["FORGE_VERSION", "Crash", "CrashKey", "ForgeLine", "Ok", "Outcome", "Rejected", "Seed", "Stage"]
-        + ["compile_and_sort"],
+        + ["STAGE_TEXT", "compile_and_sort"],
         "compiler",
     ),
     **dict.fromkeys(["Change", "Input", "RULE_NAMES", "input_sequence"], "mutate"),
     **dict.fromkeys(["Count", "Limit", "Seconds", "Totals", "Tried", "fuzz"], "runner"),
     **dict.fromkeys(["FirstSeen", "Group", "Report", "Run", "Tick"], "report"),
+    **dict.fromkeys(["shrink", "shrunk_path"], "shrinker"),
 }
 """The module that holds each public name. compiler, runner, and report load forge; mutate does not."""
 

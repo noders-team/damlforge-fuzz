@@ -3,7 +3,7 @@
 damlforge-fuzz is a fuzzer for the DamlForge compiler, `forge`, which compiles `.vy` files to Daml.
 The fuzzer takes a few seed contracts, makes small random edits to them, runs `forge` on each edited copy, and reports crashes.
 
-**Status.** This is unit 4. The `damlforge-fuzz check` command compiles `.vy` files and sorts each result. The `damlforge-fuzz run` command makes random edits to the seeds, counts the results, and writes a report of the crashes. Shrinking the crashing inputs comes next.
+**Status.** This is unit 5. The `damlforge-fuzz check` command compiles `.vy` files and sorts each result. The `damlforge-fuzz run` command makes random edits to the seeds, counts the results, and writes a report of the crashes, with a shrunk copy of each crashing input. The `damlforge-fuzz shrink` command shrinks one crashing file. A damlc check of the Daml that forge writes comes next.
 
 For a step-by-step guide with real command output, open [`docs/guide.html`](docs/guide.html) in a browser.
 The plan for units 2 to 6 is in [`docs/plan.html`](docs/plan.html).
@@ -118,7 +118,19 @@ The first column is the result:
 - `REJECTED`: forge reported an error in the input, such as `DF1213`.
 - `CRASH`: forge failed with an error that is not its own. This is a bug in forge, and the line ends with the forge file and line where it failed.
 
-The second column is the forge step that was running: `parse`, `check`, `lower`, or `emit`.
+The second column is the forge step that was running, the stage. forge runs four stages, in this order:
+
+| Stage | What forge does |
+| --- | --- |
+| `parse` | forge reads the `.vy` text and makes a syntax tree (`forge.ast.parse_to_ast`). A crash here means forge failed while it read the code. |
+| `check` | forge checks names, types, imports, and the rules for templates and choices (`forge.semantics.analyze_module`). Wrong code must stop here with a DF error. |
+| `lower` | forge changes the checked program into its internal form, IR (`forge.ir.lower_module`). A crash here usually means that check let through code that forge cannot translate. |
+| `emit` | forge writes the Daml code from the IR (`forge.codegen.generate_daml`). |
+
+The stage is the step that was running, not the folder of the forge file.
+So a crash can have stage `check` and a line in `forge/ir/lower.py`.
+`STAGE_TEXT` in `src/damlforge_fuzz/compiler.py` has the same texts, and `report.md` uses them.
+
 The command exits with 0 when every file is `OK`, 1 when any file is `REJECTED` or `CRASH`, and 2 for a usage error, such as a missing path.
 
 `damlforge-fuzz run` makes changed copies of the seeds and compiles each copy with `forge`.
@@ -174,8 +186,9 @@ Git ignores `reports/`.
 The folder has these files:
 
 - `report.json`: the full report. It has the run settings, the counts, the counts after each second of the run, and one entry for each group. A group entry has the exception, the forge file and line, the stage, the number of crashes, the first input that crashed, and the full text of that input.
-- `report.md`: a short summary of `report.json`, with one table row for each group.
+- `report.md`: a short summary of `report.json`, with one table row for each group. It also explains the stages of the groups, and shows each shrunk input.
 - `groups/g01/`, `groups/g02/`, and so on: one folder for each group, numbered in the order the run found them. Each folder has the first crashing input, with the file name of its seed, such as `iou.vy`, and a copy of the seed's `daml.yaml`.
+- `groups/g01/shrunk/iou.vy`: the shrunk input of the group. [Shrunk inputs](#shrunk-inputs) explains it.
 
 To see a crash again, run `check` on the saved file:
 
@@ -185,6 +198,48 @@ CRASH    lower  reports/2026-10-19T15-27-46Z/groups/g01/iou.vy  CompilerPanic lo
 ```
 
 When you press Ctrl-C, the run writes the report for the copies so far, and `report.json` has `"interrupted": true`.
+
+### Shrunk inputs
+
+A crashing input has 30 to 45 lines, but usually only a few of them cause the crash.
+After the last copy, the run shrinks the first input of each group.
+The shrinker deletes lines, first in large blocks, then one line or one indented block at a time.
+It keeps a deletion only when the text still crashes with the same exception at the same forge line.
+It stops when it cannot delete one more line.
+The shrunk input has only lines of the full input, in the same order, and no line is changed.
+For the 11 groups of a 2000-copy run, shrinking took less than half a second, and the shrunk inputs have 2 to 12 lines.
+
+The shrunk input is in `groups/g02/shrunk/escrow.vy`, next to the full input, with the same file name.
+The same name keeps the Daml module name. The shrunk file uses the `daml.yaml` of the group folder above it.
+`report.json` has the text in `"shrunk"` and the file in `"shrunk_file"`.
+`report.md` has a `Shrunk` column, such as `3 of 42 lines`, and a code block with each shrunk input.
+
+```
+$ damlforge-fuzz check reports/2026-10-19T15-36-34Z/groups/g02
+CRASH    check  reports/2026-10-19T15-36-34Z/groups/g02/escrow.vy  AttributeError 'Subscript' object has no attribute 'id' at forge/semantics/analysis/types.py:644
+CRASH    check  reports/2026-10-19T15-36-34Z/groups/g02/shrunk/escrow.vy  AttributeError 'Subscript' object has no attribute 'id' at forge/semantics/analysis/types.py:644
+```
+
+The first Ctrl-C stops the copies, and the run still shrinks.
+A second Ctrl-C, while the run shrinks, stops the shrinking.
+The groups that are not shrunk yet have `"shrunk": null`, and `report.md` shows `not shrunk`.
+
+To shrink any `.vy` file that crashes forge, run `damlforge-fuzz shrink FILE`:
+
+```
+$ damlforge-fuzz shrink reports/2026-10-19T15-36-34Z/groups/g02/escrow.vy
+shrunk reports/2026-10-19T15-36-34Z/groups/g02/escrow.vy from 42 to 3 lines: reports/2026-10-19T15-36-34Z/groups/g02/shrunk/escrow.vy
+@template
+class Escrow:
+    tuple[int, str]: EscrowTerms
+```
+
+The command writes the shrunk file to `shrunk/` next to FILE and prints it.
+It exits with 0 when it writes the file.
+It exits with 1 and writes nothing when FILE does not crash forge.
+It exits with 2 for a usage error, such as a missing file, a folder, or a file that is already in a `shrunk/` folder.
+It exits with 130 and writes nothing when you press Ctrl-C.
+This output is from DamlForge `v0.0.10`.
 
 To see each copy, its changes, and its result, run `python scripts/show_inputs.py contracts/iou --count 5 --random-seed 1`.
 It makes the same copies as `damlforge-fuzz run` with the same folders and random seed.

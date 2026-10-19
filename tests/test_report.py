@@ -21,9 +21,12 @@ import pytest
 from conftest import CONTRACTS, PROJECT
 
 from damlforge_fuzz import (
+    STAGE_TEXT,
     Count,
     Crash,
+    FirstSeen,
     ForgeLine,
+    Group,
     Ok,
     Report,
     Seed,
@@ -97,7 +100,7 @@ def test_report_json_has_every_field_with_its_type(counted):
     for group in doc["groups"]:
         assert set(group) == {
             "id", "kind", "exception", "where", "stage", "message", "count", "first_seen",
-            "seed", "input", "input_file",
+            "seed", "input", "input_file", "shrunk", "shrunk_file",
         }  # fmt: skip
         assert group["kind"] == "crash"
         assert re.fullmatch(r"\w+", group["exception"])
@@ -110,6 +113,8 @@ def test_report_json_has_every_field_with_its_type(counted):
         assert type(group["first_seen"]["second"]) in (int, float)
         assert group["seed"] in SEEDS
         assert group["input_file"] == f"groups/{group['id']}/{Path(group['seed']).name}"
+        assert type(group["shrunk"]) is str
+        assert group["shrunk_file"] == f"groups/{group['id']}/shrunk/{Path(group['seed']).name}"
 
 
 def test_group_counts_add_up_to_the_printed_crash_count(counted):
@@ -133,6 +138,32 @@ def test_each_saved_input_crashes_again_in_its_group(counted, capsys):
         assert line.startswith(f"CRASH    {group['stage']:<7}{path}  {group['exception']}"), line
         if group["where"] is not None:
             assert line.endswith(f" at {group['where']}"), line
+
+
+def test_each_shrunk_input_crashes_again_in_its_group(counted, capsys):
+    _, _, folder, doc = counted
+
+    for group in doc["groups"]:
+        path = str(folder / group["shrunk_file"])
+        assert main(["check", path]) == 1
+        [line] = capsys.readouterr().out.splitlines()
+        assert line.startswith(f"CRASH    {group['stage']:<7}{path}  {group['exception']}"), line
+        if group["where"] is not None:
+            assert line.endswith(f" at {group['where']}"), line
+
+
+def test_each_shrunk_input_is_shorter_and_made_of_its_inputs_lines(counted):
+    _, _, folder, doc = counted
+
+    for group in doc["groups"]:
+        full = group["input"].splitlines(keepends=True)
+        small = group["shrunk"].splitlines(keepends=True)
+        # The shrinker never returns an empty text, so a 1-line input cannot get shorter.
+        assert len(full) > 1, group["id"]
+        assert len(small) < len(full), group["id"]
+        rest = iter(full)
+        assert all(line in rest for line in small), f"{group['id']}: not a subsequence"
+        assert (folder / group["shrunk_file"]).read_text() == group["shrunk"]
 
 
 def test_each_saved_input_is_the_input_its_random_seed_and_number_make(counted):
@@ -175,7 +206,29 @@ def test_report_md_lists_every_group(counted):
         [row] = [line for line in md if line.startswith(f"| {group['id']} |")]
         name = Path(group["input_file"]).name
         assert row.startswith(f"| {group['id']} | {group['count']} | {group['exception']}")
-        assert row.endswith(f" | [{name}]({group['input_file']}) |"), row
+        shrunk = f"{len(group['shrunk'].splitlines())} of {len(group['input'].splitlines())} lines"
+        assert row.endswith(
+            f" | [{name}]({group['input_file']}) | [{shrunk}]({group['shrunk_file']}) |"
+        ), row
+
+
+def test_report_md_explains_exactly_the_stages_of_its_groups_in_pipeline_order(counted):
+    _, _, folder, doc = counted
+    md = (folder / "report.md").read_text()
+
+    present = {group["stage"] for group in doc["groups"]}
+    expected = [f"- `{stage}`: {STAGE_TEXT[stage]}" for stage in Stage if stage in present]
+    section = md.split("\n## Stages\n\n", 1)[1].split("\n\n", 1)[0]
+    assert section.splitlines() == expected
+
+
+def test_report_md_shows_each_shrunk_input_in_a_code_block(counted):
+    _, _, folder, doc = counted
+    md = (folder / "report.md").read_text()
+
+    shrunk_inputs = md.split("\n## Shrunk inputs\n", 1)[1]
+    for group in doc["groups"]:
+        assert f"```python\n{group['shrunk']}```\n" in shrunk_inputs, group["id"]
 
 
 def test_two_counted_runs_with_one_random_seed_write_the_same_report(
@@ -273,6 +326,37 @@ def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, c
     assert "- Stopped early by Ctrl-C. The report covers the inputs so far." in (
         (folder / "report.md").read_text().splitlines()
     )
+    assert doc["groups"], "99 inputs should crash forge at least once"
+    for group in doc["groups"]:
+        assert (folder / group["shrunk_file"]).read_text() == group["shrunk"]
+
+
+def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeypatch, capsys):
+    from damlforge_fuzz import shrink
+
+    calls = itertools.count(1)
+
+    def interrupted_in_group_2(text, seed, key):
+        if next(calls) == 2:
+            raise KeyboardInterrupt
+        return shrink(text, seed, key)
+
+    monkeypatch.setattr("damlforge_fuzz.report.shrink", interrupted_in_group_2)
+    monkeypatch.chdir(PROJECT)
+
+    status, lines, folder, doc = run(capsys, tmp_path, "--count", "400", "--random-seed", "1")
+    assert status == 130
+    assert len(lines) == 3
+    assert doc["run"]["interrupted"] is True
+    first, *rest = doc["groups"]
+    assert rest, "400 inputs should crash forge in at least two groups"
+    assert (folder / first["shrunk_file"]).read_text() == first["shrunk"]
+    assert [(g["shrunk"], g["shrunk_file"]) for g in rest] == [(None, None)] * len(rest)
+    assert sorted(p.parent.parent.name for p in folder.glob("groups/*/shrunk/*")) == [first["id"]]
+    md = (folder / "report.md").read_text().splitlines()
+    assert all(
+        line.endswith(" | not shrunk |") for line in md if line.startswith(("| g02 |", "| g03 |"))
+    )
 
 
 def test_the_timeline_has_one_tick_per_second(tmp_path, monkeypatch, capsys):
@@ -304,3 +388,18 @@ def test_writing_again_leaves_no_stale_group_folder(tmp_path):
     assert sorted(path.name for path in (report.folder / "groups").iterdir()) == [
         group.id for group in report.groups.values()
     ]
+
+
+def test_report_md_fences_a_shrunk_input_longer_than_its_backticks(tmp_path):
+    seed = Seed.load(CONTRACTS / "iou" / "iou.vy")
+    report = Report.open([seed], 1, Count(1), tmp_path)
+    key = Crash(Stage.LOWER, "KeyError", "'x'", ForgeLine("forge/x.py", 1)).key
+    report.groups[key] = Group(
+        "g01", "crash", "KeyError", "forge/x.py:1", Stage.LOWER, "'x'", 1, FirstSeen(0.0, 1),
+        "contracts/iou/iou.vy", "a\nb = '```'\n", "groups/g01/iou.vy",
+        shrunk="b = '```'\n", shrunk_file="groups/g01/shrunk/iou.vy",
+    )  # fmt: skip
+
+    md = report.markdown()
+    assert "\n````python\nb = '```'\n````\n" in md
+    assert "| [1 of 2 lines](groups/g01/shrunk/iou.vy) |" in md

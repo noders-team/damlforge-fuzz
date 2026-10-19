@@ -1,4 +1,5 @@
-"""The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`; unit 4 adds its report.
+"""The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`; unit 4 adds its report;
+unit 5 adds shrinking and `shrink`.
 
     damlforge-fuzz check PATH [PATH ...]
 
@@ -30,12 +31,30 @@ The first two lines hold no time, so two --count runs with one random seed
 print the same first two lines. `--count 31200 --random-seed 48213` repeats
 the 60-second run above. The third line names the run folder, which every run
 makes under --reports (default: reports): report.json, report.md, and one
-folder per crash group with the group's first input.
+folder per crash group with the group's first input and its shrunk copy.
+Between the second and the third line, `run` shrinks each group's input.
 
 Exit status: 0 when no input crashed, 1 when any input crashed, 2 for a usage
 error (as for check, and a --reports folder that cannot be made, or a report
 that cannot be written), 130 on Ctrl-C, after all three lines and the report
-for the inputs so far.
+for the inputs so far. A first Ctrl-C stops the inputs and the run still
+shrinks. A Ctrl-C while it shrinks stops the shrinking: the groups not shrunk
+yet get "shrunk": null.
+
+    damlforge-fuzz shrink FILE
+
+`shrink` compiles FILE as `check` does. When it crashes, it deletes lines while
+the text still crashes in the same group, writes the result to shrunk/ next to
+FILE under the same name, and prints a line and the shrunk text:
+
+    shrunk groups/g02/escrow.vy from 42 to 3 lines: groups/g02/shrunk/escrow.vy
+    @template
+    ...
+
+Exit status: 0 when the shrunk file is written, 1 when FILE does not crash
+(one line to stderr, nothing written), 2 for a usage error (as for check, and
+a FILE that is a folder or already in a shrunk/ folder), 130 on Ctrl-C
+(nothing written).
 """
 
 from __future__ import annotations
@@ -101,9 +120,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="DIR",
         help="the folder that gets one run folder per run (default: reports)",
     )
+    shrink = commands.add_parser(
+        "shrink",
+        help="delete lines of a crashing .vy file while it still crashes the same way",
+        description="Delete lines of FILE while forge still crashes on it with the same "
+        "exception at the same forge line, and write the result to shrunk/ next to FILE.",
+    )
+    shrink.add_argument("file", type=Path, metavar="FILE", help="a .vy file that crashes forge")
     args = parser.parse_args(argv)
     if args.command == "check":
         return _check(args.paths)
+    if args.command == "shrink":
+        return _shrink(args.file)
     return _run(args.seed_folders, args.seconds, args.count, args.random_seed, args.reports)
 
 
@@ -161,6 +189,10 @@ def _run(
         report.interrupt()
     print(_final_line(random_seed, report.totals), flush=True)
     try:
+        report.shrink()
+    except KeyboardInterrupt:
+        report.interrupt()
+    try:
         report.write()
     except OSError as error:
         print(f"damlforge-fuzz run: cannot write the report: {error}", file=sys.stderr)
@@ -169,6 +201,46 @@ def _run(
     if report.run.interrupted:
         return 130
     return 1 if report.totals.crash else 0
+
+
+def _shrink(path: Path) -> int:
+    try:
+        from damlforge_fuzz import Crash, Seed, compile_and_sort, shrink, shrunk_path
+    except ImportError as error:
+        print(f"damlforge-fuzz: {error}", file=sys.stderr)
+        return 2
+    if path.parent.name == "shrunk":
+        # Shrinking again changes nothing, and would write shrunk/shrunk/.
+        print(f"damlforge-fuzz shrink: {path} is already a shrunk file", file=sys.stderr)
+        return 2
+    try:
+        if path.is_dir():
+            raise IsADirectoryError(f"{path} is a folder, not a .vy file")
+        seed = Seed.load(path)
+    except (OSError, ValueError) as error:
+        print(f"damlforge-fuzz shrink: {error}", file=sys.stderr)
+        return 2
+    try:
+        outcome = compile_and_sort(seed.text, seed)
+        if not isinstance(outcome, Crash):
+            detail = _detail(outcome)
+            result = f"{outcome.label} {outcome.stage}" + (f"  {detail}" if detail else "")
+            print(f"{path} does not crash forge: {result}", file=sys.stderr)
+            return 1
+        text = shrink(seed.text, seed, outcome.key)
+    except KeyboardInterrupt:
+        return 130
+    out = shrunk_path(path)
+    try:
+        out.parent.mkdir(exist_ok=True)
+        out.write_text(text, encoding="utf-8", newline="")
+    except OSError as error:
+        print(f"damlforge-fuzz shrink: cannot write {out}: {error}", file=sys.stderr)
+        return 2
+    before, after = len(seed.text.splitlines()), len(text.splitlines())
+    print(f"shrunk {path} from {before} to {_plural(after, 'line')}: {out}")
+    print(text, end="" if text.endswith("\n") else "\n")
+    return 0
 
 
 def _start_line(random_seed: int, seed_count: int, limit: Limit) -> str:
@@ -260,12 +332,18 @@ def _line(path: Path, outcome: Outcome) -> str:
 
     The label and stage columns are padded so the paths line up.
     """
+    head = f"{outcome.label:<9}{outcome.stage:<7}{path}"
+    detail = _detail(outcome)
+    return f"{head}  {detail}" if detail else head
+
+
+def _detail(outcome: Outcome) -> str:
+    """What went wrong, as a result line ends: '' for OK."""
     from damlforge_fuzz import Crash, Ok, Rejected
 
-    head = f"{outcome.label:<9}{outcome.stage:<7}{path}"
     match outcome:
         case Ok():
-            return head
+            return ""
         case Rejected(exception=exception, message=message, codes=codes):
             detail = message if codes else f"{exception}: {message}"
         case Crash(exception=exception, message=message, where=where):
@@ -273,4 +351,4 @@ def _line(path: Path, outcome: Outcome) -> str:
             detail = " ".join(part for part in (exception, first_line) if part)
             if where is not None:
                 detail += f" at {where}"
-    return f"{head}  {detail}"
+    return detail

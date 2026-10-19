@@ -15,6 +15,7 @@ This module imports the compiler, so it loads forge. It owns three decisions:
           report.md
           groups/g01/iou.vy      the first input of the group, under the seed's file name
           groups/g01/daml.yaml   a copy of the seed's daml.yaml, when it has one
+          groups/g01/shrunk/iou.vy   the shrunk input (see shrinker.shrunk_path)
 
 Time enters a run only here: Report.add reads the clock. fuzz() and the
 inputs never see it, so `--count N --random-seed S` gives the same inputs, the
@@ -26,15 +27,17 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 import shutil
 import time
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Final, Literal
 
-from damlforge_fuzz.compiler import FORGE_VERSION, Crash, CrashKey, Seed, Stage
+from damlforge_fuzz.compiler import FORGE_VERSION, STAGE_TEXT, Crash, CrashKey, Seed, Stage
 from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried
+from damlforge_fuzz.shrinker import shrink, shrunk_path
 
 SCHEMA: Final = 1
 """The version of the report.json shape. Raise it when a change breaks readers:
@@ -106,6 +109,12 @@ class Group:
     """The full text of the first input."""
     input_file: str
     """Where write() saves `input`, relative to the run folder: "groups/g01/iou.vy"."""
+    shrunk: str | None = None
+    """The shortest text the shrinker found by deleting lines of `input` that
+    still crashes in this group. Its lines are a subsequence of `input`'s lines.
+    None only when Ctrl-C stopped the shrinking before this group."""
+    shrunk_file: str | None = None
+    """Where write() saves `shrunk`: "groups/g01/shrunk/iou.vy". None exactly when `shrunk` is None."""
 
 
 @dataclass(slots=True)
@@ -121,7 +130,7 @@ class Report:
       1, 2, ... with no gap. to_json() adds the final partial second, so the
       document's last tick always equals its totals.
 
-    The run loop is the only writer. Make one with Report.open.
+    The run loop and shrink() are the only writers. Make one with Report.open.
     """
 
     run: Run
@@ -208,6 +217,21 @@ class Report:
         """Mark the run as stopped by Ctrl-C."""
         self.run = replace(self.run, interrupted=True)
 
+    def shrink(self) -> None:
+        """Shrink each group that has no shrunk input yet, in group order.
+
+        Each group shrinks with the run's own Seed and the group's key, so the
+        shrinker compiles exactly as the run did. shrunk and shrunk_file are
+        set together after shrink() returns, so a Ctrl-C in the middle of a
+        group leaves that group untouched. A second call finishes the groups
+        that a Ctrl-C skipped. KeyboardInterrupt propagates to the caller.
+        """
+        for key, group in self.groups.items():
+            if group.shrunk is None:
+                text = shrink(group.input, self._seeds[group.seed], key)
+                group.shrunk = text
+                group.shrunk_file = str(shrunk_path(PurePosixPath(group.input_file)))
+
     def to_json(self) -> dict[str, Any]:
         """The report.json document. The only code that builds its shape. Pure."""
         timeline = list(self.timeline)
@@ -223,7 +247,8 @@ class Report:
         }
 
     def markdown(self) -> str:
-        """report.md: the run settings, the totals, and one table row per group."""
+        """report.md: the run settings, the totals, one table row per group, the
+        stages those groups crashed in, and each shrunk input."""
         run, totals = self.run, self.totals
         if run.count is not None:
             limit = f"{run.count} inputs"
@@ -251,23 +276,38 @@ class Report:
         if self.groups:
             lines += [
                 "",
-                "| Group | Count | Exception | Stage | Seed | First seen | Input |",
-                "| --- | --- | --- | --- | --- | --- | --- |",
+                "| Group | Count | Exception | Stage | Seed | First seen | Input | Shrunk |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- |",
             ]
         for group in self.groups.values():
-            exception = group.exception
-            if group.where is not None:
-                exception += f" at {group.where}"
             cells = [
                 group.id,
                 str(group.count),
-                exception,
+                _exception_at(group),
                 group.stage,
                 group.seed,
                 f"input {group.first_seen.input}, {group.first_seen.second} s",
                 f"[{Path(group.input_file).name}]({group.input_file})",
+                _shrunk_cell(group),
             ]
             lines.append("| " + " | ".join(cell.replace("|", "\\|") for cell in cells) + " |")
+        present = {group.stage for group in self.groups.values()}
+        if present:
+            lines += ["", "## Stages", ""]
+            lines += [f"- `{stage}`: {STAGE_TEXT[stage]}" for stage in Stage if stage in present]
+            lines += [
+                "",
+                "The stage is the step that was running, not the folder of the forge file, "
+                "so a crash can have stage `check` and a line in `forge/ir/lower.py`.",
+            ]
+        shrunk = [group for group in self.groups.values() if group.shrunk is not None]
+        if shrunk:
+            lines += ["", "## Shrunk inputs"]
+        for group in shrunk:
+            # One backtick more than the longest run in the text, so the text cannot end the block.
+            fence = "`" * max([3, *(len(run) + 1 for run in re.findall("`+", group.shrunk))])
+            lines += ["", f"### {group.id}: {_exception_at(group)}", "", f"{fence}python"]
+            lines += [group.shrunk.rstrip("\n"), fence]
         return "\n".join(lines) + "\n"
 
     def write(self) -> None:
@@ -289,9 +329,27 @@ class Report:
             daml_yaml = self._seeds[group.seed].daml_yaml
             if daml_yaml is not None:
                 shutil.copyfile(daml_yaml, saved.parent / "daml.yaml")
+            if group.shrunk_file is not None:
+                shrunk = self.folder / group.shrunk_file
+                shrunk.parent.mkdir()
+                shrunk.write_text(group.shrunk, encoding="utf-8", newline="")
         (self.folder / "report.md").write_text(self.markdown(), encoding="utf-8")
         document = json.dumps(self.to_json(), indent=2, ensure_ascii=False) + "\n"
         (self.folder / "report.json").write_text(document, encoding="utf-8")
+
+
+def _exception_at(group: Group) -> str:
+    """'KeyError at forge/ir/lower.py:289', or 'RecursionError' when there is no forge line."""
+    return group.exception if group.where is None else f"{group.exception} at {group.where}"
+
+
+def _shrunk_cell(group: Group) -> str:
+    """'[3 of 42 lines](groups/g02/shrunk/escrow.vy)', or 'not shrunk'."""
+    if group.shrunk is None:
+        return "not shrunk"
+    total = len(group.input.splitlines())
+    lines = f"{len(group.shrunk.splitlines())} of {total} line{'' if total == 1 else 's'}"
+    return f"[{lines}]({group.shrunk_file})"
 
 
 def _now() -> datetime.datetime:
