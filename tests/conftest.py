@@ -7,8 +7,9 @@ PROJECT = Path(__file__).resolve().parents[1]
 CONTRACTS = PROJECT / "contracts"
 SEED_FILES = sorted(CONTRACTS.glob("*/*.vy"))
 
-FLOORDIV = "def f(a: int, b: int) -> int:\n    return a // b\n"
 BITAND = "def f(count: int) -> int:\n    return count & 1\n"
+"""Crashes forge in lower: `&` is missing from forge's _BIN_OPS table. `a // b` did too, until DamlForge v0.0.10."""
+BITOR = "def f(count: int) -> int:\n    return count | 1\n"
 
 OWNER_FIELD = "\n    owner: Party\n"
 """iou.vy's field line. "owner: Party" alone also matches `new_owner: Party` in Transfer."""

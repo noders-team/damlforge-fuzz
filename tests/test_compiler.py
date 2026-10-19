@@ -8,7 +8,7 @@ from pathlib import Path
 
 import forge
 import pytest
-from conftest import BITAND, CONTRACTS, FLOORDIV, OWNER_FIELD, SEED_FILES, copy_iou
+from conftest import BITAND, BITOR, CONTRACTS, OWNER_FIELD, SEED_FILES, copy_iou
 
 from damlforge_fuzz import Crash, Ok, Rejected, Seed, Stage, compile_and_sort
 
@@ -44,8 +44,8 @@ def test_daml_yaml_build_options_reach_forge(tmp_path):
     assert outcome.daml == forge_daml_output(project / "escrow.vy", tmp_path / "out", "Escrow")
 
 
-def test_floor_division_crashes_in_lower_at_the_bin_ops_lookup(write_vy):
-    seed = Seed.load(write_vy("floordiv.vy", FLOORDIV))
+def test_bitwise_and_crashes_in_lower_at_the_bin_ops_lookup(write_vy):
+    seed = Seed.load(write_vy("bitand.vy", BITAND))
 
     outcome = compile_and_sort(seed.text, seed)
 
@@ -53,7 +53,7 @@ def test_floor_division_crashes_in_lower_at_the_bin_ops_lookup(write_vy):
     assert (outcome.stage, outcome.exception, outcome.message) == (
         Stage.LOWER,
         "KeyError",
-        "'FloorDiv'",
+        "'BitAnd'",
     )
     assert outcome.where is not None and outcome.where.file == "forge/ir/lower.py"
     forge_source = Path(forge.__file__).parent.parent / outcome.where.file
@@ -62,14 +62,14 @@ def test_floor_division_crashes_in_lower_at_the_bin_ops_lookup(write_vy):
 
 
 def test_crashes_with_different_messages_at_one_forge_line_share_a_key(write_vy):
-    seed = Seed.load(write_vy("ops.vy", FLOORDIV))
+    seed = Seed.load(write_vy("ops.vy", BITAND))
 
-    floordiv = compile_and_sort(FLOORDIV, seed)
     bitand = compile_and_sort(BITAND, seed)
+    bitor = compile_and_sort(BITOR, seed)
 
-    assert isinstance(floordiv, Crash) and isinstance(bitand, Crash)
-    assert floordiv.message != bitand.message
-    assert floordiv.key == bitand.key
+    assert isinstance(bitand, Crash) and isinstance(bitor, Crash)
+    assert bitand.message != bitor.message
+    assert bitand.key == bitor.key
 
 
 def test_field_typed_as_its_own_name_is_rejected_with_DF1213(tmp_path):
@@ -177,7 +177,7 @@ def test_indentation_error_from_the_pre_parser_is_a_parse_crash(write_vy):
 def test_repeated_calls_in_mixed_order_give_equal_outcomes():
     seed = Seed.load(CONTRACTS / "iou" / "iou.vy")
 
-    outcomes = [compile_and_sort(text, seed) for text in [FLOORDIV, seed.text] * 2]
+    outcomes = [compile_and_sort(text, seed) for text in [BITAND, seed.text] * 2]
 
     assert isinstance(outcomes[0], Crash) and isinstance(outcomes[1], Ok)
     assert outcomes[2] == outcomes[0], "a crash after an OK compile should repeat exactly"
@@ -238,6 +238,6 @@ def test_the_text_argument_is_compiled_not_the_file(tmp_path):
     vy = tmp_path / "iou.vy"
     shutil.copy(CONTRACTS / "iou" / "iou.vy", vy)
     seed = Seed.load(vy)
-    vy.write_text(FLOORDIV)
+    vy.write_text(BITAND)
 
     assert isinstance(compile_and_sort(seed.text, seed), Ok)

@@ -72,8 +72,8 @@ class CrashKey:
     """What makes two crashes the same crash: one report group, one shrink target.
 
     The message is left out on purpose because it often holds text from the
-    input. `a // b` and `count & 1` both crash with KeyError at
-    forge/ir/lower.py:244, with messages 'FloorDiv' and 'BitAnd'. They are one
+    input. `count & 1` and `count | 1` both crash with KeyError at
+    forge/ir/lower.py:289 in DamlForge v0.0.10, with messages 'BitAnd' and 'BitOr'. They are one
     bug, a missing entry in forge's _BIN_OPS table.
 
     `where` is None for a crash with no stable line. See Crash.where.

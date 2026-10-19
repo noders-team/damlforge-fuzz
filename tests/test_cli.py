@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import CONTRACTS, FLOORDIV, OWNER_FIELD, PROJECT, copy_iou
+from conftest import BITAND, CONTRACTS, OWNER_FIELD, PROJECT, copy_iou
 
 from damlforge_fuzz.cli import main
 
@@ -25,13 +25,13 @@ def test_check_on_the_contracts_folder_prints_four_ok_lines_and_returns_0(monkey
 def test_check_prints_a_crash_line_with_exception_message_and_forge_line(
     tmp_path, monkeypatch, capsys
 ):
-    (tmp_path / "floordiv.vy").write_text(FLOORDIV)
+    (tmp_path / "bitand.vy").write_text(BITAND)
     monkeypatch.chdir(tmp_path)
 
-    assert main(["check", "floordiv.vy"]) == 1
+    assert main(["check", "bitand.vy"]) == 1
     [line] = capsys.readouterr().out.splitlines()
     assert re.fullmatch(
-        r"CRASH    lower  floordiv\.vy  KeyError 'FloorDiv' at forge/ir/lower\.py:\d+", line
+        r"CRASH    lower  bitand\.vy  KeyError 'BitAnd' at forge/ir/lower\.py:\d+", line
     ), line
 
 
@@ -46,12 +46,12 @@ def test_check_prints_a_rejected_line_with_the_df_code(tmp_path, monkeypatch, ca
 
 def test_check_prints_one_line_per_file_in_argument_order(tmp_path, monkeypatch, capsys):
     iou = str(CONTRACTS / "iou" / "iou.vy")
-    (tmp_path / "floordiv.vy").write_text(FLOORDIV)
+    (tmp_path / "bitand.vy").write_text(BITAND)
     monkeypatch.chdir(tmp_path)
 
-    assert main(["check", "floordiv.vy", iou]) == 1
+    assert main(["check", "bitand.vy", iou]) == 1
     crash, ok = capsys.readouterr().out.splitlines()
-    assert crash.startswith("CRASH    lower  floordiv.vy  "), crash
+    assert crash.startswith("CRASH    lower  bitand.vy  "), crash
     assert ok == f"OK       emit   {iou}"
 
 
@@ -94,8 +94,14 @@ def test_folder_without_vy_files_returns_2(tmp_path, capsys):
         (["--help"], 0, "stdout", "check"),
         (["check"], 2, "stderr", "usage: damlforge-fuzz check"),
         (["check", "x.vy"], 2, "stderr", "Install DamlForge first"),
+        (["run", "--help"], 0, "stdout", "--random-seed"),
+        (["run"], 2, "stderr", "one of the arguments --seconds --count is required"),
+        (["run", "--count", "5", "--seconds", "5"], 2, "stderr", "not allowed with"),
+        (["run", "--count", "0"], 2, "stderr", "argument --count: '0' is not a whole number"),
+        (["run", "--count", "5"], 2, "stderr", "Install DamlForge first"),
     ],
-    ids=["help", "usage-error", "check"],
+    ids=["help", "usage-error", "check", "run-help", "run-no-limit", "run-two-limits",
+         "run-count-0", "run"],  # fmt: skip
 )
 def test_command_works_without_forge_installed(argv, status, stream, expected):
     hide_forge = (
