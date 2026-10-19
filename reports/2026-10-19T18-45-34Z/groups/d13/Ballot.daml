@@ -1,0 +1,49 @@
+module Ballot where
+
+import qualified DA.Map as M
+
+import DA.Map as Map
+
+count_yes : (Map.Map Party Bool) -> Int
+count_yes float =
+  let (answers : [Bool]) = M.values votes in
+  let count = 0 in
+  let _damlforge_count2 =
+        foldl
+          (\count in_favor ->
+            if in_favor
+              then
+                let _damlforge_count1 = count + 1 in
+                _damlforge_count1
+              else
+                count)
+          count answers
+  in
+  _damlforge_count2
+
+template Ballot
+  with
+    organizer : Party
+    voters : [Party]
+    votes : Map.Map Party Bool
+  where
+    signatory [organizer]
+    observer voters
+
+    choice CastVote : ContractId Ballot
+      with
+        voter : Party
+        in_favor : Bool
+      controller voter
+      do
+        let self = this
+        assertMsg "voter is not on the voter list" (voter `elem` self.voters)
+        assertMsg "voter has already voted" (M.lookup voter self.votes == None)
+        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes
+        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)
+
+    choice Close : Bool
+      controller organizer
+      do
+        let self = this
+        pure ((count_yes self.votes * 2) > length self.voters)

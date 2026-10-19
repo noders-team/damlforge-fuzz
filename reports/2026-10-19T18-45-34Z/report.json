@@ -1,0 +1,971 @@
+{
+  "schema": 1,
+  "run": {
+    "started": "2026-10-19T18:45:34Z",
+    "random_seed": 1,
+    "seconds": null,
+    "count": 20000,
+    "seeds": [
+      "contracts/asset_proposal/asset_proposal.vy",
+      "contracts/ballot/ballot.vy",
+      "contracts/escrow/escrow.vy",
+      "contracts/iou/iou.vy"
+    ],
+    "forge_version": "0.0.11",
+    "interrupted": false
+  },
+  "totals": {
+    "inputs": 20000,
+    "ok": 3692,
+    "rejected": 13742,
+    "crash": 1138,
+    "skipped": 1428
+  },
+  "timeline": [
+    {
+      "second": 1,
+      "inputs": 1082,
+      "ok": 206,
+      "rejected": 736,
+      "crash": 63,
+      "skipped": 77
+    },
+    {
+      "second": 2,
+      "inputs": 2252,
+      "ok": 414,
+      "rejected": 1528,
+      "crash": 150,
+      "skipped": 160
+    },
+    {
+      "second": 3,
+      "inputs": 3436,
+      "ok": 655,
+      "rejected": 2321,
+      "crash": 219,
+      "skipped": 241
+    },
+    {
+      "second": 4,
+      "inputs": 4581,
+      "ok": 879,
+      "rejected": 3119,
+      "crash": 268,
+      "skipped": 315
+    },
+    {
+      "second": 5,
+      "inputs": 5762,
+      "ok": 1080,
+      "rejected": 3941,
+      "crash": 348,
+      "skipped": 393
+    },
+    {
+      "second": 6,
+      "inputs": 6952,
+      "ok": 1293,
+      "rejected": 4752,
+      "crash": 427,
+      "skipped": 480
+    },
+    {
+      "second": 7,
+      "inputs": 8171,
+      "ok": 1507,
+      "rejected": 5605,
+      "crash": 493,
+      "skipped": 566
+    },
+    {
+      "second": 8,
+      "inputs": 9326,
+      "ok": 1735,
+      "rejected": 6381,
+      "crash": 566,
+      "skipped": 644
+    },
+    {
+      "second": 9,
+      "inputs": 10517,
+      "ok": 1954,
+      "rejected": 7169,
+      "crash": 645,
+      "skipped": 749
+    },
+    {
+      "second": 10,
+      "inputs": 11604,
+      "ok": 2159,
+      "rejected": 7908,
+      "crash": 703,
+      "skipped": 834
+    },
+    {
+      "second": 11,
+      "inputs": 12744,
+      "ok": 2385,
+      "rejected": 8693,
+      "crash": 758,
+      "skipped": 908
+    },
+    {
+      "second": 12,
+      "inputs": 13899,
+      "ok": 2608,
+      "rejected": 9468,
+      "crash": 826,
+      "skipped": 997
+    },
+    {
+      "second": 13,
+      "inputs": 15127,
+      "ok": 2806,
+      "rejected": 10348,
+      "crash": 889,
+      "skipped": 1084
+    },
+    {
+      "second": 14,
+      "inputs": 16326,
+      "ok": 3028,
+      "rejected": 11197,
+      "crash": 942,
+      "skipped": 1159
+    },
+    {
+      "second": 15,
+      "inputs": 17530,
+      "ok": 3246,
+      "rejected": 12045,
+      "crash": 997,
+      "skipped": 1242
+    },
+    {
+      "second": 16,
+      "inputs": 18712,
+      "ok": 3452,
+      "rejected": 12882,
+      "crash": 1058,
+      "skipped": 1320
+    },
+    {
+      "second": 17,
+      "inputs": 19891,
+      "ok": 3679,
+      "rejected": 13657,
+      "crash": 1133,
+      "skipped": 1422
+    },
+    {
+      "second": 18,
+      "inputs": 20000,
+      "ok": 3692,
+      "rejected": 13742,
+      "crash": 1138,
+      "skipped": 1428
+    }
+  ],
+  "damlc": {
+    "checked_texts": 1437,
+    "bad_texts": 1177,
+    "bad_inputs": 1721,
+    "seconds": 14.75,
+    "interrupted": false
+  },
+  "groups": [
+    {
+      "id": "g01",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/ir/lower.py:314",
+      "stage": "lower",
+      "message": "lower_stmt: unsupported statement node Import",
+      "count": 89,
+      "first_seen": {
+        "second": 0.01,
+        "input": 7
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        import os\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/g01/iou.vy",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, template\n@template\nclass Iou:\n    owner: Party\n    signatory: list[Party] = [issuer]\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        import os\n",
+      "shrunk_file": "groups/g01/shrunk/iou.vy"
+    },
+    {
+      "id": "g02",
+      "kind": "crash",
+      "exception": "AttributeError",
+      "where": "forge/semantics/analysis/types.py:644",
+      "stage": "check",
+      "message": "'Subscript' object has no attribute 'id'",
+      "count": 114,
+      "first_seen": {
+        "second": 0.03,
+        "input": 24
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    amount: Decimal\n    deadline: datetime\n\n\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    buyer: Party\n    seller: Party\n    arbiter: Party\n    tuple[int, str]: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    raise\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/g02/escrow.vy",
+      "shrunk": "@template\nclass Escrow:\n    tuple[int, str]: EscrowTerms\n",
+      "shrunk_file": "groups/g02/shrunk/escrow.vy"
+    },
+    {
+      "id": "g03",
+      "kind": "crash",
+      "exception": "IndentationError",
+      "where": "forge/ast/pre_parser.py:304",
+      "stage": "parse",
+      "message": "unindent does not match any outer indentation level (<string>, line 30)",
+      "count": 249,
+      "first_seen": {
+        "second": 0.03,
+        "input": 28
+      },
+      "seed": "contracts/asset_proposal/asset_proposal.vy",
+      "input": "from forge.models import ContractId, Party, choice, template\n\n        return create(\n\n@template\nclass Asset:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer, owner]\n\n    # The new owner must sign the asset too, so giving it makes a proposal.\n    @choice(controller=owner, consuming=True)\n    def Give(self, new_owner: Party) -> ContractId[AssetProposal]:\n        assert new_owner != self.owner, \"cannot give an asset to its current owner\"\n        return create(AssetProposal(issuer=self.issuer, owner=new_owner, name=self.name))\n\n\n@template\nclass AssetProposal:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n            )\n    @choice(controller=owner, consuming=True)\n    def Accept(self) -> ContractId[Asset]:\n        return create(Asset(issuer=self.issuer, owner=self.owner, name=self.name))\n\n    @choice(controller=owner, consuming=True)\n    def Reject(self) -> None:\n        controller\n",
+      "input_file": "groups/g03/asset_proposal.vy",
+      "shrunk": "            )\n    @choice(controller=owner, consuming=True)\n",
+      "shrunk_file": "groups/g03/shrunk/asset_proposal.vy"
+    },
+    {
+      "id": "g04",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/ir/lower.py:115",
+      "stage": "check",
+      "message": "lower_type: unsupported type expression Decimal",
+      "count": 567,
+      "first_seen": {
+        "second": 0.04,
+        "input": 45
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    assert False\n    amount: Decimal\n    deadline: datetime\n\n\n@template\nclass Payout:\n    observer: list[Party] = [seller, arbiter]\n    payer: Party\n    receiver: Party\n    amount: 0.0\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    buyer: Party\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/g04/escrow.vy",
+      "shrunk": "struct EscrowTerms:\n    amount: 0.0\n",
+      "shrunk_file": "groups/g04/shrunk/escrow.vy"
+    },
+    {
+      "id": "g05",
+      "kind": "crash",
+      "exception": "AssertionError",
+      "where": "forge/ast/parse.py:106",
+      "stage": "parse",
+      "message": "",
+      "count": 72,
+      "first_seen": {
+        "second": 0.12,
+        "input": 119
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return {k: v for k, v in m}(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/g05/iou.vy",
+      "shrunk": "@template\nclass Iou:\n        return {k: v for k, v in m}(\n        )\n",
+      "shrunk_file": "groups/g05/shrunk/iou.vy"
+    },
+    {
+      "id": "g06",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/codegen/emit.py:271",
+      "stage": "emit",
+      "message": "render_expr: unsupported IR expression NoneType",
+      "count": 8,
+      "first_seen": {
+        "second": 0.2,
+        "input": 212
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    organizer: Party\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/g06/ballot.vy",
+      "shrunk": "def count_yes(votes: GenMap[Party, bool]) -> int:\n    organizer: Party\n",
+      "shrunk_file": "groups/g06/shrunk/ballot.vy"
+    },
+    {
+      "id": "g07",
+      "kind": "crash",
+      "exception": "KeyError",
+      "where": "forge/ir/lower.py:289",
+      "stage": "lower",
+      "message": "'RShift'",
+      "count": 6,
+      "first_seen": {
+        "second": 0.35,
+        "input": 369
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount >> split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/g07/iou.vy",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, template\n@template\nclass Iou:\n    owner: Party\n    signatory: list[Party] = [issuer]\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        rest = create(\n            Iou(\n                amount=self.amount >> split_amount,\n            )\n        )\n",
+      "shrunk_file": "groups/g07/shrunk/iou.vy"
+    },
+    {
+      "id": "g08",
+      "kind": "crash",
+      "exception": "AssertionError",
+      "where": "forge/ast/parse.py:110",
+      "stage": "parse",
+      "message": "",
+      "count": 1,
+      "first_seen": {
+        "second": 0.97,
+        "input": 1049
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split \"x\" must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/g08/iou.vy",
+      "shrunk": "@template\nclass Iou:\n        assert split_amount < self.amount, \"split \"x\" must be less than the full amount\"\n",
+      "shrunk_file": "groups/g08/shrunk/iou.vy"
+    },
+    {
+      "id": "g09",
+      "kind": "crash",
+      "exception": "AttributeError",
+      "where": "forge/semantics/analysis/types.py:630",
+      "stage": "check",
+      "message": "'Subscript' object has no attribute 'id'",
+      "count": 13,
+      "first_seen": {
+        "second": 1.42,
+        "input": 1582
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    ContractId[int]: Decimal\n    deadline: datetime\n\n\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    buyer: Party\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/g09/escrow.vy",
+      "shrunk": "struct EscrowTerms:\n    ContractId[int]: Decimal\n",
+      "shrunk_file": "groups/g09/shrunk/escrow.vy"
+    },
+    {
+      "id": "g10",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/codegen/loops.py:354",
+      "stage": "emit",
+      "message": "apply_renames: unsupported IR expression NoneType",
+      "count": 2,
+      "first_seen": {
+        "second": 1.54,
+        "input": 1719
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    issuer: Party\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/g10/ballot.vy",
+      "shrunk": "def count_yes(votes: GenMap[Party, bool]) -> int:\n    count = 0\n    for in_favor in answers:\n            count = count + 1\n    issuer: Party\n",
+      "shrunk_file": "groups/g10/shrunk/ballot.vy"
+    },
+    {
+      "id": "g11",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/codegen/emit.py:596",
+      "stage": "emit",
+      "message": "_translate_for: a `for` loop with both loop-carried accumulator mutation and an early `return` inside its body is not supported",
+      "count": 2,
+      "first_seen": {
+        "second": 1.73,
+        "input": 1954
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        return\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/g11/ballot.vy",
+      "shrunk": "def count_yes(votes: GenMap[Party, bool]) -> int:\n    count = 0\n    for in_favor in answers:\n        return\n        if in_favor:\n            count = count + 1\n",
+      "shrunk_file": "groups/g11/shrunk/ballot.vy"
+    },
+    {
+      "id": "g12",
+      "kind": "crash",
+      "exception": "ModuleNotFoundError",
+      "where": "forge/semantics/analysis/imports.py:108",
+      "stage": "check",
+      "message": "No module named 'forge.AssetProposal'",
+      "count": 5,
+      "first_seen": {
+        "second": 2.16,
+        "input": 2454
+      },
+      "seed": "contracts/asset_proposal/asset_proposal.vy",
+      "input": "from forge.AssetProposal import ContractId, Party, choice, template\n\n\n@template\nclass Asset:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer, str]\n\n    # The new owner must sign the asset too, so giving it makes a proposal.\n    @choice(controller=owner, consuming=True)\n    def Give(self, new_owner: Party) -> ContractId[AssetProposal]:\n        assert new_owner != self.owner, \"cannot give an asset to its current owner\"\n        return create(AssetProposal(issuer=self.issuer, owner=new_owner, name=self.name))\n\n\n@template\nclass AssetProposal:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=True)\n    def Accept(self) -> ContractId[Asset]:\n        return create(Asset(issuer=self.issuer, owner=self.owner, name=self.name))\n\n    @choice(controller=owner, consuming=True)\n    def Reject(self) -> None:\n        return\n",
+      "input_file": "groups/g12/asset_proposal.vy",
+      "shrunk": "from forge.AssetProposal import ContractId, Party, choice, template\n",
+      "shrunk_file": "groups/g12/shrunk/asset_proposal.vy"
+    },
+    {
+      "id": "g13",
+      "kind": "crash",
+      "exception": "IndexError",
+      "where": "forge/ast/pre_parser.py:389",
+      "stage": "parse",
+      "message": "pop from empty list",
+      "count": 2,
+      "first_seen": {
+        "second": 2.58,
+        "input": 2913
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    terms: EscrowTerms\n    count = 0\n    for in_favor \"\" answers:\n        if [x for x in xs]:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/g13/ballot.vy",
+      "shrunk": "    for in_favor \"\" answers:\n        if [x for x in xs]:\n",
+      "shrunk_file": "groups/g13/shrunk/ballot.vy"
+    },
+    {
+      "id": "g14",
+      "kind": "crash",
+      "exception": "KeyError",
+      "where": "forge/ir/lower.py:298",
+      "stage": "lower",
+      "message": "'Invert'",
+      "count": 8,
+      "first_seen": {
+        "second": 6.16,
+        "input": 7163
+      },
+      "seed": "contracts/asset_proposal/asset_proposal.vy",
+      "input": "from forge.models import ContractId, Party, choice, template\n\n\n@template\nclass Asset:\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer, owner]\n\n    # The new owner must sign the asset too, so giving it makes a proposal.\n    @choice(controller=owner, consuming=True)\n    def Give(self, new_owner: Party) -> ContractId[AssetProposal]:\n        assert new_owner != self.owner, \"cannot give an asset to its current owner\"\n        return create(AssetProposal(issuer=self.issuer, owner=new_owner, name=self.name))\n\n\n@template\nclass AssetProposal:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=True)\n    def Accept(self) -> ContractId[Asset]:\n        return create(Asset(issuer=self.issuer, owner=self.owner, name=self.name))\n\n    @choice(controller=owner, consuming=True)\n    def Reject(self) -> None:\n        ~x\n",
+      "input_file": "groups/g14/asset_proposal.vy",
+      "shrunk": "from forge.models import ContractId, Party, choice, template\n@template\nclass Asset:\n    owner: Party\n    signatory: list[Party] = [issuer, owner]\n    @choice(controller=owner, consuming=True)\n    def Reject(self) -> None:\n        ~x\n",
+      "shrunk_file": "groups/g14/shrunk/asset_proposal.vy"
+    },
+    {
+      "id": "d01",
+      "kind": "bad_daml",
+      "key": "Constructor ‘…’ does not have the required strict field(s): …",
+      "message": "Constructor ‘Ballot’ does not have the required strict field(s): owner",
+      "damlc_stage": "typecheck",
+      "daml_line": 44,
+      "count": 114,
+      "first_seen": {
+        "second": 0.01,
+        "input": 3
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n    owner: Party\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d01/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n    owner : Party\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d01/Ballot.daml"
+    },
+    {
+      "id": "d02",
+      "kind": "bad_daml",
+      "key": "Variable not in scope: …",
+      "message": "Variable not in scope: x : [a0]",
+      "damlc_stage": "typecheck",
+      "daml_line": 28,
+      "count": 321,
+      "first_seen": {
+        "second": 0.01,
+        "input": 9
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > len(x)(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/d02/iou.vy",
+      "daml": "module Iou where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    currency : Text\n  where\n    signatory [issuer]\n    observer [owner]\n    ensure amount > (0.0 : Decimal)\n\n    choice Transfer : ContractId Iou\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        create (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.currency)\n\n    choice Split : (ContractId Iou, ContractId Iou)\n      with\n        split_amount : Decimal\n      controller owner\n      do\n        let self = this\n        assertMsg \"split amount must be positive\" (split_amount > length x 0)\n        assertMsg \"split amount must be less than the full amount\" (split_amount < self.amount)\n        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, currency = self.currency)\n        rest <- create (Iou with issuer = self.issuer, owner = self.owner, amount = self.amount - split_amount, currency = self.currency)\n        pure (first, rest)\n",
+      "daml_file": "groups/d02/Iou.daml"
+    },
+    {
+      "id": "d03",
+      "kind": "bad_daml",
+      "key": "Data constructor not in scope: …",
+      "message": "Data constructor not in scope: ContractId : [ContractId Payout]",
+      "damlc_stage": "typecheck",
+      "daml_line": 35,
+      "count": 61,
+      "first_seen": {
+        "second": 0.03,
+        "input": 25
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    amount: Decimal\n    deadline: datetime\n\n\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    break\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    buyer: Party\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return ContractId[int](Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/d03/escrow.vy",
+      "daml": "module Escrow where\n\nimport DA.List ((!!))\n\ndata EscrowTerms = EscrowTerms\n  with\n    amount : Decimal\n    deadline : Time\n  deriving (Eq, Show)\n\ntemplate Payout\n  with\n    payer : Party\n    receiver : Party\n    amount : Decimal\n  where\n    signatory [payer]\n    observer [receiver]\n\ntemplate Escrow\n  with\n    buyer : Party\n    seller : Party\n    arbiter : Party\n    terms : EscrowTerms\n  where\n    signatory [buyer]\n    observer [seller, arbiter]\n    ensure terms.amount > (0.0 : Decimal)\n\n    choice Release : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        pure ((ContractId) !! (int) (Payout with payer = self.arbiter, receiver = self.seller, amount = (self.terms).amount))\n\n    choice Refund : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        now <- getTime\n        assertMsg \"refund is allowed only after the deadline\" (now > (self.terms).deadline)\n        create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)\n",
+      "daml_file": "groups/d03/Escrow.daml"
+    },
+    {
+      "id": "d04",
+      "kind": "bad_daml",
+      "key": "Couldn't match type ‘…’ with ‘…’",
+      "message": "Couldn't match type ‘Iou’ with ‘ContractId Iou’",
+      "damlc_stage": "typecheck",
+      "daml_line": 1,
+      "count": 170,
+      "first_seen": {
+        "second": 0.03,
+        "input": 41
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return (\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full \"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/d04/iou.vy",
+      "daml": "module Iou where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    currency : Text\n  where\n    signatory [issuer]\n    observer [owner]\n    ensure amount > (0.0 : Decimal)\n\n    choice Transfer : ContractId Iou\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        pure (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.currency)\n\n    choice Split : (ContractId Iou, ContractId Iou)\n      with\n        split_amount : Decimal\n      controller owner\n      do\n        let self = this\n        assertMsg \"split amount must be positive\" (split_amount > (0.0 : Decimal))\n        assertMsg \"split amount must be less than the full \" (split_amount < self.amount)\n        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, currency = self.currency)\n        rest <- create (Iou with issuer = self.issuer, owner = self.owner, amount = self.amount - split_amount, currency = self.currency)\n        pure (first, rest)\n",
+      "daml_file": "groups/d04/Iou.daml"
+    },
+    {
+      "id": "d05",
+      "kind": "bad_daml",
+      "key": "Couldn't match type ‘…’",
+      "message": "Couldn't match type ‘ContractId Iou’",
+      "damlc_stage": "typecheck",
+      "daml_line": 1,
+      "count": 21,
+      "first_seen": {
+        "second": 0.09,
+        "input": 100
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.ContractId)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, )\n",
+      "input_file": "groups/d05/iou.vy",
+      "daml": "module Iou where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    currency : Text\n  where\n    signatory [issuer]\n    observer [owner]\n    ensure amount > (0.0 : Decimal)\n\n    choice Transfer : ContractId Iou\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        create (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.ContractId)\n\n    choice Split : (ContractId Iou, ContractId Iou)\n      with\n        split_amount : Decimal\n      controller owner\n      do\n        let self = this\n        assertMsg \"split amount must be positive\" (split_amount > (0.0 : Decimal))\n        assertMsg \"split amount must be less than the full amount\" (split_amount < self.amount)\n        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, currency = self.currency)\n        rest <- create (Iou with issuer = self.issuer, owner = self.owner, amount = self.amount - split_amount, currency = self.currency)\n        pure (first)\n",
+      "daml_file": "groups/d05/Iou.daml"
+    },
+    {
+      "id": "d06",
+      "kind": "bad_daml",
+      "key": "Tried to access nonexistent field ‘…’ with type ‘…’ on value of type ‘…’",
+      "message": "Tried to access nonexistent field ‘_1’ with type ‘Party’ on value of type ‘r0’",
+      "damlc_stage": "typecheck",
+      "daml_line": 30,
+      "count": 128,
+      "first_seen": {
+        "second": 0.1,
+        "input": 106
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.x[0],\n                amount=self.amount + split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/d06/iou.vy",
+      "daml": "module Iou where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    currency : Text\n  where\n    signatory [issuer]\n    observer [owner]\n\n    choice Transfer : ContractId Iou\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        create (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.currency)\n\n    choice Split : (ContractId Iou, ContractId Iou)\n      with\n        split_amount : Decimal\n      controller owner\n      do\n        let self = this\n        assertMsg \"split amount must be positive\" (split_amount > (0.0 : Decimal))\n        assertMsg \"split amount must be less than the full amount\" (split_amount < self.amount)\n        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, currency = self.currency)\n        rest <- create (Iou with issuer = self.issuer, owner = (self.x)._1, amount = self.amount + split_amount, currency = self.currency)\n        pure (first, rest)\n",
+      "daml_file": "groups/d06/Iou.daml"
+    },
+    {
+      "id": "d07",
+      "kind": "bad_daml",
+      "key": "Not in scope: ‘…’",
+      "message": "Not in scope: ‘float’",
+      "damlc_stage": "typecheck",
+      "daml_line": 33,
+      "count": 128,
+      "first_seen": {
+        "second": 0.1,
+        "input": 109
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    amount: Decimal\n    deadline: datetime\n\n\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    buyer: Party\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, float=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/d07/escrow.vy",
+      "daml": "module Escrow where\n\ndata EscrowTerms = EscrowTerms\n  with\n    amount : Decimal\n    deadline : Time\n  deriving (Eq, Show)\n\ntemplate Payout\n  with\n    payer : Party\n    receiver : Party\n    amount : Decimal\n  where\n    signatory [payer]\n    observer [receiver]\n\ntemplate Escrow\n  with\n    buyer : Party\n    seller : Party\n    arbiter : Party\n    terms : EscrowTerms\n  where\n    signatory [buyer]\n    observer [seller, arbiter]\n    ensure terms.amount > (0.0 : Decimal)\n\n    choice Release : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        create (Payout with payer = self.arbiter, receiver = self.seller, float = (self.terms).amount)\n\n    choice Refund : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        now <- getTime\n        assertMsg \"refund is allowed only after the deadline\" (now > (self.terms).deadline)\n        create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)\n",
+      "daml_file": "groups/d07/Escrow.daml"
+    },
+    {
+      "id": "d08",
+      "kind": "bad_daml",
+      "key": "Duplicate field name …. Original definition at ….",
+      "message": "Duplicate field name organizer. Original definition at Ballot.daml:26:5-13.",
+      "damlc_stage": "parser",
+      "daml_line": 27,
+      "count": 304,
+      "first_seen": {
+        "second": 0.13,
+        "input": 128
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d08/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d08/Ballot.daml"
+    },
+    {
+      "id": "d09",
+      "kind": "bad_daml",
+      "key": "No instance for (IsParties …)",
+      "message": "No instance for (IsParties Bool)",
+      "damlc_stage": "typecheck",
+      "daml_line": 30,
+      "count": 25,
+      "first_seen": {
+        "second": 0.18,
+        "input": 195
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    amount: Decimal\n    deadline: datetime\n\n\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    buyer: Party\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=True, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/d09/escrow.vy",
+      "daml": "module Escrow where\n\ndata EscrowTerms = EscrowTerms\n  with\n    amount : Decimal\n    deadline : Time\n  deriving (Eq, Show)\n\ntemplate Payout\n  with\n    payer : Party\n    receiver : Party\n    amount : Decimal\n  where\n    signatory [payer]\n    observer [receiver]\n\ntemplate Escrow\n  with\n    buyer : Party\n    seller : Party\n    arbiter : Party\n    terms : EscrowTerms\n  where\n    signatory [buyer]\n    observer [seller, arbiter]\n    ensure terms.amount > (0.0 : Decimal)\n\n    choice Release : ContractId Payout\n      controller True\n      do\n        let self = this\n        create (Payout with payer = self.arbiter, receiver = self.seller, amount = (self.terms).amount)\n\n    choice Refund : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        now <- getTime\n        assertMsg \"refund is allowed only after the deadline\" (now > (self.terms).deadline)\n        create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)\n",
+      "daml_file": "groups/d09/Escrow.daml"
+    },
+    {
+      "id": "d10",
+      "kind": "bad_daml",
+      "key": "Parse error in pattern: …",
+      "message": "Parse error in pattern: x . _1",
+      "damlc_stage": "parser",
+      "daml_line": 40,
+      "count": 9,
+      "first_seen": {
+        "second": 0.28,
+        "input": 288
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    amount: Decimal\n    deadline: datetime\n\n\nraise\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    buyer: Party\n    continue\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n    seller: Party\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        x[0] = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/d10/escrow.vy",
+      "daml": "module Escrow where\n\ndata EscrowTerms = EscrowTerms\n  with\n    amount : Decimal\n    deadline : Time\n  deriving (Eq, Show)\n\ntemplate Payout\n  with\n    payer : Party\n    receiver : Party\n    amount : Decimal\n  where\n    signatory [payer]\n    observer [receiver]\n\ntemplate Escrow\n  with\n    buyer : Party\n    seller : Party\n    arbiter : Party\n    terms : EscrowTerms\n    seller : Party\n  where\n    signatory [buyer]\n    observer [seller, arbiter]\n    ensure terms.amount > (0.0 : Decimal)\n\n    choice Release : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        create (Payout with payer = self.arbiter, receiver = self.seller, amount = (self.terms).amount)\n\n    choice Refund : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        x._1 <- getTime\n        assertMsg \"refund is allowed only after the deadline\" (now > (self.terms).deadline)\n        create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)\n",
+      "daml_file": "groups/d10/Escrow.daml"
+    },
+    {
+      "id": "d11",
+      "kind": "bad_daml",
+      "key": "Multiple declarations of ‘…’",
+      "message": "Multiple declarations of ‘Payout’",
+      "damlc_stage": "typecheck",
+      "daml_line": 18,
+      "count": 6,
+      "first_seen": {
+        "second": 0.3,
+        "input": 313
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\nstruct EscrowTerms:\n    amount: Decimal\n    deadline: datetime\n\n\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Payout:\n    buyer: Party\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/d11/escrow.vy",
+      "daml": "module Escrow where\n\ndata EscrowTerms = EscrowTerms\n  with\n    amount : Decimal\n    deadline : Time\n  deriving (Eq, Show)\n\ntemplate Payout\n  with\n    payer : Party\n    receiver : Party\n    amount : Decimal\n  where\n    signatory [payer]\n    observer [receiver]\n\ntemplate Payout\n  with\n    buyer : Party\n    seller : Party\n    arbiter : Party\n    terms : EscrowTerms\n  where\n    signatory [buyer]\n    observer [seller, arbiter]\n    ensure terms.amount > (0.0 : Decimal)\n\n    choice Release : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        create (Payout with payer = self.arbiter, receiver = self.seller, amount = (self.terms).amount)\n\n    choice Refund : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        now <- getTime\n        assertMsg \"refund is allowed only after the deadline\" (now > (self.terms).deadline)\n        create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)\n",
+      "daml_file": "groups/d11/Escrow.daml"
+    },
+    {
+      "id": "d12",
+      "kind": "bad_daml",
+      "key": "Couldn't match expected type ‘…’ with actual type ‘…’",
+      "message": "Couldn't match expected type ‘Update a0’ with actual type ‘Bool’",
+      "damlc_stage": "typecheck",
+      "daml_line": 49,
+      "count": 42,
+      "first_seen": {
+        "second": 0.42,
+        "input": 427
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n         count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d12/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        (count_yes self.votes * 2) > length self.voters\n        pure ()\n",
+      "daml_file": "groups/d12/Ballot.daml"
+    },
+    {
+      "id": "d13",
+      "kind": "bad_daml",
+      "key": "Couldn't match expected type ‘…’",
+      "message": "Couldn't match expected type ‘Map k0 Bool’",
+      "damlc_stage": "typecheck",
+      "daml_line": 9,
+      "count": 69,
+      "first_seen": {
+        "second": 0.56,
+        "input": 582
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(float: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d13/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes float =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d13/Ballot.daml"
+    },
+    {
+      "id": "d14",
+      "kind": "bad_daml",
+      "key": "parse error on input ‘…’",
+      "message": "parse error on input ‘Party’",
+      "damlc_stage": "parser",
+      "daml_line": 6,
+      "count": 105,
+      "first_seen": {
+        "second": 0.63,
+        "input": 670
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\nfrom datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    amount: Decimal\n    Party: datetime\n\n\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    amount: Decimal\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(0)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now > self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/d14/escrow.vy",
+      "daml": "module Escrow where\n\ndata EscrowTerms = EscrowTerms\n  with\n    amount : Decimal\n    Party : Time\n  deriving (Eq, Show)\n\ntemplate Payout\n  with\n    payer : Party\n    receiver : Party\n    amount : Decimal\n    amount : Decimal\n  where\n    signatory [payer]\n    observer [receiver]\n\ntemplate Escrow\n  with\n    seller : Party\n    arbiter : Party\n    terms : EscrowTerms\n  where\n    signatory [buyer]\n    observer [seller, arbiter]\n    ensure terms.amount > (0.0 : Decimal)\n\n    choice Release : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        create (Payout with payer = self.arbiter, receiver = self.seller, amount = (self.terms).amount)\n\n    choice Refund : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        now <- getTime\n        assertMsg \"refund is allowed only after the deadline\" (now > (self.terms).deadline)\n        create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)\n",
+      "daml_file": "groups/d14/Escrow.daml"
+    },
+    {
+      "id": "d15",
+      "kind": "bad_daml",
+      "key": "Not in scope: data constructor ‘…’",
+      "message": "Not in scope: data constructor ‘Decimal’",
+      "damlc_stage": "typecheck",
+      "daml_line": 13,
+      "count": 29,
+      "first_seen": {
+        "second": 0.71,
+        "input": 757
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for Decimal in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d15/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count Decimal ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d15/Ballot.daml"
+    },
+    {
+      "id": "d16",
+      "kind": "bad_daml",
+      "key": "Ambiguous type variable ‘…’ arising from a use of ‘…’",
+      "message": "Ambiguous type variable ‘a0’ arising from a use of ‘toParties’",
+      "damlc_stage": "typecheck",
+      "daml_line": 30,
+      "count": 22,
+      "first_seen": {
+        "second": 0.73,
+        "input": 786
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = []\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d16/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory []\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d16/Ballot.daml"
+    },
+    {
+      "id": "d17",
+      "kind": "bad_daml",
+      "key": "Failure to process Daml program, this feature is not currently supported.",
+      "message": "Failure to process Daml program, this feature is not currently supported.",
+      "damlc_stage": "Core to Daml-LF",
+      "daml_line": 3,
+      "count": 12,
+      "first_seen": {
+        "second": 0.82,
+        "input": 877
+      },
+      "seed": "contracts/asset_proposal/asset_proposal.vy",
+      "input": "from forge.models import ContractId, Party, choice, template\n\n\n@template\nclass Asset:\n    issuer: Party\n    owner: Party\n    x = 1\n    name: str\n\n    signatory: list[Party] = [issuer, owner]\n\n    # The new owner must sign the asset too, so giving it makes a proposal.\n    @choice(controller=owner, consuming=True)\n    def Give(self, new_owner: Party) -> ContractId[AssetProposal]:\n        assert new_owner != self.owner, \"cannot give an asset to its current owner\"\n        x += 1\n        return create(AssetProposal(issuer=self.issuer, owner=new_owner, name=self.name))\n\n\n@template\nclass AssetProposal:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=True)\n    def Accept(self) -> ContractId[Asset]:\n        return create(Asset(issuer=self.issuer, owner=self.owner, name=self.name))\n\n    @choice(controller=owner, consuming=True)\n    def Reject(self) -> None:\n        return\n",
+      "input_file": "groups/d17/asset_proposal.vy",
+      "daml": "module AssetProposal where\n\ntemplate Asset\n  with\n    issuer : Party\n    owner : Party\n    name : Text\n  where\n    signatory [issuer, owner]\n\n    choice Give : ContractId AssetProposal\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        assertMsg \"cannot give an asset to its current owner\" (new_owner /= self.owner)\n        let x = x + 1\n        create (AssetProposal with issuer = self.issuer, owner = new_owner, name = self.name)\n\ntemplate AssetProposal\n  with\n    issuer : Party\n    owner : Party\n    name : Text\n  where\n    signatory [issuer]\n    observer [owner]\n\n    choice Accept : ContractId Asset\n      controller owner\n      do\n        let self = this\n        create (Asset with issuer = self.issuer, owner = self.owner, name = self.name)\n\n    choice Reject : ()\n      controller owner\n      do\n        let self = this\n        pure ()\n",
+      "daml_file": "groups/d17/AssetProposal.daml"
+    },
+    {
+      "id": "d18",
+      "kind": "bad_daml",
+      "key": "Constructor ‘…’ does not have field ‘…’",
+      "message": "Constructor ‘AssetProposal’ does not have field ‘issuer’",
+      "damlc_stage": "typecheck",
+      "daml_line": 18,
+      "count": 51,
+      "first_seen": {
+        "second": 0.92,
+        "input": 1002
+      },
+      "seed": "contracts/asset_proposal/asset_proposal.vy",
+      "input": "from forge.models import ContractId, Party, choice, template\n\n\n@template\nclass Asset:\n    issuer: Party\n    owner: Party\n    import os\n    name: str\n\n    signatory: list[Party] = [issuer, owner]\n\n    # The new owner must sign the asset too, so giving it str a proposal.\n    @choice(controller=owner, consuming=True)\n    def Give(self, new_owner: Party) -> ContractId[AssetProposal]:\n        assert new_owner != self.owner, \"cannot give an asset to its current owner\"\n        return create(AssetProposal(issuer=self.issuer, owner=new_owner, name=self.name))\n\n\n@template\nclass AssetProposal:\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=True)\n    def Accept(self) -> ContractId[Asset]:\n        return create(Asset(issuer=self.issuer, owner=self.owner, name=self.name))\n\n    @choice(controller=owner, consuming=True)\n    def Reject(self) -> None:\n        return\n",
+      "input_file": "groups/d18/asset_proposal.vy",
+      "daml": "module AssetProposal where\n\ntemplate Asset\n  with\n    issuer : Party\n    owner : Party\n    name : Text\n  where\n    signatory [issuer, owner]\n\n    choice Give : ContractId AssetProposal\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        assertMsg \"cannot give an asset to its current owner\" (new_owner /= self.owner)\n        create (AssetProposal with issuer = self.issuer, owner = new_owner, name = self.name)\n\ntemplate AssetProposal\n  with\n    owner : Party\n    name : Text\n  where\n    signatory [issuer]\n    observer [owner]\n\n    choice Accept : ContractId Asset\n      controller owner\n      do\n        let self = this\n        create (Asset with issuer = self.issuer, owner = self.owner, name = self.name)\n\n    choice Reject : ()\n      controller owner\n      do\n        let self = this\n        pure ()\n",
+      "daml_file": "groups/d18/AssetProposal.daml"
+    },
+    {
+      "id": "d19",
+      "kind": "bad_daml",
+      "key": "name collision between choice … and field …",
+      "message": "name collision between choice Iou:Iou.Currency and field Iou:Iou.currency",
+      "damlc_stage": "Daml-LF typechecker",
+      "daml_line": 1,
+      "count": 5,
+      "first_seen": {
+        "second": 1.05,
+        "input": 1126
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def currency(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/d19/iou.vy",
+      "daml": "module Iou where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    currency : Text\n  where\n    signatory [issuer]\n    observer [owner]\n    ensure amount > (0.0 : Decimal)\n\n    choice Transfer : ContractId Iou\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        create (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.currency)\n\n    choice Currency : (ContractId Iou, ContractId Iou)\n      with\n        split_amount : Decimal\n      controller owner\n      do\n        let self = this\n        assertMsg \"split amount must be positive\" (split_amount > (0.0 : Decimal))\n        assertMsg \"split amount must be less than the full amount\" (split_amount < self.amount)\n        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, currency = self.currency)\n        rest <- create (Iou with issuer = self.issuer, owner = self.owner, amount = self.amount - split_amount, currency = self.currency)\n        pure (first, rest)\n",
+      "daml_file": "groups/d19/Iou.daml"
+    },
+    {
+      "id": "d20",
+      "kind": "bad_daml",
+      "key": "duplicate field name ‘…’ in record construction",
+      "message": "duplicate field name ‘issuer’ in record construction",
+      "damlc_stage": "typecheck",
+      "daml_line": 31,
+      "count": 44,
+      "first_seen": {
+        "second": 1.16,
+        "input": 1262
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/d20/iou.vy",
+      "daml": "module Iou where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    currency : Text\n  where\n    signatory [issuer]\n    observer [owner]\n    ensure amount > (0.0 : Decimal)\n\n    choice Transfer : ContractId Iou\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        create (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.currency)\n\n    choice Split : (ContractId Iou, ContractId Iou)\n      with\n        split_amount : Decimal\n      controller owner\n      do\n        let self = this\n        assertMsg \"split amount must be positive\" (split_amount > (0.0 : Decimal))\n        assertMsg \"split amount must be less than the full amount\" (split_amount < self.amount)\n        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, currency = self.currency)\n        rest <- create (Iou with issuer = self.issuer, issuer = self.issuer, owner = self.owner, amount = self.amount - split_amount, currency = self.currency)\n        pure (first, rest)\n",
+      "daml_file": "groups/d20/Iou.daml"
+    },
+    {
+      "id": "d21",
+      "kind": "bad_daml",
+      "key": "Ambiguous occurrence ‘…’",
+      "message": "Ambiguous occurrence ‘Bool’",
+      "damlc_stage": "typecheck",
+      "daml_line": 1,
+      "count": 23,
+      "first_seen": {
+        "second": 1.3,
+        "input": 1417
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def bool(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d21/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Bool : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d21/Ballot.daml"
+    },
+    {
+      "id": "d22",
+      "kind": "bad_daml",
+      "key": "`self' is a prohibited field name, please use something else.",
+      "message": "`self' is a prohibited field name, please use something else.",
+      "damlc_stage": "parser",
+      "daml_line": 25,
+      "count": 5,
+      "first_seen": {
+        "second": 1.54,
+        "input": 1734
+      },
+      "seed": "contracts/asset_proposal/asset_proposal.vy",
+      "input": "from forge.models import ContractId, Party, choice, template\n\n\n@template\nclass Asset:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer, owner]\n\n    # The new owner must sign the asset too, so giving it makes a proposal.\n    @choice(controller=owner, consuming=True)\n    @choice(controller=owner, consuming=True)\n    def Give(self, new_owner: Party) -> ContractId[AssetProposal]:\n        assert new_owner != self.owner, \"cannot give an asset to its current owner\"\n        return create(AssetProposal(issuer=self.issuer, owner=new_owner, name=self.name))\n\n\n@template\nclass AssetProposal:\n    issuer: Party\n    owner: Party\n    name: str\n\n    return None\n    signatory: list[Party] = [issuer]\n    self: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=True)\n    def Accept(self) -> ContractId[Asset]:\n        return create(Asset(issuer=self.issuer, owner=self.owner, name=self.name))\n\n    @choice(controller=owner, consuming=True)\n    def Reject(self) -> None:\n        return\n",
+      "input_file": "groups/d22/asset_proposal.vy",
+      "daml": "module AssetProposal where\n\ntemplate Asset\n  with\n    issuer : Party\n    owner : Party\n    name : Text\n  where\n    signatory [issuer, owner]\n\n    choice Give : ContractId AssetProposal\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        assertMsg \"cannot give an asset to its current owner\" (new_owner /= self.owner)\n        create (AssetProposal with issuer = self.issuer, owner = new_owner, name = self.name)\n\ntemplate AssetProposal\n  with\n    issuer : Party\n    owner : Party\n    name : Text\n    self : [Party]\n  where\n    signatory [issuer]\n\n    choice Accept : ContractId Asset\n      controller owner\n      do\n        let self = this\n        create (Asset with issuer = self.issuer, owner = self.owner, name = self.name)\n\n    choice Reject : ()\n      controller owner\n      do\n        let self = this\n        pure ()\n",
+      "daml_file": "groups/d22/AssetProposal.daml"
+    },
+    {
+      "id": "d23",
+      "kind": "bad_daml",
+      "key": "Tried to access nonexistent field ‘…’ with type ‘…’",
+      "message": "Tried to access nonexistent field ‘consuming’ with type ‘Map",
+      "damlc_stage": "typecheck",
+      "daml_line": 42,
+      "count": 12,
+      "first_seen": {
+        "second": 1.91,
+        "input": 2142
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.consuming)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d23/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.consuming\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d23/Ballot.daml"
+    },
+    {
+      "id": "d24",
+      "kind": "bad_daml",
+      "key": "Tried to get field ‘…’ with type ‘…’ on value of type ‘…’, but that field has type ‘…’",
+      "message": "Tried to get field ‘deadline’ with type ‘[Time]’ on value of type ‘EscrowTerms’, but that field has type ‘Time’",
+      "damlc_stage": "typecheck",
+      "daml_line": 40,
+      "count": 3,
+      "first_seen": {
+        "second": 2.85,
+        "input": 3246
+      },
+      "seed": "contracts/escrow/escrow.vy",
+      "input": "from datetime import datetime\n\nfrom forge.models import ContractId, Decimal, Party, choice, template\n\n\nstruct EscrowTerms:\n    amount: Decimal\n    deadline: datetime\n\n\n@template\nclass Payout:\n    payer: Party\n    receiver: Party\n    amount: Decimal\n\n    signatory: list[Party] = [payer]\n    observer: list[Party] = [receiver]\n\n\n# The arbiter holds the buyer's money until the deal ends.\n@template\nclass Escrow:\n    buyer: Party\n    seller: Party\n    arbiter: Party\n    terms: EscrowTerms\n\n    signatory: list[Party] = [buyer]\n    observer: list[Party] = [seller, arbiter]\n    ensure: bool = terms.amount > Decimal(1.5)\n\n    @choice(controller=arbiter, consuming=True)\n    def Release(self) -> ContractId[Payout]:\n        return create(Payout(payer=self.arbiter, receiver=self.seller, amount=self.terms.amount))\n\n    @choice(controller=arbiter, consuming=True)\n    def Refund(self) -> ContractId[Payout]:\n        now = datetime.now()\n        assert now  not in  self.terms.deadline, \"refund is allowed only after the deadline\"\n        return create(Payout(payer=self.arbiter, receiver=self.buyer, amount=self.terms.amount))\n",
+      "input_file": "groups/d24/escrow.vy",
+      "daml": "module Escrow where\n\ndata EscrowTerms = EscrowTerms\n  with\n    amount : Decimal\n    deadline : Time\n  deriving (Eq, Show)\n\ntemplate Payout\n  with\n    payer : Party\n    receiver : Party\n    amount : Decimal\n  where\n    signatory [payer]\n    observer [receiver]\n\ntemplate Escrow\n  with\n    buyer : Party\n    seller : Party\n    arbiter : Party\n    terms : EscrowTerms\n  where\n    signatory [buyer]\n    observer [seller, arbiter]\n    ensure terms.amount > (1.5 : Decimal)\n\n    choice Release : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        create (Payout with payer = self.arbiter, receiver = self.seller, amount = (self.terms).amount)\n\n    choice Refund : ContractId Payout\n      controller arbiter\n      do\n        let self = this\n        now <- getTime\n        assertMsg \"refund is allowed only after the deadline\" (now `notElem` (self.terms).deadline)\n        create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)\n",
+      "daml_file": "groups/d24/Escrow.daml"
+    },
+    {
+      "id": "d25",
+      "kind": "bad_daml",
+      "key": "Tried to get field ‘…’ with type ‘…’",
+      "message": "Tried to get field ‘owner’ with type ‘Transfer",
+      "damlc_stage": "typecheck",
+      "daml_line": 32,
+      "count": 2,
+      "first_seen": {
+        "second": 3.31,
+        "input": 3780
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        assert new_owner != self.owner, \"cannot give an asset to its current owner\"\n        return (first, rest)\n",
+      "input_file": "groups/d25/iou.vy",
+      "daml": "module Iou where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    currency : Text\n  where\n    signatory [issuer]\n    observer [owner]\n    ensure amount > (0.0 : Decimal)\n\n    choice Transfer : ContractId Iou\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        create (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.currency)\n\n    choice Split : (ContractId Iou, ContractId Iou)\n      with\n        split_amount : Decimal\n      controller owner\n      do\n        let self = this\n        assertMsg \"split amount must be positive\" (split_amount > (0.0 : Decimal))\n        assertMsg \"split amount must be less than the full amount\" (split_amount < self.amount)\n        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, currency = self.currency)\n        rest <- create (Iou with issuer = self.issuer, owner = self.owner, amount = self.amount - split_amount, currency = self.currency)\n        assertMsg \"cannot give an asset to its current owner\" (new_owner /= self.owner)\n        pure (first, rest)\n",
+      "daml_file": "groups/d25/Iou.daml"
+    },
+    {
+      "id": "d26",
+      "kind": "bad_daml",
+      "key": "Duplicate type signatures for ‘…’",
+      "message": "Duplicate type signatures for ‘count_yes’",
+      "damlc_stage": "typecheck",
+      "daml_line": 24,
+      "count": 1,
+      "first_seen": {
+        "second": 5.23,
+        "input": 6068
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d26/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  ()\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  count\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d26/Ballot.daml"
+    },
+    {
+      "id": "d27",
+      "kind": "bad_daml",
+      "key": "You cannot bind scoped type variable ‘…’",
+      "message": "You cannot bind scoped type variable ‘self’",
+      "damlc_stage": "typecheck",
+      "daml_line": 42,
+      "count": 6,
+      "first_seen": {
+        "second": 5.63,
+        "input": 6492
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    count = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[self, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d27/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let count = 0 in\n  let _damlforge_count2 =\n        foldl\n          (\\count in_favor ->\n            if in_favor\n              then\n                let _damlforge_count1 = count + 1 in\n                _damlforge_count1\n              else\n                count)\n          count answers\n  in\n  _damlforge_count2\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map self Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d27/Ballot.daml"
+    },
+    {
+      "id": "d28",
+      "kind": "bad_daml",
+      "key": "Expected kind ‘…’, but ‘…’ has kind ‘…’",
+      "message": "Expected kind ‘* -> *’, but ‘Reject’ has kind ‘*’",
+      "damlc_stage": "typecheck",
+      "daml_line": 11,
+      "count": 1,
+      "first_seen": {
+        "second": 5.82,
+        "input": 6725
+      },
+      "seed": "contracts/asset_proposal/asset_proposal.vy",
+      "input": "from forge.models import ContractId, Party, choice, template\n\n\n@template\nclass Asset:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer, owner]\n\n    # The new owner must sign the asset too, so giving it makes a proposal.\n    @choice(controller=owner, consuming=True)\n    def Give(self, new_owner: Party) -> Reject[AssetProposal]:\n        assert new_owner != self.owner, \"cannot give an asset to its current owner\"\n        return create(AssetProposal(issuer=self.issuer, owner=new_owner, name=self.name))\n\n\n@template\nclass AssetProposal:\n    issuer: Party\n    owner: Party\n    name: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=True)\n    def Accept(self) -> ContractId[Asset]:\n        return create(Asset(issuer=self.issuer, owner=self.owner, name=self.name))\n\n    @choice(controller=owner, consuming=True)\n    def Reject(self) -> None:\n        return\n",
+      "input_file": "groups/d28/asset_proposal.vy",
+      "daml": "module AssetProposal where\n\ntemplate Asset\n  with\n    issuer : Party\n    owner : Party\n    name : Text\n  where\n    signatory [issuer, owner]\n\n    choice Give : Reject AssetProposal\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        assertMsg \"cannot give an asset to its current owner\" (new_owner /= self.owner)\n        create (AssetProposal with issuer = self.issuer, owner = new_owner, name = self.name)\n\ntemplate AssetProposal\n  with\n    issuer : Party\n    owner : Party\n    name : Text\n  where\n    signatory [issuer]\n    observer [owner]\n\n    choice Accept : ContractId Asset\n      controller owner\n      do\n        let self = this\n        create (Asset with issuer = self.issuer, owner = self.owner, name = self.name)\n\n    choice Reject : ()\n      controller owner\n      do\n        let self = this\n        pure ()\n",
+      "daml_file": "groups/d28/AssetProposal.daml"
+    },
+    {
+      "id": "d29",
+      "kind": "bad_daml",
+      "key": "The constructor ‘…’ should have 3 arguments, but has been given none",
+      "message": "The constructor ‘Ballot’ should have 3 arguments, but has been given none",
+      "damlc_stage": "typecheck",
+      "daml_line": 10,
+      "count": 1,
+      "first_seen": {
+        "second": 5.98,
+        "input": 6916
+      },
+      "seed": "contracts/ballot/ballot.vy",
+      "input": "from forge.models import ContractId, GenMap, Party, choice, template\nimport DA.Map as M\n\n\ndef count_yes(votes: GenMap[Party, bool]) -> int:\n    answers: list[bool] = M.values(votes)\n    Ballot = 0\n    for in_favor in answers:\n        if in_favor:\n            count = count + 1\n    return count\n\n\n@template\nclass Ballot:\n    organizer: Party\n    voters: list[Party]\n    votes: GenMap[Party, bool]\n\n    signatory: list[Party] = [organizer]\n    observer: list[Party] = voters\n\n    @choice(controller=voter, consuming=True)\n    @choice(controller=voter, consuming=True)\n    def CastVote(self, voter: Party, in_favor: bool) -> ContractId[Ballot]:\n        assert voter in self.voters, \"voter is not on the voter list\"\n        assert M.lookup(voter, self.votes) is None, \"voter has already voted\"\n        new_votes: GenMap[Party, bool] = M.insert(voter, in_favor, self.votes)\n        return create(Ballot(organizer=self.organizer, voters=self.voters, votes=new_votes))\n\n    @choice(controller=organizer, consuming=True)\n    def Close(self) -> bool:\n        return count_yes(self.votes) * 2 > len(self.voters)\n",
+      "input_file": "groups/d29/ballot.vy",
+      "daml": "module Ballot where\n\nimport qualified DA.Map as M\n\nimport DA.Map as Map\n\ncount_yes : (Map.Map Party Bool) -> Int\ncount_yes votes =\n  let (answers : [Bool]) = M.values votes in\n  let Ballot = 0 in\n  count\n\ntemplate Ballot\n  with\n    organizer : Party\n    voters : [Party]\n    votes : Map.Map Party Bool\n  where\n    signatory [organizer]\n    observer voters\n\n    choice CastVote : ContractId Ballot\n      with\n        voter : Party\n        in_favor : Bool\n      controller voter\n      do\n        let self = this\n        assertMsg \"voter is not on the voter list\" (voter `elem` self.voters)\n        assertMsg \"voter has already voted\" (M.lookup voter self.votes == None)\n        let (new_votes : Map.Map Party Bool) = M.insert voter in_favor self.votes\n        create (Ballot with organizer = self.organizer, voters = self.voters, votes = new_votes)\n\n    choice Close : Bool\n      controller organizer\n      do\n        let self = this\n        pure ((count_yes self.votes * 2) > length self.voters)\n",
+      "daml_file": "groups/d29/Ballot.daml"
+    },
+    {
+      "id": "d30",
+      "kind": "bad_daml",
+      "key": "No instance for (IsParties",
+      "message": "No instance for (IsParties",
+      "damlc_stage": "typecheck",
+      "daml_line": 11,
+      "count": 1,
+      "first_seen": {
+        "second": 9.08,
+        "input": 10590
+      },
+      "seed": "contracts/iou/iou.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n    currency: str\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [Iou]\n    ensure: bool = amount > Decimal(0)\n\n    @choice(controller=owner, consuming=True)\n    def Transfer(self, new_owner: Party) -> ContractId[Iou]:\n        return create(\n            Iou(issuer=self.issuer, owner=new_owner, amount=self.amount, currency=self.currency)\n        )\n\n    @choice(controller=owner, consuming=True)\n    def Split(self, split_amount: Decimal) -> tuple[ContractId[Iou], ContractId[Iou]]:\n        assert split_amount > Decimal(0), \"split amount must be positive\"\n        assert split_amount < self.amount, \"split amount must be less than the full amount\"\n        first = create(\n            Iou(issuer=self.issuer, owner=self.owner, amount=split_amount, currency=self.currency)\n        )\n        rest = create(\n            Iou(\n                issuer=self.issuer,\n                owner=self.owner,\n                amount=self.amount - split_amount,\n                currency=self.currency,\n            )\n        )\n        return (first, rest)\n",
+      "input_file": "groups/d30/iou.vy",
+      "daml": "module Iou where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    currency : Text\n  where\n    signatory [issuer]\n    observer [Iou]\n    ensure amount > (0.0 : Decimal)\n\n    choice Transfer : ContractId Iou\n      with\n        new_owner : Party\n      controller owner\n      do\n        let self = this\n        create (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.currency)\n\n    choice Split : (ContractId Iou, ContractId Iou)\n      with\n        split_amount : Decimal\n      controller owner\n      do\n        let self = this\n        assertMsg \"split amount must be positive\" (split_amount > (0.0 : Decimal))\n        assertMsg \"split amount must be less than the full amount\" (split_amount < self.amount)\n        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, currency = self.currency)\n        rest <- create (Iou with issuer = self.issuer, owner = self.owner, amount = self.amount - split_amount, currency = self.currency)\n        pure (first, rest)\n",
+      "daml_file": "groups/d30/Iou.daml"
+    }
+  ]
+}

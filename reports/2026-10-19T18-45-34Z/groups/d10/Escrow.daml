@@ -1,0 +1,42 @@
+module Escrow where
+
+data EscrowTerms = EscrowTerms
+  with
+    amount : Decimal
+    deadline : Time
+  deriving (Eq, Show)
+
+template Payout
+  with
+    payer : Party
+    receiver : Party
+    amount : Decimal
+  where
+    signatory [payer]
+    observer [receiver]
+
+template Escrow
+  with
+    buyer : Party
+    seller : Party
+    arbiter : Party
+    terms : EscrowTerms
+    seller : Party
+  where
+    signatory [buyer]
+    observer [seller, arbiter]
+    ensure terms.amount > (0.0 : Decimal)
+
+    choice Release : ContractId Payout
+      controller arbiter
+      do
+        let self = this
+        create (Payout with payer = self.arbiter, receiver = self.seller, amount = (self.terms).amount)
+
+    choice Refund : ContractId Payout
+      controller arbiter
+      do
+        let self = this
+        x._1 <- getTime
+        assertMsg "refund is allowed only after the deadline" (now > (self.terms).deadline)
+        create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)

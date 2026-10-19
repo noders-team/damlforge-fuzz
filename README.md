@@ -181,7 +181,10 @@ random seed 1: 2000 inputs, 369 OK, 1356 rejected, 128 crash, 147 skipped
 This output is from DamlForge `v0.0.10`. The folder name is an example: it is the UTC time when the run started.
 If a folder with that name exists, the run adds `-2`, `-3`, and so on.
 The folder is in `reports/`. To use another folder, give `--reports DIR`.
-Git ignores `reports/`.
+Git does not ignore `reports/`. Commit the reports that you want to keep, and delete the others.
+The repository has one report: `reports/2026-10-19T18-45-34Z/`.
+It comes from `damlforge-fuzz run --damlc --count 20000 --random-seed 1` on DamlForge `v0.0.10` (one commit later, which reports version `0.0.11`).
+It has 14 crash groups and 30 bad Daml groups.
 
 The folder has these files:
 
