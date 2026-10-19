@@ -1,0 +1,6 @@
+module ListAssign where
+
+reset_first : [Int] -> [Int]
+reset_first xs =
+  let xs._1 = 0 in
+  xs

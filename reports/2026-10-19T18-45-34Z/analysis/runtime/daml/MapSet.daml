@@ -1,0 +1,10 @@
+module MapSet where
+
+import DA.Map as Map
+
+import DA.List ((!!))
+
+mark : (Map.Map Party Bool) -> Party -> (Map.Map Party Bool)
+mark votes voter =
+  let (votes) !! (voter) = True in
+  votes

@@ -1,0 +1,23 @@
+module Test where
+
+import Daml.Script
+import DA.Assert
+import DA.Map as Map
+import ListAssign
+import MapSet
+
+control_map_insert_works : Script ()
+control_map_insert_works = do
+  alice <- allocateParty "alice"
+  Map.member alice (Map.insert alice True Map.empty) === True
+
+list_assignment_sets_first_element : Script ()
+list_assignment_sets_first_element = do
+  debug (reset_first [5, 6])
+  reset_first [5, 6] === [0, 6]
+
+map_assignment_adds_the_voter : Script ()
+map_assignment_adds_the_voter = do
+  alice <- allocateParty "alice"
+  debug (Map.toList (mark Map.empty alice))
+  Map.member alice (mark Map.empty alice) === True
