@@ -39,3 +39,25 @@ def write_vy(tmp_path):
         return path
 
     return write
+
+
+@pytest.fixture(scope="session")
+def dpm():
+    """dpm's path. Skips the test when dpm or the SDK in contracts/*/daml.yaml (3.5.2) is missing.
+
+    One build of the unchanged iou seed proves both, and that its Daml builds.
+    """
+    from damlforge_fuzz import DamlcUnavailable, Seed, compile_and_sort
+    from damlforge_fuzz.damlc import DamlSource, build_daml, find_dpm
+
+    path = find_dpm()
+    if path is None:
+        pytest.skip("dpm not found on PATH or at ~/.dpm/bin/dpm")
+    seed = Seed.load(CONTRACTS / "iou" / "iou.vy")
+    ok = compile_and_sort(seed.text, seed)
+    try:
+        [(_, error)] = build_daml([DamlSource(ok.daml, ok.module_name, seed.daml_yaml)])
+    except DamlcUnavailable as unavailable:
+        pytest.skip(f"dpm cannot build the seeds' Daml SDK: {unavailable}")
+    assert error is None, f"the iou seed's Daml does not build: {error}"
+    return path

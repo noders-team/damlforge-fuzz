@@ -1,7 +1,7 @@
 """The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`; unit 4 adds its report;
-unit 5 adds shrinking and `shrink`.
+unit 5 adds shrinking and `shrink`; unit 6 adds --damlc.
 
-    damlforge-fuzz check PATH [PATH ...]
+    damlforge-fuzz check [--damlc] PATH [PATH ...]
 
 Each PATH is a .vy file, or a folder searched recursively for .vy files.
 `check` prints one line per file, in argument order and sorted within a folder:
@@ -11,13 +11,20 @@ Each PATH is a .vy file, or a folder searched recursively for .vy files.
     CRASH    lower  bitand.vy  KeyError 'BitAnd' at forge/ir/lower.py:289
     CRASH    parse  deep.vy  RecursionError maximum recursion depth exceeded
 
-Exit status: 0 when every file is OK, 1 when any file is REJECTED or CRASH,
-2 for a usage error (a missing path, a folder with no .vy file, an unreadable
-file, or DamlForge not installed). A usage error prints no result lines: every
-path is loaded before anything compiles.
+With --damlc, `check` also builds the Daml of the OK files with damlc, in one
+`dpm build`, and prints BAD_DAML for each file whose Daml damlc rejects, with
+damlc's first error line:
+
+    BAD_DAML emit   iou.vy  Variable not in scope: str : Decimal -> Text
+
+Exit status: 0 when every file is OK, 1 when any file is REJECTED, CRASH, or
+BAD_DAML, 2 for a usage error (a missing path, a folder with no .vy file, an
+unreadable file, or DamlForge not installed; with --damlc, also a file with no
+daml.yaml, or dpm or its SDK missing). A usage error prints no result lines:
+every path is loaded before anything compiles.
 
     damlforge-fuzz run [SEED_FOLDER ...] (--seconds N | --count N) [--random-seed S]
-                       [--reports DIR]
+                       [--reports DIR] [--damlc]
 
 `run` changes copies of the seeds at random and compiles each copy. Without a
 SEED_FOLDER it uses contracts/. Without --random-seed it picks one. It prints
@@ -34,12 +41,22 @@ makes under --reports (default: reports): report.json, report.md, and one
 folder per crash group with the group's first input and its shrunk copy.
 Between the second and the third line, `run` shrinks each group's input.
 
-Exit status: 0 when no input crashed, 1 when any input crashed, 2 for a usage
-error (as for check, and a --reports folder that cannot be made, or a report
-that cannot be written), 130 on Ctrl-C, after all three lines and the report
-for the inputs so far. A first Ctrl-C stops the inputs and the run still
-shrinks. A Ctrl-C while it shrinks stops the shrinking: the groups not shrunk
-yet get "shrunk": null.
+With --damlc, `run` first builds the Daml of the unchanged seeds. When dpm or
+the SDK is missing, or a seed's Daml does not build, it prints one line to
+stderr and exits 2 before input 1. After the inputs it builds each distinct
+Daml text of the OK inputs, groups the ones damlc rejects (BAD_DAML) in the
+report, and prints one more line before the last:
+
+    damlc: 200 Daml texts, 157 bad, 22 bad Daml groups
+
+Exit status: 0 when no input crashed and no Daml was bad, 1 when any input
+crashed or any Daml text was bad, 2 for a usage error (as for check, and a
+--reports folder that cannot be made, a report that cannot be written, or dpm
+failing during the damlc step), 130 on Ctrl-C, after all the lines and the
+report for the inputs so far. A first Ctrl-C stops the inputs, and the run
+still builds the Daml and shrinks. A Ctrl-C while damlc builds keeps the
+batches already built and stops the damlc step. A Ctrl-C while it shrinks
+stops the shrinking: the groups not shrunk yet get "shrunk": null.
 
     damlforge-fuzz shrink FILE
 
@@ -67,7 +84,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from damlforge_fuzz import Limit, Outcome, Totals
+    from damlforge_fuzz import DamlcSummary, DamlError, Limit, Outcome, Seed, Totals
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -81,6 +98,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "check",
         help="compile .vy files with forge and sort each result",
         description="Compile each .vy file with forge and print OK, REJECTED, or CRASH.",
+    )
+    check.add_argument(
+        "--damlc",
+        action="store_true",
+        help="also build the Daml of the OK files with damlc (needs dpm and the Daml SDK)",
     )
     check.add_argument(
         "paths",
@@ -120,6 +142,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="DIR",
         help="the folder that gets one run folder per run (default: reports)",
     )
+    run.add_argument(
+        "--damlc",
+        action="store_true",
+        help="also build the Daml of the OK inputs with damlc and report the bad ones "
+        "(needs dpm and the Daml SDK)",
+    )
     shrink = commands.add_parser(
         "shrink",
         help="delete lines of a crashing .vy file while it still crashes the same way",
@@ -129,28 +157,50 @@ def main(argv: Sequence[str] | None = None) -> int:
     shrink.add_argument("file", type=Path, metavar="FILE", help="a .vy file that crashes forge")
     args = parser.parse_args(argv)
     if args.command == "check":
-        return _check(args.paths)
+        return _check(args.paths, args.damlc)
     if args.command == "shrink":
         return _shrink(args.file)
-    return _run(args.seed_folders, args.seconds, args.count, args.random_seed, args.reports)
+    return _run(
+        args.seed_folders, args.seconds, args.count, args.random_seed, args.reports, args.damlc
+    )
 
 
-def _check(paths: Sequence[Path]) -> int:
+def _check(paths: Sequence[Path], damlc: bool) -> int:
     try:
-        from damlforge_fuzz import Ok, Seed, compile_and_sort
+        from damlforge_fuzz import (
+            DamlcUnavailable,
+            DamlSource,
+            Ok,
+            Seed,
+            build_daml,
+            compile_and_sort,
+        )
     except ImportError as error:
         print(f"damlforge-fuzz: {error}", file=sys.stderr)
         return 2
     try:
         seeds = [Seed.load(path) for path in _vy_files(paths)]
+        if damlc:
+            _need_daml_yaml(seeds)
     except (OSError, ValueError) as error:
         print(f"damlforge-fuzz check: {error}", file=sys.stderr)
         return 2
+    outcomes = [compile_and_sort(seed.text, seed) for seed in seeds]
+    sources = {
+        seed.path: DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)
+        for seed, outcome in zip(seeds, outcomes, strict=True)
+        if damlc and isinstance(outcome, Ok)
+    }
+    try:
+        verdicts = dict(build_daml(set(sources.values()))) if sources else {}
+    except DamlcUnavailable as error:
+        print(f"damlforge-fuzz check: damlc: {error}", file=sys.stderr)
+        return 2
     status = 0
-    for seed in seeds:
-        outcome = compile_and_sort(seed.text, seed)
-        print(_line(seed.path, outcome))
-        if not isinstance(outcome, Ok):
+    for seed, outcome in zip(seeds, outcomes, strict=True):
+        error = verdicts.get(sources.get(seed.path))
+        print(_line(seed.path, outcome) if error is None else _bad_daml_line(seed.path, error))
+        if not isinstance(outcome, Ok) or error is not None:
             status = 1
     return status
 
@@ -161,23 +211,29 @@ def _run(
     count: int | None,
     random_seed: int | None,
     reports: Path,
+    damlc: bool,
 ) -> int:
     try:
-        from damlforge_fuzz import Count, Report, Seconds, Seed, fuzz
+        from damlforge_fuzz import Count, DamlcUnavailable, Report, Seconds, Seed, fuzz
     except ImportError as error:
         print(f"damlforge-fuzz: {error}", file=sys.stderr)
         return 2
     try:
         seeds = [Seed.load(path) for path in _vy_files(seed_folders or [Path("contracts")])]
-    except (OSError, ValueError) as error:
+        if damlc:
+            _need_daml_yaml(seeds)
+            _seeds_build(seeds)
+    except (OSError, ValueError, DamlcUnavailable) as error:
         print(f"damlforge-fuzz run: {error}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        return 130
     if random_seed is None:
         # Short enough to retype from the screen.
         random_seed = secrets.randbelow(1_000_000)
     limit = Count(count) if count is not None else Seconds(seconds)
     try:
-        report = Report.open(seeds, random_seed, limit, reports)
+        report = Report.open(seeds, random_seed, limit, reports, damlc=damlc)
     except OSError as error:
         print(f"damlforge-fuzz run: cannot make a run folder in {reports}: {error}", file=sys.stderr)
         return 2
@@ -188,6 +244,16 @@ def _run(
     except KeyboardInterrupt:
         report.interrupt()
     print(_final_line(random_seed, report.totals), flush=True)
+    dpm_failed = False
+    try:
+        report.check_daml()
+    except KeyboardInterrupt:
+        report.interrupt()
+    except DamlcUnavailable as error:
+        print(f"damlforge-fuzz run: damlc: {error}", file=sys.stderr)
+        dpm_failed = True
+    if report.damlc is not None:
+        print(_damlc_line(report.damlc, len(report.bad_daml_groups())), flush=True)
     try:
         report.shrink()
     except KeyboardInterrupt:
@@ -198,9 +264,42 @@ def _run(
         print(f"damlforge-fuzz run: cannot write the report: {error}", file=sys.stderr)
         return 2
     print(f"{_plural(len(report.groups), 'crash group')}, report in {report.folder}")
+    if dpm_failed:
+        return 2
     if report.run.interrupted:
         return 130
-    return 1 if report.totals.crash else 0
+    return 1 if report.totals.crash or (report.damlc and report.damlc.bad_texts) else 0
+
+
+def _need_daml_yaml(seeds: Sequence[Seed]) -> None:
+    """Raise ValueError for the first seed with no daml.yaml: damlc needs its sdk-version."""
+    for seed in seeds:
+        if seed.daml_yaml is None:
+            raise ValueError(f"--damlc needs a daml.yaml for {seed.path}, and found none")
+
+
+def _seeds_build(seeds: Sequence[Seed]) -> None:
+    """Raise ValueError unless forge compiles every seed and damlc builds its Daml.
+
+    One build before input 1, so a missing dpm or SDK fails in about a second,
+    not after the run, and no bad Daml group comes from a seed itself. Raises
+    DamlcUnavailable when dpm cannot build.
+    """
+    from damlforge_fuzz import DamlSource, Ok, build_daml, compile_and_sort
+
+    sources = {}
+    for seed in seeds:
+        outcome = compile_and_sort(seed.text, seed)
+        if not isinstance(outcome, Ok):
+            raise ValueError(
+                f"--damlc needs seeds that forge compiles: {_line(seed.path, outcome)}"
+            )
+        sources[DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)] = seed
+    for source, error in build_daml(sources):
+        if error is not None:
+            raise ValueError(
+                f"damlc rejects the Daml of seed {sources[source].path}: {error.message}"
+            )
 
 
 def _shrink(path: Path) -> int:
@@ -253,6 +352,14 @@ def _start_line(random_seed: int, seed_count: int, limit: Limit) -> str:
         case Seconds(s):
             how_long = _plural(int(s) if s.is_integer() else s, "second")
     return f"random seed {random_seed}, {_plural(seed_count, 'seed')}, {how_long}"
+
+
+def _damlc_line(damlc: DamlcSummary, groups: int) -> str:
+    """'damlc: 200 Daml texts, 157 bad, 22 bad Daml groups'."""
+    return (
+        f"damlc: {_plural(damlc.checked_texts, 'Daml text')}, {damlc.bad_texts} bad, "
+        f"{_plural(groups, 'bad Daml group')}"
+    )
 
 
 def _final_line(random_seed: int, totals: Totals) -> str:
@@ -335,6 +442,11 @@ def _line(path: Path, outcome: Outcome) -> str:
     head = f"{outcome.label:<9}{outcome.stage:<7}{path}"
     detail = _detail(outcome)
     return f"{head}  {detail}" if detail else head
+
+
+def _bad_daml_line(path: Path, error: DamlError) -> str:
+    """'BAD_DAML emit   iou.vy  Variable not in scope: ...': forge wrote Daml, damlc rejects it."""
+    return f"{error.label:<9}{'emit':<7}{path}  {error.message}"
 
 
 def _detail(outcome: Outcome) -> str:

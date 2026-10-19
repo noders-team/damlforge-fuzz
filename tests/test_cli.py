@@ -102,9 +102,13 @@ def test_folder_without_vy_files_returns_2(tmp_path, capsys):
         (["run", "--count", "5"], 2, "stderr", "Install DamlForge first"),
         (["shrink", "--help"], 0, "stdout", "FILE"),
         (["shrink", "x.vy"], 2, "stderr", "Install DamlForge first"),
+        (["check", "--damlc", "x.vy"], 2, "stderr", "Install DamlForge first"),
+        (["run", "--help"], 0, "stdout", "--damlc"),
+        (["run", "--damlc", "--count", "5"], 2, "stderr", "Install DamlForge first"),
     ],
     ids=["help", "usage-error", "check", "run-help", "run-help-reports", "run-no-limit",
-         "run-two-limits", "run-count-0", "run", "shrink-help", "shrink"],  # fmt: skip
+         "run-two-limits", "run-count-0", "run", "shrink-help", "shrink", "check-damlc",
+         "run-help-damlc", "run-damlc"],  # fmt: skip
 )
 def test_command_works_without_forge_installed(argv, status, stream, expected):
     hide_forge = (

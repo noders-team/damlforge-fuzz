@@ -3,7 +3,7 @@
 damlforge-fuzz is a fuzzer for the DamlForge compiler, `forge`, which compiles `.vy` files to Daml.
 The fuzzer takes a few seed contracts, makes small random edits to them, runs `forge` on each edited copy, and reports crashes.
 
-**Status.** This is unit 5. The `damlforge-fuzz check` command compiles `.vy` files and sorts each result. The `damlforge-fuzz run` command makes random edits to the seeds, counts the results, and writes a report of the crashes, with a shrunk copy of each crashing input. The `damlforge-fuzz shrink` command shrinks one crashing file. A damlc check of the Daml that forge writes comes next.
+**Status.** This is unit 6. The `damlforge-fuzz check` command compiles `.vy` files and sorts each result. The `damlforge-fuzz run` command makes random edits to the seeds, counts the results, and writes a report of the crashes, with a shrunk copy of each crashing input. The `damlforge-fuzz shrink` command shrinks one crashing file. With `--damlc`, `run` and `check` also build the Daml that forge writes with `damlc` and report the Daml that `damlc` rejects.
 
 For a step-by-step guide with real command output, open [`docs/guide.html`](docs/guide.html) in a browser.
 The plan for units 2 to 6 is in [`docs/plan.html`](docs/plan.html).
@@ -75,7 +75,7 @@ The output lists the `daml`, `dar`, `json`, and `stubs` commands.
 
 dpm is the Daml package manager.
 It installs the Daml SDK, which has the `damlc` compiler.
-Only the second check in [Check the seeds](#check-the-seeds) needs dpm.
+The `--damlc` option of `run` and `check`, and the second check in [Check the seeds](#check-the-seeds), need dpm and the SDK version in the seeds' `daml.yaml` files, 3.5.2.
 
 ```sh
 curl -sSL https://get.digitalasset.com/install | sh
@@ -240,6 +240,62 @@ It exits with 1 and writes nothing when FILE does not crash forge.
 It exits with 2 for a usage error, such as a missing file, a folder, or a file that is already in a `shrunk/` folder.
 It exits with 130 and writes nothing when you press Ctrl-C.
 This output is from DamlForge `v0.0.10`.
+
+### Check the Daml with damlc
+
+forge says `OK` when it writes Daml. But the Daml can still be wrong.
+With `--damlc`, the run also builds the Daml of the `OK` copies with `damlc`, the Daml compiler.
+`BAD_DAML` means that forge said `OK` and wrote Daml, but `damlc` rejects that Daml.
+That is a bug in forge: its check stage let through a program that it then translated to wrong Daml.
+
+```
+$ damlforge-fuzz run --damlc --count 2000 --random-seed 1
+random seed 1, 4 seeds, 2000 inputs
+random seed 1: 2000 inputs, 369 OK, 1356 rejected, 128 crash, 147 skipped
+damlc: 200 Daml texts, 157 bad, 22 bad Daml groups
+11 crash groups, report in reports/2026-10-19T17-32-10Z
+```
+
+This output is from DamlForge `v0.0.10`.
+The first two lines and the last line are the same as without `--damlc`.
+The new line comes before the last line:
+
+- `Daml texts`: the number of different Daml texts among the `OK` copies. Many copies give the same Daml, so the run builds each text only once.
+- `bad`: the texts that `damlc` rejects.
+- `bad Daml groups`: texts whose first `damlc` error is the same, after the names in the error are hidden, are one group. For example, `Variable not in scope: str : Int -> t` and `Variable not in scope: x : [a0]` are one group.
+  So a group is one kind of `damlc` error, and it can hold more than one forge bug. The report shows the full error of the group's first copy.
+
+`--damlc` needs dpm and the Daml SDK. [Install dpm and the Daml SDK](#install-dpm-and-the-daml-sdk) shows how.
+Before the first copy, the run builds the Daml of the unchanged seeds.
+If dpm or the SDK is missing, or a seed's Daml does not build, the run prints one line to stderr and exits with 2.
+
+The run builds the Daml after the last copy and before it shrinks the crash inputs.
+It puts up to 500 texts into one temporary Daml project and runs one `dpm build` for them.
+A build of 500 texts takes about 5 seconds, so a 60-second run adds about 40 seconds.
+The temporary projects are in your system's temporary folder, and the run deletes them.
+
+The report has the bad Daml groups after the crash groups.
+Their folders are `groups/d01/`, `groups/d02/`, and so on, in the order the run found them.
+Each folder has the first copy with that error, such as `iou.vy`, a copy of the seed's `daml.yaml`, and the Daml that forge wrote for the copy, such as `Iou.daml`.
+To see the error again without the fuzzer, run `dpm build` in the folder.
+`report.json` has a `damlc` entry with the counts and the time that `damlc` took. Without `--damlc`, it is `null`.
+`report.md` has a `Bad Daml` section with a table of the groups and the first error line of each group.
+
+`check --damlc` also builds the Daml of the files that are `OK`, and prints `BAD_DAML` for the files whose Daml `damlc` rejects:
+
+```
+$ damlforge-fuzz check --damlc reports/2026-10-19T17-32-10Z/groups/d02/iou.vy
+BAD_DAML emit   reports/2026-10-19T17-32-10Z/groups/d02/iou.vy  Variable not in scope: x : [a0]
+```
+
+The line ends with the first line of the first `damlc` error.
+`check --damlc` exits with 1 when any file is `BAD_DAML`, and with 2 when a file has no `daml.yaml` or dpm cannot build.
+
+With `--damlc`, `run` exits with 1 when any copy crashed or any Daml text is bad.
+When you press Ctrl-C while `damlc` builds, the run keeps the texts that it built, still shrinks the crash inputs, writes the report, and exits with 130.
+`report.json` then has `"interrupted": true` in `damlc`.
+
+The run does not shrink the bad Daml inputs, because each try needs its own `dpm build`, which takes about 0.7 seconds.
 
 To see each copy, its changes, and its result, run `python scripts/show_inputs.py contracts/iou --count 5 --random-seed 1`.
 It makes the same copies as `damlforge-fuzz run` with the same folders and random seed.

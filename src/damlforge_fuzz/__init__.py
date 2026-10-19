@@ -45,6 +45,20 @@ write() saves each result under groups/gNN/shrunk/::
     small = shrink(text, seed, crash.key)  # a subsequence of text's lines
     shrunk_path(path)                      # groups/g02/escrow.vy -> groups/g02/shrunk/escrow.vy
 
+Unit 6 builds the Daml of OK inputs with damlc, through `dpm build`, and
+groups the texts damlc rejects (BAD_DAML). It needs dpm and the Daml SDK::
+
+    from damlforge_fuzz import DamlSource, build_daml
+
+    source = DamlSource(ok.daml, ok.module_name, seed.daml_yaml)
+    for source, error in build_daml([source]):  # one dpm build per 500 texts
+        ...  # error is None, or a DamlError with .message and .key
+
+    report = Report.open([seed], 1, Count(2000), Path("reports"), damlc=True)
+    ...
+    report.check_daml()        # after the inputs: every distinct Daml text
+    report.bad_daml_groups()   # [BadDamlGroup], ids d01, d02, ...
+
 Import from this package only. The modules behind it are not part of the API.
 """
 
@@ -65,8 +79,23 @@ if TYPE_CHECKING:
         Stage,
         compile_and_sort,
     )
+    from damlforge_fuzz.damlc import (
+        DamlcUnavailable,
+        DamlError,
+        DamlErrorKey,
+        DamlSource,
+        build_daml,
+    )
     from damlforge_fuzz.mutate import RULE_NAMES, Change, Input, input_sequence
-    from damlforge_fuzz.report import FirstSeen, Group, Report, Run, Tick
+    from damlforge_fuzz.report import (
+        BadDamlGroup,
+        DamlcSummary,
+        FirstSeen,
+        Group,
+        Report,
+        Run,
+        Tick,
+    )
     from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried, fuzz
     from damlforge_fuzz.shrinker import shrink, shrunk_path
 
@@ -78,10 +107,16 @@ _HOME = {
     ),
     **dict.fromkeys(["Change", "Input", "RULE_NAMES", "input_sequence"], "mutate"),
     **dict.fromkeys(["Count", "Limit", "Seconds", "Totals", "Tried", "fuzz"], "runner"),
-    **dict.fromkeys(["FirstSeen", "Group", "Report", "Run", "Tick"], "report"),
+    **dict.fromkeys(
+        ["BadDamlGroup", "DamlcSummary", "FirstSeen", "Group", "Report", "Run", "Tick"], "report"
+    ),
+    **dict.fromkeys(
+        ["DamlError", "DamlErrorKey", "DamlSource", "DamlcUnavailable", "build_daml"], "damlc"
+    ),
     **dict.fromkeys(["shrink", "shrunk_path"], "shrinker"),
 }
-"""The module that holds each public name. compiler, runner, and report load forge; mutate does not."""
+"""The module that holds each public name. compiler, runner, and report load forge; mutate
+and damlc do not."""
 
 __all__ = sorted(_HOME)
 
