@@ -22,7 +22,7 @@ With `--damlc`, it also builds the Daml that `forge` writes, and reports the Dam
 ## Features
 
 - **Repeatable runs.** One random seed fixes every copy and its changes. The same random seed always gives the same copies in the same order.
-- **Line-level change rules.** Ten rules each change one line: they delete it, copy it, insert a line above it, or replace or delete one word.
+- **Text change rules.** Ten rules each change one line: they delete it, copy it, insert a line above it, or replace or delete one word. Six loop rules make the code shapes that break forge's loops, such as a `fetch` inside an expression or a `return` inside a loop.
 - **Crash groups.** Crashes with the same exception at the same forge file and line are one group.
 - **Shrinking.** The run cuts the first input of each group down to the lines that cause the crash.
 - **Daml checks.** With `--damlc`, the run builds the Daml that `forge` writes with `damlc`, and groups the Daml that `damlc` rejects.
@@ -134,10 +134,10 @@ Run these commands from the root of this repository.
 
    ```
    $ damlforge-fuzz run --seconds 60
-   random seed 603708, 9 seeds, 60 seconds
-   random seed 603708: 88546 inputs, 15994 OK, 59526 rejected, 6604 crash, 6422 skipped
-   loops: 172 inputs with loop findings, 4 loop groups
-   15 crash groups, report in reports/2026-10-20T10-03-38Z
+   random seed 813550, 9 seeds, 60 seconds
+   random seed 813550: 82103 inputs, 17467 OK, 42691 rejected, 5420 crash, 16525 skipped
+   loops: 658 inputs with loop findings, 4 loop groups
+   14 crash groups, report in reports/2026-10-20T11-46-49Z
    ```
 
 3. Open `report.md` in the report folder.
@@ -210,9 +210,9 @@ Each copy starts from one seed and gets 1 to 4 random changes.
 ```
 $ damlforge-fuzz run contracts/iou --count 2000 --random-seed 1
 random seed 1, 1 seed, 2000 inputs
-random seed 1: 2000 inputs, 336 OK, 1391 rejected, 110 crash, 163 skipped
-loops: 0 inputs with loop findings, 0 loop groups
-9 crash groups, report in reports/2026-10-20T10-02-53Z
+random seed 1: 2000 inputs, 419 OK, 1135 rejected, 63 crash, 383 skipped
+loops: 11 inputs with loop findings, 2 loop groups
+7 crash groups, report in reports/2026-10-20T11-45-50Z
 ```
 
 The first line prints when the run starts.
@@ -241,7 +241,7 @@ To repeat a run exactly, give its random seed and its number of inputs.
 For example, this command repeats the 60-second run in [Quick start](#quick-start):
 
 ```sh
-damlforge-fuzz run --count 88546 --random-seed 603708
+damlforge-fuzz run --count 82103 --random-seed 813550
 ```
 
 Do not use `--seconds` to repeat a run.
@@ -250,8 +250,10 @@ The number of copies in a time limit changes with the speed of the machine.
 `report.json` records the seeds of a run in `run.seeds`.
 A run without `SEED_FOLDER` uses every seed in `contracts/`, so a new seed in `contracts/` changes the copies of such a run.
 To repeat a run from before a seed was added, name the seeds of that run.
-For example, the report in `reports/2026-10-19T18-45-34Z` comes from a run on the four seeds that `contracts/` had before the loop seeds.
-This command makes the same copies:
+A change to the [change rules](#change-rules) also changes the copies.
+To repeat a run from before such a change, use a commit from before it.
+For example, the report in `reports/2026-10-19T18-45-34Z` comes from a run with the ten rules from before the loop rules, on the four seeds that `contracts/` had before the loop seeds.
+At commit `e99695a`, this command makes the same copies:
 
 ```sh
 damlforge-fuzz run contracts/asset_proposal contracts/ballot contracts/escrow contracts/iou --damlc --count 20000 --random-seed 1
@@ -287,10 +289,10 @@ That is a bug in forge: its check stage let through a program that it then trans
 ```
 $ damlforge-fuzz run --damlc --count 2000 --random-seed 1
 random seed 1, 9 seeds, 2000 inputs
-random seed 1: 2000 inputs, 334 OK, 1377 rejected, 139 crash, 150 skipped
-damlc: 200 Daml texts, 152 bad, 20 bad Daml groups
-loops: 7 inputs with loop findings, 2 loop groups, 0 build with damlc
-10 crash groups, report in reports/2026-10-20T10-02-56Z
+random seed 1: 2000 inputs, 432 OK, 1017 rejected, 133 crash, 418 skipped
+damlc: 231 Daml texts, 172 bad, 22 bad Daml groups
+loops: 12 inputs with loop findings, 4 loop groups, 1 builds with damlc
+9 crash groups, report in reports/2026-10-20T11-45-56Z
 ```
 
 The `damlc:` line comes before the `loops:` line:
@@ -382,9 +384,9 @@ How a run uses the loop check:
   ```
   $ damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1
   random seed 1, 5 seeds, 5000 inputs
-  random seed 1: 5000 inputs, 847 OK, 3365 rejected, 423 crash, 365 skipped
-  loops: 19 inputs with loop findings, 3 loop groups
-  12 crash groups, report in reports/2026-10-20T10-03-00Z
+  random seed 1: 5000 inputs, 972 OK, 2582 rejected, 413 crash, 1033 skipped
+  loops: 49 inputs with loop findings, 4 loop groups
+  10 crash groups, report in reports/2026-10-20T11-45-52Z
   ```
 
 - With `--damlc`, the run also splits the loop groups by the verdict of `damlc`.
@@ -394,13 +396,13 @@ How a run uses the loop check:
   ```
   $ damlforge-fuzz run contracts/loop_* --damlc --count 5000 --random-seed 1
   random seed 1, 5 seeds, 5000 inputs
-  random seed 1: 5000 inputs, 847 OK, 3365 rejected, 423 crash, 365 skipped
-  damlc: 396 Daml texts, 313 bad, 24 bad Daml groups
-  loops: 19 inputs with loop findings, 4 loop groups, 1 builds with damlc
-  12 crash groups, report in reports/2026-10-20T10-03-04Z
+  random seed 1: 5000 inputs, 972 OK, 2582 rejected, 413 crash, 1033 skipped
+  damlc: 405 Daml texts, 315 bad, 22 bad Daml groups
+  loops: 49 inputs with loop findings, 5 loop groups, 1 builds with damlc
+  10 crash groups, report in reports/2026-10-20T11-44-20Z
   ```
 
-  Here the `L3` inputs make two groups: `l02`, whose Daml `damlc` builds, and `l03`, whose Daml `damlc` rejects.
+  Here the `L3` inputs make two groups: `l01`, whose Daml `damlc` builds, and `l05`, whose Daml `damlc` rejects.
 
 - The run does not shrink the loop groups.
 
@@ -511,9 +513,9 @@ For example, `damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1` 
 
 ```
 groups/l01/
-├── loop_verify.vy     the first input whose first check is L2
+├── loop_pure.vy       the first input whose first check is L3
 ├── daml.yaml          a copy of the seed's daml.yaml
-└── LoopVerify.daml    the Daml that forge wrote for the input
+└── LoopPure.daml      the Daml that forge wrote for the input
 ```
 
 ### See a group again
@@ -534,8 +536,8 @@ With `--damlc`, the line also gives the verdict of `damlc`.
 This example uses the report of the `--damlc` run in [Loop check](#loop-check):
 
 ```
-$ damlforge-fuzz check --damlc reports/2026-10-20T10-03-04Z/groups/l02/loop_give.vy
-BAD_LOOP emit   reports/2026-10-20T10-03-04Z/groups/l02/loop_give.vy  L3: the return in a loop of choice GiveAll at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
+$ damlforge-fuzz check --damlc reports/2026-10-20T11-44-20Z/groups/l01/loop_pure.vy
+BAD_LOOP emit   reports/2026-10-20T11-44-20Z/groups/l01/loop_pure.vy  L3: the return in a loop of function has_party at Daml line 37 is lost (2 loops with a return, 0 early-return helpers); damlc builds
 ```
 
 ### Shrunk inputs
@@ -549,8 +551,8 @@ After the last copy, the run shrinks the first input of each crash group:
 3. It stops when it cannot delete one more line.
 
 The shrunk input has only lines of the full input, in the same order, and no line is changed.
-For the 10 crash groups of the 2000-copy run in [Check the Daml with damlc](#check-the-daml-with-damlc), shrinking took about 0.1 seconds.
-The inputs of these groups have 19 to 41 lines, and the shrunk inputs have 1 to 7 lines.
+For the 9 crash groups of the 2000-copy run in [Check the Daml with damlc](#check-the-daml-with-damlc), shrinking took about 0.06 seconds.
+The inputs of these groups have 19 to 42 lines, and the shrunk inputs have 1 to 8 lines.
 
 The shrunk input is in `shrunk/` in the group folder, with the same file name as the full input.
 The same file name keeps the Daml module name.
@@ -607,22 +609,44 @@ The six loop rules never take a string or a comment for code.
 
 To add a word, add it at the end of its list in `mutate.py`.
 
+A rule is one of two kinds:
+
+- A line rule changes only its own line. Most rules are line rules.
+- A text rule gets the whole text and returns the whole new text. Use it when the rule must change other lines, such as `inline_var`, or must know where its line is, such as `inline_local` and `early_return`.
+
 To add a rule:
 
-1. In `mutate.py`, write a function that takes `(rng, line, ctx)` and returns the lines that replace `line`.
-   - Return `[]` to delete the line.
-   - Return `[new_line]` to change the line.
-   - Return `[inserted_line, line]` to insert a line above it.
-   - Return `None` when the rule does not fit the line.
+1. In `mutate.py`, write the function of the rule.
+   - A line rule takes `(rng, line, ctx)` and returns the lines that replace `line`:
+     - Return `[]` to delete the line.
+     - Return `[new_line]` to change the line.
+     - Return `[inserted_line, line]` to insert a line above it.
+     - Return `None` when the rule does not fit the line.
+   - A text rule takes `(rng, i, ctx)` and returns every line of the new text. `ctx.lines[i]` is the line that the run picked. Return `None` when the rule does not fit there.
 
-   Use `rng` for every random choice.
-   `ctx.lines` is the whole text, and `ctx.donor_lines` holds the lines of all the run's seeds.
-2. Add a row `_Rule("your_rule", your_function)` at the end of `_RULES`.
+   Use `rng` for every random choice, and never the order of a set.
+   `ctx.lines` is the whole text before the change, and `ctx.donor_lines` holds the lines of all the run's seeds.
+   To find code and not a string or a comment, search the lines that `_code(ctx.lines)` returns. They have the same positions.
+2. Add a row at the end of `_RULES`:
+   - for a line rule, `_Rule("your_rule", _line_rule(your_function))`
+   - for a text rule, `_Rule("your_rule", your_function)`
+
    Do not put it first or in the middle.
    In a test, a rule added last kept 1608 of the first 2000 copies the same, and the same rule added first kept 86.
+   The six loop rules, added last together, kept 25 of the first 2000 copies of random seed 1 on the nine seeds the same.
 3. Add a row for the rule at the end of the table in [Change rules](#change-rules).
    A test checks that the table and `_RULES` list the same rules in the same order.
-4. Run `pytest`.
+4. In `tests/test_mutate.py`, add a test that applies the rule to a short text and compares the result with the exact text that it must give.
+   Change the expected input in `test_input_1_of_random_seed_1_on_a_two_line_text` to the new input 1.
+5. Run `pytest`.
+6. Compare the rules with and without the new rule:
+
+   ```sh
+   python scripts/compare_rules.py contracts/loop_* --count 5000 --random-seed 1 2 3 --leave-out your_rule
+   ```
+
+   For each set of rules, the script counts the `OK` inputs and the loop findings by first check.
+   Leaving out a rule also changes the rules that the run picks for the other changes, so a small difference can be chance.
 
 ## Seeds
 
@@ -724,7 +748,9 @@ damlforge-fuzz/
 │   └── loopcheck.py      the loop check: finds wrong loops in forge's Daml
 ├── tests/                pytest tests, and in tests/loops/ the saved .vy and Daml pairs of the loop check
 ├── scripts/
-│   └── show_inputs.py    prints each copy of a run, its changes, and its result
+│   ├── show_inputs.py    prints each copy of a run, its changes, and its result
+│   ├── compare_rules.py  compares sets of change rules by what the loop check finds
+│   └── update_loop_fixtures.py  writes the Daml in tests/loops/ again with the installed forge
 ├── contracts/            the seeds, one Daml project for each seed
 ├── reports/              the reports that are kept in git
 ├── bugs/                 hand-written programs that prove forge bugs, with their write-ups
@@ -748,6 +774,10 @@ pytest
 The tests that need dpm skip when dpm or the Daml SDK is missing.
 The Daml in `tests/loops/` is from DamlForge 0.0.11.
 The tests that compare it with the Daml that forge writes now skip on an older forge, such as `0.0.7`.
+On a newer forge that writes other Daml, they fail.
+Then run `python scripts/update_loop_fixtures.py`.
+It writes the Daml of each fixture again with the installed forge, puts the forge version in `tests/loops/EXPECTED.tsv`, and prints each fixture whose Daml or loop findings changed.
+Read each printed fixture. When its new loop findings are right, change its expected checks in `EXPECTED.tsv`.
 
 ### Show the inputs of a run
 
