@@ -572,9 +572,9 @@ In each of these cases, the run writes the report and exits with 130:
 For each change, the run picks one line and one of these rules, each with the same chance.
 A word is a name, a number, or an operator.
 A rule that does not fit its line, such as `operator` on a line with no operator, leaves the line as it was.
-The examples are real changes to `contracts/iou/iou.vy`.
+The first ten examples are real changes to `contracts/iou/iou.vy`, and the last six are real changes to the loop seeds.
 
-| Rule | What it does to the line | Example |
+| Rule | What it does | Example |
 | --- | --- | --- |
 | `delete_line` | Deletes the line. | `        return create(` is deleted |
 | `copy_line` | Inserts a copy of the line above it. | the `from forge.models import ...` line is there two times |
@@ -586,9 +586,17 @@ The examples are real changes to `contracts/iou/iou.vy`.
 | `expression` | Replaces one name with an expression. | `> Decimal(0)` becomes `> len(x)(0)` |
 | `name` | Replaces one name with another name from the same text. | `owner=self.owner` becomes `str=self.owner` |
 | `delete_word` | Deletes one word. | `self, new_owner: Party` becomes `self, : Party` |
+| `inline_local` | Replaces one use of a local name with the value that an assignment in the text gives it. The value gets parentheses unless it is a name or a call. | `if i.amount > Decimal(1):` becomes `if fetch(c).amount > Decimal(1):` |
+| `toggle_ledger_effect` | Deletes a line `@ledger_effect`, or inserts one above a `def` at column 0. | the `@ledger_effect` line above `def verify` is deleted |
+| `early_return` | In a loop body, inserts `if v == v:` and the `return` line that follows the loop, above the line. `v` is the loop's name. It looks out through `if` and `else` blocks and inner loops for the nearest loop that a `return` follows. | `if c == c:` and `return n` are inserted above `n = n + 1` |
+| `wrap_in_loop` | Puts a statement that has an indent into `for _k in range(0, 2):`. | `return cids` becomes `for _k in range(0, 2):` and `    return cids` |
+| `dedent_line` | Moves a line with an indent of 8 or more 4 spaces to the left. | `cid = create(...)` moves out of the `if` |
+| `inline_var` | On `v = value`, puts the value in place of each use of `v` below it in the same block, and deletes the line. It does not fit when `v` gets a new value in that block. | `cid = create(Iou(...))` is deleted, and `cids.append(cid)` becomes `cids.append(create(Iou(...)))` |
 
 The rules take their new words from five lists in `src/damlforge_fuzz/mutate.py`: `_OPERATORS`, `_LITERALS`, `_TYPES`, `_EXPRESSIONS`, and `_STATEMENTS`.
-A rule can change only its own line. It cannot, for example, swap two lines.
+Most rules change only their own line.
+`inline_local` and `early_return` read the whole text, and `inline_var` also changes the lines below its line.
+The six loop rules never take a string or a comment for code.
 
 ### Add a word or a rule
 

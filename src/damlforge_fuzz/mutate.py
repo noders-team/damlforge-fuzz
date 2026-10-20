@@ -12,9 +12,12 @@ rebuild "input 1554 of random seed 1" alone.
 
 from __future__ import annotations
 
+import ast
 import itertools
+import keyword
 import random
 import re
+import warnings
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -218,6 +221,193 @@ def _a_name_in_the_text(rng: random.Random, ctx: _Context) -> str:
     return rng.choice(_NAME.findall("\n".join(ctx.lines)))
 
 
+# The loop rules. They make the code shapes that break forge's loops: a ledger
+# action inside an expression, a `return` inside a loop, a missing
+# @ledger_effect. They read the text through _code, so a string or a comment
+# is never taken for code.
+
+# A string, or a comment. A string that its line does not close ends there.
+_NOT_CODE: Final = re.compile(
+    r"'''[\s\S]*?(?:'''|\Z)|\"\"\"[\s\S]*?(?:\"\"\"|\Z)"
+    r"|'(?:\\.|[^'\\\n])*'?|\"(?:\\.|[^\"\\\n])*\"?|#[^\n]*"
+)
+_ASSIGNMENT: Final = re.compile(
+    r" *(?P<name>[a-z_][A-Za-z0-9_]*) *(?::[^=]+)?=(?!=) *(?P<value>.+?) *"
+)
+_FOR: Final = re.compile(r" *for +(?P<target>[A-Za-z_]\w*)")
+_BRANCH: Final = re.compile(r" *(?:if|elif|else)\b")
+_RETURN: Final = re.compile(r" *return\b")
+
+
+def _code(lines: Sequence[str]) -> list[str]:
+    """`lines` with each string written as quote marks and each comment as spaces.
+
+    A match in a code line is at the same place in the real line, and is
+    never in a string or a comment.
+    """
+
+    def blank(match: re.Match[str]) -> str:
+        text = match.group()
+        return " " * len(text) if text.startswith("#") else re.sub(r"\S", '"', text)
+
+    return _NOT_CODE.sub(blank, "\n".join(lines)).split("\n")
+
+
+def _indent(line: str) -> int:
+    return len(_INDENT.match(line).group(0))
+
+
+def _assignment(code: str) -> re.Match[str] | None:
+    """`name = value` or `name: T = value`, in a code line."""
+    match = _ASSIGNMENT.fullmatch(code)
+    if match is None or keyword.iskeyword(match["name"]):
+        return None
+    return match
+
+
+def _uses(name: str, code: str) -> list[re.Match[str]]:
+    # Not an attribute such as `self.name`, and not a string prefix such as f"".
+    return list(re.finditer(rf'(?<![\w.]){name}(?![\w"])', code))
+
+
+def _assigns(name: str, code: str) -> bool:
+    return re.match(
+        rf" *(?:{name} *(?::[^=]+)?(?:[-+*/%&|^@]|//|\*\*|<<|>>)?=(?!=)|for +{name}\b)", code
+    ) is not None
+
+
+def _as_operand(value: str) -> str:
+    """`value`, in parentheses unless it is a name or a call, such as `fetch(c).amount`."""
+    try:
+        # A value such as "\d" would print a SyntaxWarning in the middle of a run.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            node = ast.parse(value, mode="eval").body
+    except (SyntaxError, ValueError):
+        return f"({value})"
+    while isinstance(node, ast.Attribute):
+        node = node.value
+    return value if isinstance(node, ast.Name | ast.Call) else f"({value})"
+
+
+def _inline_local(rng: random.Random, i: int, ctx: _Context) -> list[str] | None:
+    """Put the value of a local name in place of one use in line i: `i.amount` -> `fetch(c).amount`.
+
+    A text rule, not a line rule: it must skip its own line by position.
+    """
+    code = _code(ctx.lines)
+    own = _assignment(code[i])
+    candidates = []
+    for k, other in enumerate(code):
+        assignment = _assignment(other)
+        if assignment is None or k == i:
+            continue
+        uses = [
+            use
+            for use in _uses(assignment["name"], code[i])
+            if own is None or use.start() != own.start("name")
+        ]
+        if uses:
+            value = ctx.lines[k][assignment.start("value") : assignment.end("value")]
+            candidates.append((uses, value))
+    if not candidates:
+        return None
+    uses, value = rng.choice(candidates)
+    use = rng.choice(uses)
+    line = ctx.lines[i]
+    new = line[: use.start()] + _as_operand(value) + line[use.end() :]
+    return [*ctx.lines[:i], new, *ctx.lines[i + 1 :]]
+
+
+def _toggle_ledger_effect(rng: random.Random, line: str, ctx: _Context) -> list[str] | None:
+    """Delete a line `@ledger_effect`, or add one above a top-level `def`."""
+    if line.strip() == "@ledger_effect":
+        return []
+    if line.startswith("def "):
+        return ["@ledger_effect", line]
+    return None
+
+
+def _early_return(rng: random.Random, i: int, ctx: _Context) -> list[str] | None:
+    """In a loop body, insert `if v == v:` and the `return` line that follows the loop.
+
+    It walks out of `if` and `else` blocks to the nearest loop with a `return`
+    after it, so a line in an inner loop can get the function's return.
+    """
+    code = _code(ctx.lines)
+    if not code[i].strip():
+        return None
+    indent = _indent(code[i])
+    for j in range(i - 1, -1, -1):
+        if not code[j].strip() or _indent(code[j]) >= indent:
+            continue
+        indent = _indent(code[j])
+        loop = _FOR.match(code[j])
+        if loop is None:
+            if _BRANCH.match(code[j]) is None:
+                return None
+            continue
+        back = _return_after(code, j)
+        if back is not None:
+            pad = " " * _indent(ctx.lines[i])
+            v = loop["target"]
+            test = [f"{pad}if {v} == {v}:", f"{pad}    {ctx.lines[back].strip()}"]
+            return [*ctx.lines[:i], *test, *ctx.lines[i:]]
+    return None
+
+
+def _return_after(code: list[str], j: int) -> int | None:
+    """The `return` line after the loop at line j, at the loop's indent, in the same block."""
+    indent = _indent(code[j])
+    for k in range(j + 1, len(code)):
+        if not code[k].strip():
+            continue
+        if _indent(code[k]) < indent:
+            return None
+        if _indent(code[k]) == indent and _RETURN.match(code[k]):
+            return k
+    return None
+
+
+def _wrap_in_loop(rng: random.Random, line: str, ctx: _Context) -> list[str] | None:
+    """Put a simple statement in `for _k in range(0, 2):`."""
+    code = _code([line])[0].strip()
+    if not code or code.endswith(":") or code.startswith("@") or _indent(line) == 0:
+        return None
+    return [" " * _indent(line) + "for _k in range(0, 2):", "    " + line]
+
+
+def _dedent_line(rng: random.Random, line: str, ctx: _Context) -> list[str] | None:
+    """Move a statement 4 spaces to the left: out of an `if` or a loop."""
+    if not line.startswith(" " * 8) or not _code([line])[0].strip():
+        return None
+    return [line[4:]]
+
+
+def _inline_var(rng: random.Random, i: int, ctx: _Context) -> list[str] | None:
+    """On `v = E`, put E in place of every use of v below it in its block, and delete the line."""
+    code = _code(ctx.lines)
+    assignment = _assignment(code[i])
+    if assignment is None:
+        return None
+    name = assignment["name"]
+    value = _as_operand(ctx.lines[i][assignment.start("value") : assignment.end("value")])
+    lines = list(ctx.lines)
+    used = False
+    for k in range(i + 1, len(code)):
+        if code[k].strip() and _indent(code[k]) < _indent(code[i]):
+            break
+        if _assigns(name, code[k]):
+            return None
+        for use in reversed(_uses(name, code[k])):
+            lines[k] = lines[k][: use.start()] + value + lines[k][use.end() :]
+            used = True
+    if not used:
+        return None
+    del lines[i]
+    return lines
+
+
 # The one list of rules, each equally likely. rng.choice picks by position, so
 # any edit here changes some inputs of every random seed. Add a new rule at the
 # end: in a test, a rule added last kept 1608 of the first 2000 inputs the same,
@@ -234,6 +424,12 @@ _RULES: Final[tuple[_Rule, ...]] = (
     _Rule("expression", _replace_token(_NAME, lambda rng, ctx: rng.choice(_EXPRESSIONS))),
     _Rule("name", _replace_token(_NAME, _a_name_in_the_text)),
     _Rule("delete_word", _replace_token(_TOKEN, lambda rng, ctx: "")),
+    _Rule("inline_local", _inline_local),
+    _Rule("toggle_ledger_effect", _line_rule(_toggle_ledger_effect)),
+    _Rule("early_return", _early_return),
+    _Rule("wrap_in_loop", _line_rule(_wrap_in_loop)),
+    _Rule("dedent_line", _line_rule(_dedent_line)),
+    _Rule("inline_var", _inline_var),
 )
 
 RULE_NAMES: Final = tuple(rule.name for rule in _RULES)

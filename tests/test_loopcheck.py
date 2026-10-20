@@ -199,6 +199,18 @@ def test_every_seed_is_ok_with_no_loop_bug(path):
     assert (outcome.loop_bugs, outcome.loop_key) == ((), None)
 
 
+def test_each_loop_seed_has_at_most_one_foldla_loop():
+    """forge imports foldlA for the whole module, so a second such loop hides L1 in the other."""
+    loops = {}
+    for path in SEED_FILES:
+        if "loop_" in path.name:
+            daml = compile_and_sort(path.read_text(), Seed.load(path)).daml
+            loops[path.stem] = len(re.findall(r"^(?!import ).*\bfoldlA\b", daml, re.MULTILINE))
+    assert loops == {
+        "loop_count": 1, "loop_give": 1, "loop_many": 1, "loop_pure": 0, "loop_verify": 1
+    }  # fmt: skip
+
+
 BUG_PROGRAMS = {
     "b17_create_append": "L1: foldlA at Daml line 20 with no import DA.Action",
     "b18_fetch_in_sum": "L1: foldlA at Daml line 20 with no import DA.Action",
