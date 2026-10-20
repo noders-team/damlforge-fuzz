@@ -355,10 +355,10 @@ def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeyp
 
     calls = itertools.count(1)
 
-    def interrupted_in_group_2(text, seed, key):
+    def interrupted_in_group_2(text, seed, keep):
         if next(calls) == 2:
             raise KeyboardInterrupt
-        return shrink(text, seed, key)
+        return shrink(text, seed, keep)
 
     monkeypatch.setattr("damlforge_fuzz.report.shrink", interrupted_in_group_2)
     monkeypatch.chdir(PROJECT)

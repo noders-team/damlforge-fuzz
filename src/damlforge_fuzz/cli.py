@@ -355,7 +355,7 @@ def _check_seeds(seeds: Sequence[Seed], damlc: bool) -> None:
 
 def _shrink(path: Path) -> int:
     try:
-        from damlforge_fuzz import Crash, Seed, compile_and_sort, shrink, shrunk_path
+        from damlforge_fuzz import Crash, Seed, compile_and_sort, same_crash, shrink, shrunk_path
     except ImportError as error:
         print(f"damlforge-fuzz: {error}", file=sys.stderr)
         return 2
@@ -377,7 +377,7 @@ def _shrink(path: Path) -> int:
             result = f"{outcome.label} {outcome.stage}" + (f"  {detail}" if detail else "")
             print(f"{path} does not crash forge: {result}", file=sys.stderr)
             return 1
-        text = shrink(seed.text, seed, outcome.key)
+        text = shrink(seed.text, seed, same_crash(outcome.key))
     except KeyboardInterrupt:
         return 130
     out = shrunk_path(path)

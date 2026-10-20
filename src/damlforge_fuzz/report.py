@@ -42,13 +42,13 @@ import time
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
-from typing import Any, Final, Literal, TypeAlias
+from typing import Any, Final, Literal
 
 from damlforge_fuzz.compiler import FORGE_VERSION, STAGE_TEXT, Crash, CrashKey, Ok, Seed, Stage
-from damlforge_fuzz.damlc import DamlError, DamlErrorKey, DamlSource, build_daml
+from damlforge_fuzz.damlc import DamlcVerdict, DamlError, DamlErrorKey, DamlSource, build_daml
 from damlforge_fuzz.loopcheck import LOOP_CHECK_TEXT, LoopBug, LoopCheck
 from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried
-from damlforge_fuzz.shrinker import shrink, shrunk_path
+from damlforge_fuzz.shrinker import same_crash, shrink, shrunk_path
 
 SCHEMA: Final = 1
 """The version of the report.json shape. Raise it when a change breaks readers:
@@ -160,11 +160,6 @@ class BadDamlGroup:
     """forge's Daml for `input`."""
     daml_file: str
     """"groups/d01/Iou.daml". `dpm build` in groups/d01 shows the error again."""
-
-
-DamlcVerdict: TypeAlias = Literal["builds", "rejects"] | None
-"""damlc's verdict on a Daml text in report.json. None when the run has no damlc, or
-when Ctrl-C or a dpm failure stopped damlc before it built the text."""
 
 
 @dataclass(slots=True)
@@ -418,7 +413,7 @@ class Report:
         """
         for key, group in self.groups.items():
             if group.shrunk is None:
-                text = shrink(group.input, self._seeds[group.seed], key)
+                text = shrink(group.input, self._seeds[group.seed], same_crash(key))
                 group.shrunk = text
                 group.shrunk_file = str(shrunk_path(PurePosixPath(group.input_file)))
 

@@ -30,7 +30,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import ClassVar, Final
+from typing import ClassVar, Final, Literal, TypeAlias
 
 import yaml
 
@@ -92,6 +92,11 @@ class DamlError:
     @property
     def key(self) -> DamlErrorKey:
         return DamlErrorKey(_key(self.message))
+
+
+DamlcVerdict: TypeAlias = Literal["builds", "rejects"] | None
+"""damlc's verdict on a Daml text in report.json. None when the run has no damlc, or
+when Ctrl-C or a dpm failure stopped damlc before it built the text."""
 
 
 class DamlcUnavailable(Exception):

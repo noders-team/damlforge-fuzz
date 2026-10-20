@@ -1,8 +1,10 @@
-"""Shrink a crashing input: delete lines while it still crashes in the same group.
+"""Shrink an input: delete lines while it stays in the same group.
 
-This module imports the compiler, so it loads forge. It owns two decisions:
+This module imports the compiler, so it loads forge. It owns three decisions:
 
 - which deletions the shrinker tries, and in what order (see shrink());
+- what keeps a text in its group: same_crash() for a crash group, same_loop()
+  for a loop group;
 - where a shrunk file goes: shrunk_path(). Report.write and
   `damlforge-fuzz shrink FILE` both use it. A shrunk file sits in a `shrunk/`
   folder next to its full input, under the same file name. The same name
@@ -13,35 +15,43 @@ This module imports the compiler, so it loads forge. It owns two decisions:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import PurePath
-from typing import TypeVar
+from typing import TypeAlias, TypeVar
 
-from damlforge_fuzz.compiler import Crash, CrashKey, Seed, compile_and_sort
+from damlforge_fuzz.compiler import Crash, CrashKey, Ok, Outcome, Seed, compile_and_sort
+from damlforge_fuzz.damlc import DamlcVerdict, DamlSource, build_daml
+from damlforge_fuzz.loopcheck import LoopCheck
 
 P = TypeVar("P", bound=PurePath)
 
+Keep: TypeAlias = Callable[[Outcome], bool]
+"""True when a candidate's outcome is still in the group that is being shrunk."""
 
-def shrink(text: str, seed: Seed, key: CrashKey) -> str:
-    """The shortest text found by deleting whole lines of `text` that still crashes with `key`.
+
+def shrink(text: str, seed: Seed, keep: Keep) -> str:
+    """The shortest text found by deleting whole lines of `text` whose outcome `keep` accepts.
 
     Each candidate compiles as compile_and_sort(candidate, seed): the same file
-    name, daml.yaml settings, and folder as the run that found the crash.
+    name, daml.yaml settings, and folder as the run that found the input.
 
-    Contract, for any text, seed, and key:
+    Contract, for any text, seed, and keep:
 
     - The result's lines are a subsequence of `text`'s lines, each kept byte
       for byte with its line ending. No line is edited.
-    - compile_and_sort(result, seed) is a Crash with key `key`, or the result
-      is `text` itself: no deletion kept `key`, or `text` never crashed with it.
-      A wrong key gives `text` back, not an exception.
+    - keep(compile_and_sort(result, seed)) is true, or the result is `text`
+      itself: no deletion passed `keep`, or `text` never did. A `keep` that
+      `text` does not pass gives `text` back, not an exception.
     - Never empty when `text` is not empty.
-    - Deterministic, silent, and no file I/O, because compile_and_sort is.
-    - Idempotent: the last round below deleted nothing, and a second call
-      starts with that same round.
-    - Raises only what compile_and_sort raises, such as KeyboardInterrupt.
+    - Deterministic and silent when `keep` is, because compile_and_sort is.
+      No file I/O, except the dpm builds of a same_loop() with a damlc verdict.
+    - Idempotent when `keep` is deterministic: the last round below deleted
+      nothing, and a second call starts with that same round.
+    - Raises only what compile_and_sort and `keep` raise, such as
+      KeyboardInterrupt and DamlcUnavailable.
 
     Algorithm. Repeat rounds until a round deletes nothing. A deletion is kept
-    when lines remain and they still crash with `key`. Each round:
+    when lines remain and `keep` accepts their outcome. Each round:
 
     1. Coarse: aligned blocks of n/2, n/4, ..., 2 lines (n is the current line
        count), one sweep per size, from the last block to the first.
@@ -53,16 +63,47 @@ def shrink(text: str, seed: Seed, key: CrashKey) -> str:
     goes in one step even when no 1- or 2-line window can remove it. The coarse
     pass makes long inputs cheap: a 1242-line input shrank in 44 compiles.
     Every round but the last deletes a line, so the compile count is bounded
-    by the input's length. There is no compile budget and no cache: on 11
-    real groups, every candidate text was new, and the most compiles one
-    group took was 102 (0.12 s).
+    by the input's length. There is no compile budget and no cache of
+    compiles: on 11 real groups, every candidate text was new, and the most
+    compiles one group took was 102 (0.12 s).
     """
     lines = text.splitlines(keepends=True)
     while True:
         before = len(lines)
-        lines = _fine(_coarse(lines, seed, key), seed, key)
+        lines = _fine(_coarse(lines, seed, keep), seed, keep)
         if len(lines) == before:
             return "".join(lines)
+
+
+def same_crash(key: CrashKey) -> Keep:
+    """Keeps a Crash with key `key`: the crash group of `key`."""
+    return lambda outcome: isinstance(outcome, Crash) and outcome.key == key
+
+
+def same_loop(check: LoopCheck, damlc: DamlcVerdict, seed: Seed) -> Keep:
+    """Keeps an Ok whose first loop check (Ok.loop_key) is `check`: a loop group.
+
+    With `damlc` "builds" or "rejects", it also keeps damlc's verdict on the
+    Ok's Daml. Each Daml text gets one `dpm build` (about 0.7 s) with
+    seed.daml_yaml, so the seed needs a daml.yaml. The returned function keeps
+    each verdict by Daml text. With `damlc` None, it builds nothing.
+
+    Raises DamlcUnavailable as build_daml does.
+    """
+    verdicts: dict[str, DamlcVerdict] = {}
+
+    def keep(outcome: Outcome) -> bool:
+        if not isinstance(outcome, Ok) or outcome.loop_key != check:
+            return False
+        if damlc is None:
+            return True
+        if outcome.daml not in verdicts:
+            source = DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)
+            [(_, error)] = build_daml([source])
+            verdicts[outcome.daml] = "builds" if error is None else "rejects"
+        return verdicts[outcome.daml] == damlc
+
+    return keep
 
 
 def shrunk_path(path: P) -> P:
@@ -73,28 +114,28 @@ def shrunk_path(path: P) -> P:
     return path.parent / "shrunk" / path.name
 
 
-def _coarse(lines: list[str], seed: Seed, key: CrashKey) -> list[str]:
+def _coarse(lines: list[str], seed: Seed, keep: Keep) -> list[str]:
     size = len(lines) // 2
     while size >= 2:
         end = len(lines)
         while end > 0:
             start = max(0, end - size)
             trial = lines[:start] + lines[end:]
-            if _still_crashes(trial, seed, key):
+            if _keeps(trial, seed, keep):
                 lines = trial
             end = start
         size //= 2
     return lines
 
 
-def _fine(lines: list[str], seed: Seed, key: CrashKey) -> list[str]:
+def _fine(lines: list[str], seed: Seed, keep: Keep) -> list[str]:
     i = len(lines) - 1
     while i >= 0:
         for end in dict.fromkeys((_body_end(lines, i), i + 1, i + 2)):
             if end > len(lines):
                 continue
             trial = lines[:i] + lines[end:]
-            if _still_crashes(trial, seed, key):
+            if _keeps(trial, seed, keep):
                 lines = trial
                 break
         i = min(i, len(lines)) - 1
@@ -114,8 +155,5 @@ def _indent(line: str) -> int:
     return len(line) - len(line.lstrip())
 
 
-def _still_crashes(lines: list[str], seed: Seed, key: CrashKey) -> bool:
-    if not lines:
-        return False
-    outcome = compile_and_sort("".join(lines), seed)
-    return isinstance(outcome, Crash) and outcome.key == key
+def _keeps(lines: list[str], seed: Seed, keep: Keep) -> bool:
+    return bool(lines) and keep(compile_and_sort("".join(lines), seed))

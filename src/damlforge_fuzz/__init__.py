@@ -40,10 +40,10 @@ Unit 5 shrinks each crashing input: it deletes lines while the text still
 crashes with the same key. Report.shrink() does this for every group, and
 write() saves each result under groups/gNN/shrunk/::
 
-    from damlforge_fuzz import shrink, shrunk_path
+    from damlforge_fuzz import same_crash, shrink, shrunk_path
 
-    small = shrink(text, seed, crash.key)  # a subsequence of text's lines
-    shrunk_path(path)                      # groups/g02/escrow.vy -> groups/g02/shrunk/escrow.vy
+    small = shrink(text, seed, same_crash(crash.key))  # a subsequence of text's lines
+    shrunk_path(path)  # groups/g02/escrow.vy -> groups/g02/shrunk/escrow.vy
 
 Unit 6 builds the Daml of OK inputs with damlc, through `dpm build`, and
 groups the texts damlc rejects (BAD_DAML). It needs dpm and the Daml SDK::
@@ -72,6 +72,13 @@ so each Ok carries its loop bugs::
     find_loop_bugs(vy_text, daml_text)  # the same check on a saved .vy text and its Daml
 
     report.loop_groups()  # [LoopGroup], ids l01, l02, ...: one per first check (and damlc verdict)
+
+Unit 10 shrinks the first input of each loop group too. same_loop keeps the
+first check and, with a verdict, damlc's verdict on the Daml, so it needs dpm::
+
+    from damlforge_fuzz import same_loop
+
+    small = shrink(text, seed, same_loop(outcome.loop_key, "builds", seed))
 
 Import from this package only. The modules behind it are not part of the API.
 """
@@ -113,7 +120,7 @@ if TYPE_CHECKING:
         Tick,
     )
     from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried, fuzz
-    from damlforge_fuzz.shrinker import shrink, shrunk_path
+    from damlforge_fuzz.shrinker import same_crash, same_loop, shrink, shrunk_path
 
 _HOME = {
     **dict.fromkeys(
@@ -130,7 +137,7 @@ _HOME = {
     **dict.fromkeys(
         ["DamlError", "DamlErrorKey", "DamlSource", "DamlcUnavailable", "build_daml"], "damlc"
     ),
-    **dict.fromkeys(["shrink", "shrunk_path"], "shrinker"),
+    **dict.fromkeys(["same_crash", "same_loop", "shrink", "shrunk_path"], "shrinker"),
     **dict.fromkeys(["LOOP_CHECK_TEXT", "LoopBug", "LoopCheck", "find_loop_bugs"], "loopcheck"),
 }
 """The module that holds each public name. compiler, runner, and report load forge; mutate,
