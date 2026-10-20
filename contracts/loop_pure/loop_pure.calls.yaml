@@ -1,0 +1,17 @@
+# The calls that `run --compare` makes on each input of loop_pure.vy.
+# A negative number shows a lost `if` or a lost assert. `bob` is in `ps`,
+# so a lost return changes the result of has_party.
+- function: total_of
+  args: {xs: ["1.0", "-2.0", "3.0"]}
+- function: grid_sum
+  args: {rows: [[1, 2], [3], []]}
+- function: has_party
+  args: {ps: [alice, bob], p: bob}
+- function: has_party
+  args: {ps: [alice, bob], p: stop}
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args: {xs: ["1.0", "2.0"]}
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args: {xs: ["1.0", "-1.0"]}

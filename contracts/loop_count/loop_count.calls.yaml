@@ -1,0 +1,9 @@
+# The calls that `run --compare` makes on each input of loop_count.vy.
+# The script creates the three contracts in `cids` before the call.
+- choice: Iou.Count
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args:
+    cids:
+      - {create: Iou, with: {issuer: alice, owner: bob, amount: "2.0"}}
+      - {create: Iou, with: {issuer: alice, owner: bob, amount: "0.5"}}
+      - {create: Iou, with: {issuer: bob, owner: alice, amount: "3.0"}}

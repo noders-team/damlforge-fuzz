@@ -111,6 +111,14 @@ def find_dpm() -> str | None:
     return shutil.which("dpm") or (str(fallback) if fallback.is_file() else None)
 
 
+def need_dpm() -> str:
+    """find_dpm(), or DamlcUnavailable when it finds no dpm."""
+    dpm = find_dpm()
+    if dpm is None:
+        raise DamlcUnavailable("dpm not found on PATH or at ~/.dpm/bin/dpm")
+    return dpm
+
+
 def build_daml(sources: Iterable[DamlSource]) -> Iterator[tuple[DamlSource, DamlError | None]]:
     """Build each source with damlc and yield it with its verdict: None when it builds.
 
@@ -126,9 +134,7 @@ def build_daml(sources: Iterable[DamlSource]) -> Iterator[tuple[DamlSource, Daml
     Raises DamlcUnavailable (see there), and ValueError when a text does not
     start with `module <module_name> where`.
     """
-    dpm = find_dpm()
-    if dpm is None:
-        raise DamlcUnavailable("dpm not found on PATH or at ~/.dpm/bin/dpm")
+    dpm = need_dpm()
     by_settings = groupby(
         sorted(enumerate(sources), key=lambda pair: _settings(pair[1].daml_yaml)),
         key=lambda pair: _settings(pair[1].daml_yaml),
@@ -152,39 +158,63 @@ def _build_batch(dpm: str, settings: str, batch: list[DamlSource]) -> list[DamlE
         config = {**json.loads(settings), "name": "damlforge-fuzz-batch", "source": "daml"}
         (project / "daml.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
         for k, source in enumerate(batch):
-            head, newline, rest = source.daml.partition("\n")
-            if head != f"module {source.module_name} where":
-                raise ValueError(
-                    f"forge's Daml starts with {head!r}, not module {source.module_name}"
-                )
             folder = project / "daml" / _folder(k)
             folder.mkdir(parents=True)
-            text = f"module {_folder(k)}.{source.module_name} where{newline}{rest}"
+            text = _in_folder(k, source.daml, source.module_name)
             (folder / f"{source.module_name}.daml").write_text(text, encoding="utf-8")
-        result = subprocess.run(
-            [dpm, "build"],
-            cwd=project,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env={**os.environ, "NO_COLOR": "1"},
-        )
-    output = result.stdout + result.stderr
+        returncode, output = _run_dpm(dpm, "build", project)
     verdicts: list[DamlError | None] = [None] * len(batch)
+    for k, error in _folder_errors(output).items():
+        verdicts[k] = error
+    if returncode != 0 and all(verdict is None for verdict in verdicts):
+        raise _unavailable("build", returncode, output)
+    return verdicts
+
+
+def _run_dpm(dpm: str, command: str, project: Path) -> tuple[int, str]:
+    """`dpm <command>` in `project`: its exit status, and its stdout and stderr together."""
+    result = subprocess.run(
+        [dpm, command],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env={**os.environ, "NO_COLOR": "1"},
+    )
+    return result.returncode, result.stdout + result.stderr
+
+
+def _folder_errors(output: str) -> dict[int, DamlError]:
+    """k -> the first error in daml/I<k>/, for each folder that dpm reports an error in."""
+    first: dict[int, DamlError] = {}
     for file, error in _errors(output):
         folder = _FOLDER.match(file)
-        if folder is not None and verdicts[int(folder[1])] is None:
-            verdicts[int(folder[1])] = error
-    if result.returncode != 0 and all(verdict is None for verdict in verdicts):
-        lines = [line.strip() for line in _ANSI.sub("", output).splitlines() if line.strip()]
-        reason = next((line for line in lines if _FAILURE.search(line)), None)
-        raise DamlcUnavailable(reason or f"dpm build exited with {result.returncode}")
-    return verdicts
+        if folder is not None:
+            first.setdefault(int(folder[1]), error)
+    return first
+
+
+def _unavailable(command: str, returncode: int, output: str) -> DamlcUnavailable:
+    """The error for a dpm run that failed and named no module: dpm's own line that says why."""
+    lines = [line.strip() for line in _ANSI.sub("", output).splitlines() if line.strip()]
+    reason = next((line for line in lines if _FAILURE.search(line)), None)
+    return DamlcUnavailable(reason or f"dpm {command} exited with {returncode}")
 
 
 def _folder(k: int) -> str:
     return f"I{k:05d}"
+
+
+def _in_folder(k: int, daml: str, module_name: str) -> str:
+    """`daml` with its first line changed to `module I<k>.<module_name> where`.
+
+    Raises ValueError when the text does not start with `module <module_name> where`.
+    """
+    head, newline, rest = daml.partition("\n")
+    if head != f"module {module_name} where":
+        raise ValueError(f"forge's Daml starts with {head!r}, not module {module_name}")
+    return f"module {_folder(k)}.{module_name} where{newline}{rest}"
 
 
 @functools.cache

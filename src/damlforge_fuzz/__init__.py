@@ -80,6 +80,18 @@ first check and, with a verdict, damlc's verdict on the Daml, so it needs dpm::
 
     small = shrink(text, seed, same_loop(outcome.loop_key, "builds", seed))
 
+Unit 11 runs each OK input of a seed with a calls file (loop_give.calls.yaml
+next to loop_give.vy) in Python and in Daml Script, and compares (BAD_RUN).
+It needs dpm and the Daml SDK::
+
+    from damlforge_fuzz import CompareInput, Compared, load_calls, run_and_compare
+
+    calls = load_calls(seed)  # None when the seed has no calls file
+    inputs = {"mine": CompareInput(text, outcome, seed, calls)}  # outcome is an Ok
+    for key, result in run_and_compare(inputs):  # one batch per 100 inputs
+        if isinstance(result, Compared) and result.difference is not None:
+            ...  # .kind "contracts", .call "Iou.GiveAll #1", .python, .test
+
 Import from this package only. The modules behind it are not part of the API.
 """
 
@@ -106,6 +118,20 @@ if TYPE_CHECKING:
         DamlErrorKey,
         DamlSource,
         build_daml,
+    )
+    from damlforge_fuzz.compare import (
+        Call,
+        Calls,
+        Compared,
+        CompareInput,
+        Difference,
+        DifferenceKind,
+        Dropped,
+        InputResult,
+        Skipped,
+        calls_path,
+        load_calls,
+        run_and_compare,
     )
     from damlforge_fuzz.loopcheck import LOOP_CHECK_TEXT, LoopBug, LoopCheck, find_loop_bugs
     from damlforge_fuzz.mutate import RULE_NAMES, Change, Input, input_sequence
@@ -139,9 +165,14 @@ _HOME = {
     ),
     **dict.fromkeys(["same_crash", "same_loop", "shrink", "shrunk_path"], "shrinker"),
     **dict.fromkeys(["LOOP_CHECK_TEXT", "LoopBug", "LoopCheck", "find_loop_bugs"], "loopcheck"),
+    **dict.fromkeys(
+        ["Call", "Calls", "CompareInput", "Compared", "Difference", "DifferenceKind", "Dropped"]
+        + ["InputResult", "Skipped", "calls_path", "load_calls", "run_and_compare"],
+        "compare",
+    ),
 }
 """The module that holds each public name. compiler, runner, and report load forge; mutate,
-damlc, and loopcheck do not."""
+damlc, loopcheck, and compare do not."""
 
 __all__ = sorted(_HOME)
 

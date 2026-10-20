@@ -18,7 +18,7 @@ from pathlib import Path
 
 import forge.semantics.analysis.typecheck
 import pytest
-from conftest import BITAND, CONTRACTS, PROJECT, copy_iou
+from conftest import BITAND, CONTRACTS, PROJECT, copy_iou, hide_dpm
 
 from damlforge_fuzz import (
     DamlcUnavailable,
@@ -153,11 +153,6 @@ def test_errors_reads_the_first_line_of_each_error_block_and_skips_warnings():
 def test_key_masks_the_names_that_come_from_the_input(message, key):
     assert _key(message) == key
     assert str(DamlError(message, "typecheck", 1).key) == key
-
-
-def hide_dpm(monkeypatch, tmp_path):
-    monkeypatch.setenv("PATH", "")
-    monkeypatch.setenv("HOME", str(tmp_path))
 
 
 def test_build_daml_without_dpm_raises_damlc_unavailable(tmp_path, monkeypatch):

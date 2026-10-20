@@ -29,6 +29,12 @@ def copy_iou(folder: Path, old: str, new: str, count: int) -> Path:
     return vy
 
 
+def hide_dpm(monkeypatch, tmp_path):
+    """Make find_dpm() find no dpm: an empty PATH, and a HOME with no .dpm/bin/dpm."""
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+
 @pytest.fixture
 def write_vy(tmp_path):
     """Write a .vy file under tmp_path, outside any Daml project, and return its path."""
@@ -61,3 +67,4 @@ def dpm():
         pytest.skip(f"dpm cannot build the seeds' Daml SDK: {unavailable}")
     assert error is None, f"the iou seed's Daml does not build: {error}"
     return path
+
