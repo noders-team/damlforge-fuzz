@@ -1,3 +1,4 @@
+import re
 import shutil
 from pathlib import Path
 
@@ -10,6 +11,11 @@ SEED_FILES = sorted(CONTRACTS.glob("*/*.vy"))
 BITAND = "def f(count: int) -> int:\n    return count & 1\n"
 """Crashes forge in lower: `&` is missing from forge's _BIN_OPS table. `a // b` did too, until DamlForge v0.0.10."""
 BITOR = "def f(count: int) -> int:\n    return count | 1\n"
+
+FIXTURE_FORGE = re.search(
+    r"DamlForge v([\d.]+)", (PROJECT / "tests" / "loops" / "EXPECTED.tsv").read_text()
+).group(1)
+"""The forge version that wrote the Daml in tests/loops/."""
 
 OWNER_FIELD = "\n    owner: Party\n"
 """iou.vy's field line. "owner: Party" alone also matches `new_owner: Party` in Transfer."""
@@ -68,3 +74,22 @@ def dpm():
     assert error is None, f"the iou seed's Daml does not build: {error}"
     return path
 
+
+def version(text):
+    return tuple(int(part) for part in re.findall(r"\d+", text)[:3])
+
+
+@pytest.fixture
+def fixture_forge():
+    """Skip a test of forge's own output on a forge older than the one that wrote tests/loops/.
+
+    An older forge, such as v0.0.7, writes other Daml and has other loop bugs.
+    A newer forge must still write the saved Daml, so a change in forge fails
+    these tests and shows which saved Daml to write again.
+    """
+    from damlforge_fuzz import FORGE_VERSION
+
+    if version(FORGE_VERSION) < version(FIXTURE_FORGE):
+        pytest.skip(
+            f"tests/loops/ holds the Daml of DamlForge {FIXTURE_FORGE}, not {FORGE_VERSION}"
+        )

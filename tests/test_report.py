@@ -92,9 +92,10 @@ def counted(tmp_path_factory):
 def test_report_json_has_every_field_with_its_type(counted):
     status, lines, folder, doc = counted
 
-    assert set(doc) == {"schema", "run", "totals", "timeline", "damlc", "groups"}
+    assert set(doc) == {"schema", "run", "totals", "timeline", "damlc", "compare", "groups"}
     assert doc["schema"] == 1
     assert doc["damlc"] is None, "a run without --damlc has no damlc step"
+    assert doc["compare"] is None, "a run without --compare has no compare step"
     run = doc["run"]
     assert set(run) == {
         "started", "random_seed", "seconds", "count", "seeds", "forge_version", "interrupted"

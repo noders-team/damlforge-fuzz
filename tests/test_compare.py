@@ -1,22 +1,149 @@
-"""The compare step: what its Python side does not compare, and why.
+"""The compare step: calls files, the Python side, `check --compare`, and `run --compare`.
 
-These tests need no dpm: every input stops before the Daml side.
+Tests that run Daml need the `dpm` fixture. The tests that name a difference
+that DamlForge 0.0.11 makes, such as the lost creates of a `pass` (b23), also
+need `fixture_forge`, as the bug programs in test_loopcheck.py do. The run
+tests check relations, so they hold on any forge version.
 """
 
+import contextlib
+import io
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
 import pytest
-from conftest import CONTRACTS, hide_dpm
+from conftest import CONTRACTS, PROJECT, hide_dpm
 
 from damlforge_fuzz import (
+    Count,
     CompareInput,
     DamlError,
     DamlSource,
     Dropped,
     Ok,
+    Report,
     Seed,
     Skipped,
+    fuzz,
     load_calls,
     run_and_compare,
 )
+from damlforge_fuzz.cli import main
+from damlforge_fuzz.report import BAD_RUN_TEXT
+
+
+def copy_seed(
+    folder: Path, name: str, old: str = "", new: str = "", calls: str | None = None
+) -> Path:
+    """Copy contracts/<name>/ to `folder`, replace `old` with `new` once in the .vy
+    file, write `calls` as its calls file when given, and return the .vy path."""
+    shutil.copytree(CONTRACTS / name, folder)
+    vy = folder / f"{name}.vy"
+    text = vy.read_text()
+    assert text.count(old) == 1 or old == "", f"{name}.vy should contain {old!r} once"
+    vy.write_text(text.replace(old, new, 1) if old else text)
+    if calls is not None:
+        (folder / f"{name}.calls.yaml").write_text(calls)
+    return vy
+
+
+GIVE = "  contract: {issuer: alice, owner: alice, amount: '1.0'}\n"
+
+
+@pytest.mark.parametrize(
+    ("name", "calls", "error"),
+    [
+        (
+            "loop_give",
+            f"- choice: Iou.GiveAll\n{GIVE}  args: {{owners: [alice], stop: stop, n: 1}}\n",
+            ", call 1 (Iou.GiveAll): the parameters of GiveAll are owners, stop, "
+            'and the call gives {"owners": ["alice"], "stop": "stop", "n": 1}',
+        ),
+        (
+            "loop_give",
+            f"- choice: Iou.GiveAll\n{GIVE}  args: {{owners: alice, stop: stop}}\n",
+            ', call 1 (Iou.GiveAll): "alice" is not a list[Party] for owners',
+        ),
+        (
+            "loop_give",
+            f"- choice: Iou.Take\n{GIVE}  args: {{}}\n",
+            ", call 1 (Iou.Take): template Iou has no choice 'Take'",
+        ),
+        (
+            "loop_give",
+            "- function: give\n  args: {}\n",
+            ", call 1 (give): the seed has no function 'give'",
+        ),
+        (
+            "loop_give",
+            "- choice: Iou.GiveAll\n"
+            "  contract: {issuer: alice, owner: alice, amount: '1.00000000001'}\n"
+            "  args: {owners: [alice], stop: stop}\n",
+            ', call 1 (Iou.GiveAll): "1.00000000001" is not a Decimal for amount',
+        ),
+        (
+            "loop_verify",
+            "- function: verify\n  args: {cids: [], p: alice}\n",
+            ", call 1 (verify): verify is a @ledger_effect function, "
+            "which Daml Script cannot call. "
+            "Call a choice that calls it.",
+        ),
+        ("loop_give", "choice: Iou.GiveAll\n", ": a calls file is a list of calls"),
+    ],
+    ids=[
+        "unknown-parameter",
+        "wrong-type",
+        "unknown-choice",
+        "unknown-function",
+        "11-decimal-places",
+        "ledger-effect",
+        "not-a-list",
+    ],  # fmt: skip
+)
+def test_a_calls_file_that_does_not_fit_its_seed_is_a_usage_error(
+    name, calls, error, tmp_path, capsys
+):
+    vy = copy_seed(tmp_path / name, name, calls=calls)
+
+    assert main(["check", "--compare", str(vy)]) == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err == f"damlforge-fuzz check: {vy.with_name(f'{name}.calls.yaml')}{error}\n"
+
+
+def test_run_compare_needs_a_seed_with_a_calls_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(PROJECT)
+    reports = tmp_path / "reports"
+
+    assert (
+        main(["run", "contracts/iou", "--compare", "--count", "5", "--reports", str(reports)]) == 2
+    )
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err == (
+        "damlforge-fuzz run: --compare needs a calls file next to a seed, such as "
+        "contracts/loop_give/loop_give.calls.yaml, and found none\n"
+    )
+    assert not reports.exists()
+
+
+def test_run_compare_without_dpm_returns_2_before_input_1(tmp_path, monkeypatch, capsys):
+    hide_dpm(monkeypatch, tmp_path)
+    monkeypatch.chdir(PROJECT)
+    reports = tmp_path / "reports"
+
+    assert (
+        main(["run", "contracts/loop_give", "--compare", "--count", "5", "--reports", str(reports)])
+        == 2
+    )
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err == "damlforge-fuzz run: dpm not found on PATH or at ~/.dpm/bin/dpm\n"
+    assert not reports.exists()
+
 
 MANY = Seed.load(CONTRACTS / "loop_many" / "loop_many.vy")
 
@@ -83,3 +210,151 @@ def test_a_daml_text_that_damlc_rejected_drops_the_input_without_a_build(tmp_pat
     item = CompareInput(MANY.text, ok, MANY, load_calls(MANY))
 
     assert list(run_and_compare({"input": item}, verdicts)) == [("input", Dropped(error))]
+
+
+def test_ctrl_c_during_compare_keeps_the_finished_results(tmp_path, monkeypatch):
+    seed = Seed.load(CONTRACTS / "loop_give" / "loop_give.vy")
+    report = Report.open(
+        [seed], 1, Count(300), tmp_path, compare={str(seed.path): load_calls(seed)}
+    )
+    for tried in fuzz([seed], 1, Count(300)):
+        report.add(tried)
+
+    def two_then_ctrl_c(inputs, verdicts):
+        for key in list(inputs)[:2]:
+            yield key, Skipped(("python",))
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("damlforge_fuzz.report.run_and_compare", two_then_ctrl_c)
+    with pytest.raises(KeyboardInterrupt):
+        report.run_and_compare()
+    first = report.compare
+    monkeypatch.setattr(
+        "damlforge_fuzz.report.run_and_compare",
+        lambda inputs, verdicts: ((key, Skipped(("python",))) for key in inputs),
+    )
+    report.run_and_compare()
+
+    assert (first.compared, first.dropped, first.interrupted) == (0, 0, True)
+    assert 2 <= first.skipped < report.totals.ok
+    assert report.compare.skipped == report.totals.ok
+    report.write()
+    md = (report.folder / "report.md").read_text().splitlines()
+    assert "Ctrl-C stopped the compare step, so some inputs were not compared." in md
+
+
+LOOP_SEEDS = sorted(str(path.relative_to(PROJECT)) for path in CONTRACTS.glob("loop_*"))
+FINAL_LINE = re.compile(r"random seed \d+: \d+ inputs, (\d+) OK, .*")
+REPORT_LINE = re.compile(r"(\d+) crash groups?, report in (.+)")
+
+
+@pytest.fixture(scope="module")
+def compare_run(dpm, tmp_path_factory):
+    """`run contracts/loop_* --count 136 --random-seed 251 --compare`: status,
+    stdout lines, run folder, report.json. Before input 1, all five loop seeds
+    run their own calls in Python and in Daml."""
+    reports = tmp_path_factory.mktemp("reports")
+    out = io.StringIO()
+    with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
+        patch.chdir(PROJECT)
+        status = main(
+            ["run", *LOOP_SEEDS, "--count", "136", "--random-seed", "251", "--compare"]
+            + ["--reports", str(reports)]
+        )
+    lines = out.getvalue().splitlines()
+    folder = Path(REPORT_LINE.fullmatch(lines[-1]).group(2))
+    doc = json.loads((folder / "report.json").read_text())
+    assert run_groups(doc), "136 inputs of random seed 251 should differ at least once"
+    return status, lines, folder, doc
+
+
+def run_groups(doc):
+    return [group for group in doc["groups"] if group["kind"] == "bad_run"]
+
+
+def test_compare_prints_one_line_after_the_loops_line_and_counts_every_ok_input(compare_run):
+    status, lines, _, doc = compare_run
+    groups = run_groups(doc)
+    compare = doc["compare"]
+
+    assert status == 1
+    assert len(lines) == 5 and lines[2].startswith("loops: ")
+    differ = "differs" if compare["differ"] == 1 else "differ"
+    assert lines[3] == (
+        f"compare: {compare['compared']} inputs compared, {compare['differ']} {differ}, "
+        f"{len(groups)} run group{'' if len(groups) == 1 else 's'}"
+    )
+    ok = int(FINAL_LINE.fullmatch(lines[1])[1])
+    assert compare["compared"] + compare["skipped"] + compare["dropped"] == ok
+    assert compare["differ"] == sum(group["count"] for group in groups)
+    assert compare["interrupted"] is False and compare["seconds"] > 0
+
+
+def test_each_run_group_folder_is_a_daml_project_whose_test_fails_on_the_call(compare_run, dpm):
+    _, _, folder, doc = compare_run
+    script = {
+        "result": "result",
+        "contracts": "contracts",
+        "daml_fails": "runs",
+        "daml_passes": "fails",
+    }
+
+    for group in run_groups(doc):
+        saved = folder / "groups" / group["id"]
+        assert set(group) == {
+            "id", "kind", "difference", "call", "loop_check", "python", "count", "first_seen",
+            "seed", "input", "input_file", "calls_file", "daml", "daml_file", "test", "test_file",
+        }  # fmt: skip
+        seed = PROJECT / group["seed"]
+        assert group["input_file"] == f"groups/{group['id']}/{seed.name}"
+        assert (folder / group["input_file"]).read_text() == group["input"]
+        assert group["calls_file"] == f"groups/{group['id']}/{seed.stem}.calls.yaml"
+        assert (folder / group["calls_file"]).read_bytes() == (
+            seed.with_name(f"{seed.stem}.calls.yaml").read_bytes()
+        )
+        assert (folder / group["daml_file"]).read_text() == group["daml"]
+        assert (folder / group["test_file"]).read_text() == group["test"]
+        assert "source: daml\n" in (saved / "daml.yaml").read_text()
+        result = subprocess.run([dpm, "test"], cwd=saved, capture_output=True, text=True)
+        number = group["call"].rpartition("#")[2]
+        failed = re.findall(r"^daml/Test\.daml:(\w+): failed", result.stdout + result.stderr, re.M)
+        assert f"c{number}_{script[group['difference']]}" in failed, group["id"]
+
+
+def test_check_compare_prints_bad_run_for_a_lost_create_and_for_each_saved_run_group(
+    compare_run, fixture_forge, tmp_path, monkeypatch, capsys
+):
+    _, _, folder, doc = compare_run
+    groups = run_groups(doc)
+    loop = "        for o in owners:\n"
+    lost = copy_seed(tmp_path / "pass", "loop_give", loop, loop + "            pass\n")
+    same = copy_seed(tmp_path / "is", "loop_give", "if o != stop:", "if o is not stop:")
+    saved = [folder / group["input_file"] for group in groups]
+    monkeypatch.chdir(PROJECT)
+
+    assert (
+        main(["check", "--compare", str(lost), str(same), "contracts/iou", *map(str, saved)]) == 1
+    )
+    assert capsys.readouterr().out.splitlines() == [
+        f"BAD_RUN  emit   {lost}  contracts in Iou.GiveAll #1: returns None, makes 2 contracts: "
+        "Iou(issuer=alice, owner=alice, amount=1.0), Iou(issuer=alice, owner=bob, amount=1.0)",
+        f"OK       emit   {same}",
+        "OK       emit   contracts/iou/iou.vy",
+    ] + [
+        f"BAD_RUN  emit   {path}  {g['difference']} in {g['call']}: {g['python']}"
+        + ("" if g["loop_check"] is None else f"; loop check {g['loop_check']}")
+        for path, g in zip(saved, groups, strict=True)
+    ]
+
+
+def test_report_md_explains_bad_run_and_lists_every_run_group(compare_run):
+    _, _, folder, doc = compare_run
+    md = (folder / "report.md").read_text().splitlines()
+    groups = run_groups(doc)
+
+    assert BAD_RUN_TEXT in md
+    assert f"## {len(groups)} run group{'' if len(groups) == 1 else 's'}" in md
+    for group in groups:
+        [row] = [line for line in md if line.startswith(f"| {group['id']} |")]
+        assert row.startswith(f"| {group['id']} | {group['difference']} | {group['call']} | "), row
+        assert f"Run `dpm test` in groups/{group['id']} to see what Daml does." in "\n".join(md)

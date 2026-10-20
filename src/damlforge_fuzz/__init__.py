@@ -92,6 +92,11 @@ It needs dpm and the Daml SDK::
         if isinstance(result, Compared) and result.difference is not None:
             ...  # .kind "contracts", .call "Iou.GiveAll #1", .python, .test
 
+    report = Report.open([seed], 1, Count(2000), Path("reports"), compare={str(seed.path): calls})
+    ...
+    report.run_and_compare()  # after the inputs, and after check_daml() with damlc
+    report.run_groups()       # [RunGroup], ids r01, r02, ...
+
 Import from this package only. The modules behind it are not part of the API.
 """
 
@@ -137,12 +142,14 @@ if TYPE_CHECKING:
     from damlforge_fuzz.mutate import RULE_NAMES, Change, Input, input_sequence
     from damlforge_fuzz.report import (
         BadDamlGroup,
+        CompareSummary,
         DamlcSummary,
         FirstSeen,
         Group,
         LoopGroup,
         Report,
         Run,
+        RunGroup,
         Tick,
     )
     from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried, fuzz
@@ -157,7 +164,8 @@ _HOME = {
     **dict.fromkeys(["Change", "Input", "RULE_NAMES", "input_sequence"], "mutate"),
     **dict.fromkeys(["Count", "Limit", "Seconds", "Totals", "Tried", "fuzz"], "runner"),
     **dict.fromkeys(
-        ["BadDamlGroup", "DamlcSummary", "FirstSeen", "Group", "LoopGroup", "Report", "Run", "Tick"],
+        ["BadDamlGroup", "CompareSummary", "DamlcSummary", "FirstSeen", "Group", "LoopGroup"]
+        + ["Report", "Run", "RunGroup", "Tick"],
         "report",
     ),
     **dict.fromkeys(

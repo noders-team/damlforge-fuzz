@@ -17,7 +17,6 @@ import pytest
 from conftest import PROJECT, SEED_FILES
 
 from damlforge_fuzz import (
-    FORGE_VERSION,
     LOOP_CHECK_TEXT,
     DamlcUnavailable,
     DamlSource,
@@ -42,30 +41,8 @@ EXPECTED = {
 }
 
 
-FIXTURE_FORGE = re.search(r"DamlForge v([\d.]+)", (LOOPS / "EXPECTED.tsv").read_text()).group(1)
-"""The forge version that wrote the Daml in tests/loops/."""
-
-
 def pair(name):
     return (LOOPS / f"{name}.vy").read_text(), (LOOPS / f"{name}.daml").read_text()
-
-
-def version(text):
-    return tuple(int(part) for part in re.findall(r"\d+", text)[:3])
-
-
-@pytest.fixture
-def fixture_forge():
-    """Skip a test of forge's own output on a forge older than the one that wrote tests/loops/.
-
-    An older forge, such as v0.0.7, writes other Daml and has other loop bugs.
-    A newer forge must still write the saved Daml, so a change in forge fails
-    these tests and shows which saved Daml to write again.
-    """
-    if version(FORGE_VERSION) < version(FIXTURE_FORGE):
-        pytest.skip(
-            f"tests/loops/ holds the Daml of DamlForge {FIXTURE_FORGE}, not {FORGE_VERSION}"
-        )
 
 
 @pytest.mark.parametrize("name", EXPECTED)

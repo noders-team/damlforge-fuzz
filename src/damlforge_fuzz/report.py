@@ -6,7 +6,10 @@ This module imports the compiler, so it loads forge. It owns three decisions:
   in the order of the first input that reached each key. With damlc, which
   bad Daml forms one group: one DamlErrorKey, ids d01, d02, ... in the same order.
   Which OK inputs with loop bugs form one group: the first loop check and,
-  with damlc, damlc's verdict on the Daml, ids l01, l02, ... in the same order;
+  with damlc, damlc's verdict on the Daml, ids l01, l02, ... in the same order.
+  With compare, which OK inputs whose Daml runs differently from the .vy
+  code form one group: the difference kind and the first loop check, ids
+  r01, r02, ... in the same order;
 - the shape of report.json (schema 1). The dataclasses below are the shape:
   their fields are the JSON fields, one for one. to_json() is the only code
   that builds the document, and markdown() reads the same model, so report.md
@@ -27,6 +30,11 @@ This module imports the compiler, so it loads forge. It owns three decisions:
           groups/l01/LoopGive.daml   forge's Daml for that input
           groups/l01/shrunk/loop_give.vy    the shrunk input
           groups/l01/shrunk/LoopGive.daml   forge's Daml for the shrunk input
+          groups/r01/loop_give.vy          the first input of the run group
+          groups/r01/loop_give.calls.yaml  a copy of the seed's calls file
+          groups/r01/daml.yaml             the seed's, with daml-script and `source: daml`
+          groups/r01/daml/LoopGive.daml    forge's Daml for that input
+          groups/r01/daml/Test.daml        its scripts, so `dpm test` in r01 shows the difference
 
 Time enters a run only here: Report.add reads the clock. fuzz() and the
 inputs never see it, so `--count N --random-seed S` gives the same inputs, the
@@ -46,6 +54,18 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Literal
 
+from damlforge_fuzz.compare import (
+    Calls,
+    Compared,
+    CompareInput,
+    DifferenceKind,
+    Dropped,
+    InputResult,
+    Skipped,
+    calls_path,
+    group_daml_yaml,
+    run_and_compare,
+)
 from damlforge_fuzz.compiler import (
     FORGE_VERSION,
     STAGE_TEXT,
@@ -223,6 +243,68 @@ class LoopGroup:
     """"groups/l01/shrunk/LoopGive.daml"."""
 
 
+@dataclass(slots=True)
+class RunGroup:
+    """All compared inputs whose first difference has one kind and whose first loop check is one.
+
+    The loop check is in the key, so inputs that a loop check already names,
+    such as L3, do not hide the inputs that only the run shows. The group's
+    first input, the lowest input number, supplies every field except `count`.
+    Not shrunk: each shrink candidate would need its own `dpm test`, seconds.
+    """
+
+    id: str
+    """"r01", "r02", ... in first-input order. A series of its own, like d01."""
+    kind: Literal["bad_run"]
+    difference: DifferenceKind
+    call: str
+    """The first call that differs, as "Iou.GiveAll #1": the call's place in the calls file."""
+    loop_check: LoopCheck | None
+    """The first loop check that the input fails, or None."""
+    python: str
+    """What Python does in that call: "returns None, makes 1 contract: Iou(...)" or
+    "fails: positive"."""
+    count: int
+    """OK inputs in this group."""
+    first_seen: FirstSeen
+    seed: str
+    input: str
+    input_file: str
+    """"groups/r01/loop_give.vy". `damlforge-fuzz check --compare` on it prints BAD_RUN again."""
+    calls_file: str
+    """"groups/r01/loop_give.calls.yaml", a copy of the seed's calls file."""
+    daml: str
+    """forge's Daml for `input`."""
+    daml_file: str
+    """"groups/r01/daml/LoopGive.daml"."""
+    test: str
+    """The Daml Script module with the scripts of `input`'s calls."""
+    test_file: str
+    """"groups/r01/daml/Test.daml". `dpm test` in groups/r01 fails the script of `call`."""
+
+
+@dataclass(frozen=True, slots=True)
+class CompareSummary:
+    """report.json "compare": what the compare step did. None when the run had no --compare.
+
+    Each count is of OK inputs of the seeds with a calls file, and the step
+    runs each distinct .vy text once. compared + skipped + dropped is all of
+    them, unless Ctrl-C (interrupted) or a dpm failure stopped the step.
+    differ == sum(group.count for the run groups).
+    """
+
+    compared: int
+    skipped: int
+    """Inputs with no call that Python could run and compare."""
+    dropped: int
+    """Inputs whose Daml or test module damlc rejects."""
+    differ: int
+    skipped_calls: int
+    """Calls of the compared inputs that were not compared."""
+    seconds: float
+    interrupted: bool
+
+
 @dataclass(frozen=True, slots=True)
 class DamlcSummary:
     """report.json "damlc": what the damlc step did. None when the run had no --damlc.
@@ -271,6 +353,29 @@ class _LoopText:
     seed: str
     daml: str
     check: LoopCheck
+
+
+@dataclass(slots=True)
+class _RunInput:
+    """One distinct .vy text of a seed with calls: its first OK input, and how many there are."""
+
+    first_seen: FirstSeen
+    ok: Ok
+    count: int = 0
+
+
+@dataclass(slots=True)
+class _Compare:
+    """The compare step's state. add() is the only writer of inputs, run_and_compare() of
+    the rest."""
+
+    calls: dict[str, Calls]
+    """The seeds with a calls file, by Group.seed."""
+    inputs: dict[tuple[str, str], _RunInput] = field(default_factory=dict)
+    """(seed, .vy text) -> its inputs, in first-seen order."""
+    results: dict[tuple[str, str], InputResult] = field(default_factory=dict)
+    seconds: float = 0.0
+    interrupted: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -324,6 +429,8 @@ class Report:
     """None when the run has no damlc step. Then the report is unit 5's, with "damlc": null."""
     _loops: dict[_LoopText, _LoopInputs] = field(default_factory=dict, repr=False)
     """The OK inputs with loop bugs, in first-seen order. loop_groups() reads it."""
+    _compare: _Compare | None = field(default=None, repr=False)
+    """None when the run has no compare step. Then report.json has "compare": null."""
 
     @classmethod
     def open(
@@ -333,11 +440,16 @@ class Report:
         limit: Limit,
         reports: Path,
         damlc: bool = False,
+        compare: dict[str, Calls] | None = None,
     ) -> Report:
         """Start the clock and create the run folder under `reports`, before input 1.
 
         With `damlc`, add() keeps each distinct Daml text of an OK input for
         check_daml(). Every seed then needs a daml.yaml.
+
+        With `compare`, the calls of each seed that has a calls file, by seed
+        path as given, add() keeps each distinct .vy text of an OK input of
+        those seeds for run_and_compare(). Those seeds need a daml.yaml.
 
         The folder is named after run.started with `-` for `:`, which Windows
         forbids in file names: reports/2026-10-19T13-50-00Z. When that folder
@@ -373,13 +485,19 @@ class Report:
             except FileExistsError:
                 suffix += 1
                 folder = reports / f"{name}-{suffix}"
-        return cls(run, folder, _damlc=_Damlc() if damlc else None)
+        return cls(
+            run,
+            folder,
+            _damlc=_Damlc() if damlc else None,
+            _compare=None if compare is None else _Compare(dict(compare)),
+        )
 
     def add(self, tried: Tried) -> None:
         """Count `tried`, close every whole second before it, and group it if it crashed.
 
         With damlc, an OK input's Daml text is kept, once per distinct text. An
         OK input with loop bugs is kept once per Daml text and first check.
+        With compare, an OK input of a seed with calls is kept once per .vy text.
         """
         elapsed = time.monotonic() - self._start
         while len(self.timeline) < int(elapsed):
@@ -408,6 +526,15 @@ class Report:
                     ok.loop_bugs,
                 )
             kept.count += 1
+        if isinstance(ok, Ok) and self._compare is not None:
+            seed = str(tried.seed.path)
+            if seed in self._compare.calls:
+                self._seeds[seed] = tried.seed
+                run = self._compare.inputs.setdefault(
+                    (seed, tried.input.text),
+                    _RunInput(FirstSeen(round(elapsed, 2), tried.input.number), ok),
+                )
+                run.count += 1
         if not isinstance(crash := tried.outcome, Crash):
             return
         group = self.groups.get(crash.key)
@@ -484,6 +611,56 @@ class Report:
             raise
         finally:
             damlc.seconds += time.monotonic() - start
+
+    def run_and_compare(self) -> None:
+        """Compare every kept .vy text that has no result yet, in first-seen order.
+
+        With damlc, the compare step reuses damlc's verdicts, so call
+        check_daml() first. Each result is stored as its batch ends, so a
+        Ctrl-C keeps the finished batches, marks the step interrupted, and
+        propagates. A second call compares only the rest. Raises
+        DamlcUnavailable as run_and_compare in compare.py does. Does nothing
+        without compare.
+        """
+        if self._compare is None:
+            return
+        state = self._compare
+        start = time.monotonic()
+        try:
+            todo = {
+                key: CompareInput(key[1], run.ok, self._seeds[key[0]], state.calls[key[0]])
+                for key, run in state.inputs.items()
+                if key not in state.results
+            }
+            verdicts = None if self._damlc is None else self._damlc.verdicts
+            for key, result in run_and_compare(todo, verdicts):
+                state.results[key] = result
+        except KeyboardInterrupt:
+            state.interrupted = True
+            raise
+        finally:
+            state.seconds += time.monotonic() - start
+
+    @property
+    def compare(self) -> CompareSummary | None:
+        if self._compare is None:
+            return None
+        state = self._compare
+        counts = {"compared": 0, "skipped": 0, "dropped": 0, "differ": 0, "skipped_calls": 0}
+        for key, result in state.results.items():
+            count = state.inputs[key].count
+            match result:
+                case Compared(difference=difference, skipped=skipped):
+                    counts["compared"] += count
+                    counts["differ"] += count if difference is not None else 0
+                    counts["skipped_calls"] += count * len(skipped)
+                case Skipped():
+                    counts["skipped"] += count
+                case Dropped():
+                    counts["dropped"] += count
+        return CompareSummary(
+            **counts, seconds=round(state.seconds, 2), interrupted=state.interrupted
+        )
 
     @property
     def damlc(self) -> DamlcSummary | None:
@@ -571,6 +748,46 @@ class Report:
             group.count += kept.count
         return list(groups.values())
 
+    def run_groups(self) -> list[RunGroup]:
+        """One group per difference kind and first loop check, ids r01, r02, ... by first input.
+
+        Derived on every call, like loop_groups(), so report.json, report.md,
+        the group folders, and the run's lines cannot disagree.
+        """
+        if self._compare is None:
+            return []
+        groups: dict[tuple[DifferenceKind, LoopCheck | None], RunGroup] = {}
+        for key, run in self._compare.inputs.items():
+            result = self._compare.results.get(key)
+            if not isinstance(result, Compared) or result.difference is None:
+                continue
+            difference = result.difference
+            group = groups.get((difference.kind, run.ok.loop_key))
+            if group is None:
+                group_id = f"r{len(groups) + 1:02d}"
+                folder = f"groups/{group_id}"
+                seed = Path(key[0])
+                group = groups[(difference.kind, run.ok.loop_key)] = RunGroup(
+                    id=group_id,
+                    kind="bad_run",
+                    difference=difference.kind,
+                    call=difference.call,
+                    loop_check=run.ok.loop_key,
+                    python=difference.python,
+                    count=0,
+                    first_seen=run.first_seen,
+                    seed=key[0],
+                    input=key[1],
+                    input_file=f"{folder}/{seed.name}",
+                    calls_file=f"{folder}/{calls_path(seed).name}",
+                    daml=run.ok.daml,
+                    daml_file=f"{folder}/daml/{run.ok.module_name}.daml",
+                    test=difference.test,
+                    test_file=f"{folder}/daml/Test.daml",
+                )
+            group.count += run.count
+        return list(groups.values())
+
     def _damlc_verdict(
         self, seed: str, daml: str, module_name: str
     ) -> tuple[DamlcVerdict, str | None]:
@@ -600,9 +817,15 @@ class Report:
             "totals": asdict(self.totals),
             "timeline": [asdict(tick) for tick in timeline],
             "damlc": None if self.damlc is None else asdict(self.damlc),
+            "compare": None if self.compare is None else asdict(self.compare),
             "groups": [
                 asdict(g)
-                for g in [*self.groups.values(), *self.bad_daml_groups(), *self.loop_groups()]
+                for g in [
+                    *self.groups.values(),
+                    *self.bad_daml_groups(),
+                    *self.loop_groups(),
+                    *self.run_groups(),
+                ]
             ],
         }
 
@@ -669,6 +892,8 @@ class Report:
         if self.damlc is not None:
             lines += self._damlc_markdown(self.damlc)
         lines += self._loops_markdown()
+        if self.compare is not None:
+            lines += self._compare_markdown(self.compare)
         return "\n".join(lines) + "\n"
 
     def _damlc_markdown(self, damlc: DamlcSummary) -> list[str]:
@@ -777,6 +1002,52 @@ class Report:
             lines += _code_block(group.shrunk_daml, "daml")
         return lines
 
+    def _compare_markdown(self, compare: CompareSummary) -> list[str]:
+        groups = self.run_groups()
+        lines = [
+            "",
+            "## Run and compare",
+            "",
+            BAD_RUN_TEXT,
+            "",
+            f"The run compared {_plural(compare.compared, 'OK input')} in {compare.seconds} s, "
+            f"and {compare.differ} differ. Python could run no call of {compare.skipped}, "
+            f"and damlc rejects the Daml or the test of {compare.dropped}. "
+            f"{_plural(compare.skipped_calls, 'call')} of the compared inputs "
+            f"{'was' if compare.skipped_calls == 1 else 'were'} not compared.",
+        ]
+        if compare.interrupted:
+            lines.append("Ctrl-C stopped the compare step, so some inputs were not compared.")
+        lines += ["", f"## {_plural(len(groups), 'run group')}"]
+        if groups:
+            lines += [
+                "",
+                "| Group | Difference | Call | Loop check | Count | Seed | First seen | Input "
+                "| Test |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        for group in groups:
+            cells = [
+                group.id,
+                group.difference,
+                group.call,
+                group.loop_check or "-",
+                str(group.count),
+                group.seed,
+                f"input {group.first_seen.input}, {group.first_seen.second} s",
+                f"[{Path(group.input_file).name}]({group.input_file})",
+                f"[{Path(group.test_file).name}]({group.test_file})",
+            ]
+            lines.append("| " + " | ".join(cell.replace("|", "\\|") for cell in cells) + " |")
+        if groups:
+            lines += ["", "### What Python does", ""]
+            lines += [
+                f"- {group.id}, {group.call}: {_inline_code(group.python)}. "
+                f"Run `dpm test` in groups/{group.id} to see what Daml does."
+                for group in groups
+            ]
+        return lines
+
     def write(self) -> None:
         """Write groups/, report.md, and report.json into the run folder.
 
@@ -821,6 +1092,16 @@ class Report:
                 (self.folder / loop.shrunk_daml_file).write_text(
                     loop.shrunk_daml, encoding="utf-8", newline=""
                 )
+        for run in self.run_groups():
+            saved = self.folder / run.input_file
+            (saved.parent / "daml").mkdir(parents=True)
+            saved.write_text(run.input, encoding="utf-8", newline="")
+            seed = self._seeds[run.seed]
+            shutil.copyfile(calls_path(seed.path), self.folder / run.calls_file)
+            daml_yaml = group_daml_yaml(seed.daml_yaml)
+            (saved.parent / "daml.yaml").write_text(daml_yaml, encoding="utf-8")
+            (self.folder / run.daml_file).write_text(run.daml, encoding="utf-8", newline="")
+            (self.folder / run.test_file).write_text(run.test, encoding="utf-8", newline="")
         (self.folder / "report.md").write_text(self.markdown(), encoding="utf-8")
         document = json.dumps(self.to_json(), indent=2, ensure_ascii=False) + "\n"
         (self.folder / "report.json").write_text(document, encoding="utf-8")
@@ -845,6 +1126,17 @@ BAD_LOOP_TEXT: Final = (
 )
 """What BAD_LOOP means, in plain English, for report.md."""
 
+BAD_RUN_TEXT: Final = (
+    "BAD_RUN means that forge said OK and wrote Daml that damlc builds, but the Daml "
+    "does not do what the .vy code does. The run calls each function and choice of the "
+    "seed's calls file in Python, on the .vy code, and in Daml Script, on forge's Daml, "
+    "with the same data, and compares the results and the contracts that each call makes. "
+    "An input goes to the group of its first difference, in calls file order, and its first "
+    "loop check. Each group folder is a Daml project with the input, its calls file, "
+    "forge's Daml, and a test, so `dpm test` in the folder shows the difference again."
+)
+"""What BAD_RUN means, in plain English, for report.md."""
+
 
 def _inline_code(text: str) -> str:
     """Markdown code for `text`, which can hold backticks: "`self' is ..." is a damlc message."""
@@ -863,6 +1155,10 @@ def _code_block(text: str, language: str) -> list[str]:
     # One backtick more than the longest run in the text, so the text cannot end the block.
     fence = "`" * max([3, *(len(run) + 1 for run in re.findall("`+", text))])
     return [f"{fence}{language}", text.rstrip("\n"), fence]
+
+
+def _plural(number: int, noun: str) -> str:
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
 
 
 def _shrunk_cell(group: Group | LoopGroup) -> str:

@@ -1,8 +1,8 @@
 """The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`; unit 4 adds its report;
 unit 5 adds shrinking and `shrink`; unit 6 adds --damlc; unit 8 adds the loop check; unit 10
-shrinks the loop groups.
+shrinks the loop groups; unit 11 adds --compare.
 
-    damlforge-fuzz check [--damlc] PATH [PATH ...]
+    damlforge-fuzz check [--damlc] [--compare] PATH [PATH ...]
 
 Each PATH is a .vy file, or a folder searched recursively for .vy files.
 `check` prints one line per file, in argument order and sorted within a folder:
@@ -27,14 +27,28 @@ With --damlc, a BAD_LOOP line ends with damlc's verdict, `; damlc builds` or
 `; damlc rejects: <first error line>`. A file with a loop bug prints BAD_LOOP,
 not BAD_DAML, because the loop bug names the cause.
 
+With --compare, each OK file that has a calls file next to it (FILE.calls.yaml)
+runs in Python and in Daml Script, on the calls of that file, in one batch. A
+file whose Daml does not do what the .vy code does prints BAD_RUN, the kind of
+the first difference, the call, and what Python does:
+
+    BAD_RUN  emit   b23.vy  daml_passes in Iou.Check #2: fails: positive
+
+BAD_RUN comes first: a file with a run difference prints BAD_RUN, not BAD_LOOP,
+because the run shows the wrong result. The line then ends with the first loop
+check, `; loop check L3`. A file whose Daml damlc rejects cannot run, so it
+prints its line as without --compare, and so does a file with no calls file.
+
 Exit status: 0 when every file is OK, 1 when any file is REJECTED, CRASH,
-BAD_DAML, or BAD_LOOP, 2 for a usage error (a missing path, a folder with no
-.vy file, an unreadable file, or DamlForge not installed; with --damlc, also a
-file with no daml.yaml, or dpm or its SDK missing). A usage error prints no
-result lines: every path is loaded before anything compiles.
+BAD_DAML, BAD_LOOP, or BAD_RUN, 2 for a usage error (a missing path, a folder
+with no .vy file, an unreadable file, or DamlForge not installed; with --damlc,
+also a file with no daml.yaml, or dpm or its SDK missing; with --compare, also
+a calls file that does not fit its .vy file, a file with calls and no
+daml.yaml, or dpm or its SDK missing). A usage error prints no result lines:
+every path is loaded before anything compiles.
 
     damlforge-fuzz run [SEED_FOLDER ...] (--seconds N | --count N) [--random-seed S]
-                       [--reports DIR] [--damlc]
+                       [--reports DIR] [--damlc] [--compare]
 
 `run` changes copies of the seeds at random and compiles each copy. Without a
 SEED_FOLDER it uses contracts/. Without --random-seed it picks one. It prints
@@ -72,16 +86,28 @@ Daml damlc builds:
 With --damlc, the shrink of a loop group also keeps damlc's verdict, so it
 builds the Daml of the candidates: a few seconds per loop group.
 
-Exit status: 0 when no input crashed, no Daml was bad, and no loop group was
-found, 1 when any input crashed, any Daml text was bad, or the report has a
-loop group, 2 for a usage error (as for check, and a --reports folder that
-cannot be made, a report that cannot be written, or dpm failing during the
-damlc step or the shrinking, after the report is written), 130 on Ctrl-C,
-after all the lines and the report for the inputs so far. A first Ctrl-C
-stops the inputs, and the run still builds the Daml and shrinks. A Ctrl-C
-while damlc builds keeps the batches already built and stops the damlc step.
-A Ctrl-C while it shrinks stops the shrinking: the groups not shrunk yet get
-"shrunk": null.
+With --compare, the seeds that have a calls file are compared. Before input 1,
+each of them runs its own calls in Python and in Daml, in one batch. When dpm
+is missing, no seed has a calls file, a calls file does not fit its seed, or
+a seed's Daml does not do what its .vy code does, `run` prints one line to
+stderr and exits 2. After the damlc step, it runs each distinct .vy text of
+the OK inputs of those seeds, groups the inputs that differ (BAD_RUN) by the
+kind of their first difference and their first loop check, and prints one
+more line after the loops line. Run groups are not shrunk:
+
+    compare: 195 inputs compared, 6 differ, 3 run groups
+
+Exit status: 0 when no input crashed, no Daml was bad, and no loop group or
+run group was found, 1 when any input crashed, any Daml text was bad, or the
+report has a loop group or a run group, 2 for a usage error (as for check,
+and a --reports folder that cannot be made, a report that cannot be written,
+or dpm failing during the damlc step, the compare step, or the shrinking,
+after the report is written), 130 on Ctrl-C, after all the lines and the
+report for the inputs so far. A first Ctrl-C stops the inputs, and the run
+still builds the Daml, compares, and shrinks. A Ctrl-C while damlc builds
+keeps the batches already built and stops the damlc step, and so does a
+Ctrl-C while the compare step runs. A Ctrl-C while it shrinks stops the
+shrinking: the groups not shrunk yet get "shrunk": null.
 
     damlforge-fuzz shrink [--damlc] FILE
 
@@ -112,10 +138,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from damlforge_fuzz import (
+        Calls,
+        CompareSummary,
         DamlcSummary,
         DamlError,
+        Difference,
         Limit,
         LoopBug,
+        LoopCheck,
         LoopGroup,
         Outcome,
         Seed,
@@ -139,6 +169,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--damlc",
         action="store_true",
         help="also build the Daml of the OK files with damlc (needs dpm and the Daml SDK)",
+    )
+    check.add_argument(
+        "--compare",
+        action="store_true",
+        help="also run each OK file that has a calls file in Python and in Daml Script, "
+        "and compare (needs dpm and the Daml SDK)",
     )
     check.add_argument(
         "paths",
@@ -184,6 +220,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="also build the Daml of the OK inputs with damlc and report the bad ones "
         "(needs dpm and the Daml SDK)",
     )
+    run.add_argument(
+        "--compare",
+        action="store_true",
+        help="also run the OK inputs of the seeds that have a calls file in Python and in "
+        "Daml Script, and report the ones that differ (needs dpm and the Daml SDK)",
+    )
     shrink = commands.add_parser(
         "shrink",
         help="delete lines of a .vy file while it still crashes forge or has the same loop bug",
@@ -202,23 +244,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     if args.command == "check":
-        return _check(args.paths, args.damlc)
+        return _check(args.paths, args.damlc, args.compare)
     if args.command == "shrink":
         return _shrink(args.file, args.damlc)
     return _run(
-        args.seed_folders, args.seconds, args.count, args.random_seed, args.reports, args.damlc
+        args.seed_folders,
+        args.seconds,
+        args.count,
+        args.random_seed,
+        args.reports,
+        args.damlc,
+        args.compare,
     )
 
 
-def _check(paths: Sequence[Path], damlc: bool) -> int:
+def _check(paths: Sequence[Path], damlc: bool, compare: bool) -> int:
     try:
         from damlforge_fuzz import (
+            Compared,
+            CompareInput,
             DamlcUnavailable,
             DamlSource,
             Ok,
             Seed,
             build_daml,
             compile_and_sort,
+            run_and_compare,
         )
     except ImportError as error:
         print(f"damlforge-fuzz: {error}", file=sys.stderr)
@@ -227,6 +278,7 @@ def _check(paths: Sequence[Path], damlc: bool) -> int:
         seeds = [Seed.load(path) for path in _vy_files(paths)]
         if damlc:
             _need_daml_yaml(seeds)
+        calls = _load_calls(seeds) if compare else {}
     except (OSError, ValueError) as error:
         print(f"damlforge-fuzz check: {error}", file=sys.stderr)
         return 2
@@ -241,18 +293,32 @@ def _check(paths: Sequence[Path], damlc: bool) -> int:
     except DamlcUnavailable as error:
         print(f"damlforge-fuzz check: damlc: {error}", file=sys.stderr)
         return 2
+    inputs = {
+        seed.path: CompareInput(seed.text, outcome, seed, calls[seed.path])
+        for seed, outcome in zip(seeds, outcomes, strict=True)
+        if seed.path in calls and isinstance(outcome, Ok)
+    }
+    try:
+        results = dict(run_and_compare(inputs, verdicts)) if inputs else {}
+    except DamlcUnavailable as error:
+        print(f"damlforge-fuzz check: compare: {error}", file=sys.stderr)
+        return 2
     status = 0
     for seed, outcome in zip(seeds, outcomes, strict=True):
         source = sources.get(seed.path)
         error = verdicts.get(source)
         bugs = outcome.loop_bugs if isinstance(outcome, Ok) else ()
-        if bugs:
+        result = results.get(seed.path)
+        difference = result.difference if isinstance(result, Compared) else None
+        if difference is not None:
+            print(_bad_run_line(seed.path, difference, outcome.loop_key))
+        elif bugs:
             print(_bad_loop_line(seed.path, bugs, source in verdicts, error))
         elif error is not None:
             print(_bad_daml_line(seed.path, error))
         else:
             print(_line(seed.path, outcome))
-        if not isinstance(outcome, Ok) or error is not None or bugs:
+        if not isinstance(outcome, Ok) or error is not None or bugs or difference is not None:
             status = 1
     return status
 
@@ -264,9 +330,11 @@ def _run(
     random_seed: int | None,
     reports: Path,
     damlc: bool,
+    compare: bool,
 ) -> int:
     try:
         from damlforge_fuzz import Count, DamlcUnavailable, Report, Seconds, Seed, fuzz
+        from damlforge_fuzz.damlc import need_dpm
     except ImportError as error:
         print(f"damlforge-fuzz: {error}", file=sys.stderr)
         return 2
@@ -274,7 +342,16 @@ def _run(
         seeds = [Seed.load(path) for path in _vy_files(seed_folders or [Path("contracts")])]
         if damlc:
             _need_daml_yaml(seeds)
+        calls = _load_calls(seeds) if compare else {}
+        if compare and not calls:
+            raise ValueError(
+                "--compare needs a calls file next to a seed, such as "
+                "contracts/loop_give/loop_give.calls.yaml, and found none"
+            )
+        if compare:
+            need_dpm()
         _check_seeds(seeds, damlc)
+        _check_calls(seeds, calls)
     except (OSError, ValueError, DamlcUnavailable) as error:
         print(f"damlforge-fuzz run: {error}", file=sys.stderr)
         return 2
@@ -285,7 +362,14 @@ def _run(
         random_seed = secrets.randbelow(1_000_000)
     limit = Count(count) if count is not None else Seconds(seconds)
     try:
-        report = Report.open(seeds, random_seed, limit, reports, damlc=damlc)
+        report = Report.open(
+            seeds,
+            random_seed,
+            limit,
+            reports,
+            damlc=damlc,
+            compare={str(path): c for path, c in calls.items()} if compare else None,
+        )
     except OSError as error:
         print(f"damlforge-fuzz run: cannot make a run folder in {reports}: {error}", file=sys.stderr)
         return 2
@@ -309,6 +393,16 @@ def _run(
     loop_groups = report.loop_groups()
     print(_loops_line(loop_groups, damlc), flush=True)
     try:
+        report.run_and_compare()
+    except KeyboardInterrupt:
+        report.interrupt()
+    except DamlcUnavailable as error:
+        print(f"damlforge-fuzz run: compare: {error}", file=sys.stderr)
+        dpm_failed = True
+    run_groups = report.run_groups()
+    if report.compare is not None:
+        print(_compare_line(report.compare, len(run_groups)), flush=True)
+    try:
         report.shrink()
     except KeyboardInterrupt:
         report.interrupt()
@@ -325,7 +419,12 @@ def _run(
         return 2
     if report.run.interrupted:
         return 130
-    bad = report.totals.crash or (report.damlc and report.damlc.bad_texts) or loop_groups
+    bad = (
+        report.totals.crash
+        or (report.damlc and report.damlc.bad_texts)
+        or loop_groups
+        or run_groups
+    )
     return 1 if bad else 0
 
 
@@ -334,6 +433,65 @@ def _need_daml_yaml(seeds: Sequence[Seed]) -> None:
     for seed in seeds:
         if seed.daml_yaml is None:
             raise ValueError(f"--damlc needs a daml.yaml for {seed.path}, and found none")
+
+
+def _load_calls(seeds: Sequence[Seed]) -> dict[Path, Calls]:
+    """The calls file of each seed that has one, by seed.path. Raises ValueError as
+    load_calls does, and for a seed with calls and no daml.yaml: dpm needs its sdk-version."""
+    from damlforge_fuzz import load_calls
+
+    found = {}
+    for seed in seeds:
+        calls = load_calls(seed)
+        if calls is not None:
+            if seed.daml_yaml is None:
+                raise ValueError(f"--compare needs a daml.yaml for {seed.path}, and found none")
+            found[seed.path] = calls
+    return found
+
+
+def _check_calls(seeds: Sequence[Seed], calls: dict[Path, Calls]) -> None:
+    """Raise ValueError when a seed with calls does not run the same in Python and in Daml.
+
+    One batch of the seeds themselves, before input 1. Such a difference
+    would be in almost every input, and it means that the calls file or the
+    seed is wrong. Raises DamlcUnavailable when dpm cannot build or test.
+    """
+    from damlforge_fuzz import (
+        Compared,
+        CompareInput,
+        Dropped,
+        Ok,
+        compile_and_sort,
+        run_and_compare,
+    )
+
+    inputs = {}
+    for seed in seeds:
+        if seed.path not in calls:
+            continue
+        outcome = compile_and_sort(seed.text, seed)
+        if not isinstance(outcome, Ok):
+            raise ValueError(
+                f"--compare needs seeds that forge compiles: {_line(seed.path, outcome)}"
+            )
+        inputs[seed.path] = CompareInput(seed.text, outcome, seed, calls[seed.path])
+    for path, result in run_and_compare(inputs) if inputs else ():
+        match result:
+            case Compared(difference=None, skipped=()):
+                continue
+            case Compared(difference=None, skipped=skipped):
+                reason = f"Python does not run {skipped[0]}"
+            case Compared(difference=difference):
+                reason = f"{difference.kind} in {difference.call}: Python {difference.python}"
+            case Dropped(error=error):
+                reason = f"damlc rejects its test: {error.message}"
+            case _:
+                reason = f"Python does not run {result.reasons[0]}"
+        raise ValueError(
+            f"seed {path} does not run the same in Python and in Daml, so the seed or "
+            f"{calls[path].path} is wrong: {reason}"
+        )
 
 
 def _check_seeds(seeds: Sequence[Seed], damlc: bool) -> None:
@@ -476,6 +634,14 @@ def _loops_line(groups: Sequence[LoopGroup], damlc: bool) -> str:
     return line
 
 
+def _compare_line(compare: CompareSummary, groups: int) -> str:
+    """'compare: 195 inputs compared, 6 differ, 3 run groups'. The verb agrees: '1 differs'."""
+    return (
+        f"compare: {_plural(compare.compared, 'input')} compared, {compare.differ} "
+        f"{'differs' if compare.differ == 1 else 'differ'}, {_plural(groups, 'run group')}"
+    )
+
+
 def _final_line(random_seed: int, totals: Totals) -> str:
     return (
         f"random seed {random_seed}: {_plural(totals.inputs, 'input')}, {totals.ok} OK, "
@@ -575,6 +741,18 @@ def _bad_loop_line(
     if not built:
         return line
     return line + ("; damlc builds" if error is None else f"; damlc rejects: {error.message}")
+
+
+def _bad_run_line(path: Path, difference: Difference, check: LoopCheck | None) -> str:
+    """'BAD_RUN  emit   b23.vy  daml_passes in Iou.Check #2: fails: positive'.
+
+    When the file also has a loop bug, the line ends with '; loop check L3'.
+    """
+    line = (
+        f"{difference.label:<9}{'emit':<7}{path}  "
+        f"{difference.kind} in {difference.call}: {difference.python}"
+    )
+    return line if check is None else f"{line}; loop check {check}"
 
 
 def _bugs_text(bugs: Sequence[LoopBug]) -> str:
