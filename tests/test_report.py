@@ -70,6 +70,10 @@ def _groups(n):
     return "1 crash group" if n == 1 else f"{n} crash groups"
 
 
+def crash(doc):
+    return [group for group in doc["groups"] if group["kind"] == "crash"]
+
+
 @pytest.fixture(scope="module")
 def counted(tmp_path_factory):
     """One `run --count 400 --random-seed 1` over contracts/, shared by the read-only tests."""
@@ -103,12 +107,12 @@ def test_report_json_has_every_field_with_its_type(counted):
     for tick in doc["timeline"]:
         assert set(tick) == {"second", *COUNTS}
         assert all(type(value) is int for value in tick.values())
-    for group in doc["groups"]:
+    assert {group["kind"] for group in doc["groups"]} <= {"crash", "bad_loop"}
+    for group in crash(doc):
         assert set(group) == {
             "id", "kind", "exception", "where", "stage", "message", "count", "first_seen",
             "seed", "input", "input_file", "shrunk", "shrunk_file",
         }  # fmt: skip
-        assert group["kind"] == "crash"
         assert re.fullmatch(r"\w+", group["exception"])
         assert group["where"] is None or re.fullmatch(r"forge/[\w/]+\.py:\d+", group["where"])
         assert group["stage"] in {stage.value for stage in Stage}
@@ -129,15 +133,15 @@ def test_group_counts_add_up_to_the_printed_crash_count(counted):
     assert start == "random seed 1, 9 seeds, 400 inputs"
     printed = dict(zip(COUNTS, map(int, FINAL_LINE.fullmatch(final).groups()[1:])))
     assert printed == doc["totals"]
-    assert sum(group["count"] for group in doc["groups"]) == printed["crash"]
+    assert sum(group["count"] for group in crash(doc)) == printed["crash"]
     assert status == 1
-    assert report_line == f"{_groups(len(doc['groups']))}, report in {folder}"
+    assert report_line == f"{_groups(len(crash(doc)))}, report in {folder}"
 
 
 def test_each_saved_input_crashes_again_in_its_group(counted, capsys):
     _, _, folder, doc = counted
 
-    for group in doc["groups"]:
+    for group in crash(doc):
         path = str(folder / group["input_file"])
         assert main(["check", path]) == 1
         [line] = capsys.readouterr().out.splitlines()
@@ -149,7 +153,7 @@ def test_each_saved_input_crashes_again_in_its_group(counted, capsys):
 def test_each_shrunk_input_crashes_again_in_its_group(counted, capsys):
     _, _, folder, doc = counted
 
-    for group in doc["groups"]:
+    for group in crash(doc):
         path = str(folder / group["shrunk_file"])
         assert main(["check", path]) == 1
         [line] = capsys.readouterr().out.splitlines()
@@ -161,7 +165,7 @@ def test_each_shrunk_input_crashes_again_in_its_group(counted, capsys):
 def test_each_shrunk_input_is_shorter_and_made_of_its_inputs_lines(counted):
     _, _, folder, doc = counted
 
-    for group in doc["groups"]:
+    for group in crash(doc):
         full = group["input"].splitlines(keepends=True)
         small = group["shrunk"].splitlines(keepends=True)
         # The shrinker never returns an empty text, so a 1-line input cannot get shorter.
@@ -189,13 +193,16 @@ def test_each_saved_input_is_the_input_its_random_seed_and_number_make(counted):
 
 def test_group_ids_follow_the_first_input_and_the_timeline_ends_at_the_totals(counted):
     _, _, folder, doc = counted
-    groups = doc["groups"]
 
-    assert [g["id"] for g in groups] == [f"g{n:02d}" for n in range(1, len(groups) + 1)]
-    firsts = [g["first_seen"]["input"] for g in groups]
-    assert firsts == sorted(firsts)
-    assert len(set(firsts)) == len(firsts)
-    assert sorted(path.name for path in (folder / "groups").iterdir()) == [g["id"] for g in groups]
+    for kind, series in [("crash", "g"), ("bad_loop", "l")]:
+        groups = [g for g in doc["groups"] if g["kind"] == kind]
+        assert [g["id"] for g in groups] == [f"{series}{n:02d}" for n in range(1, len(groups) + 1)]
+        firsts = [g["first_seen"]["input"] for g in groups]
+        assert firsts == sorted(firsts)
+        assert len(set(firsts)) == len(firsts)
+    assert sorted(path.name for path in (folder / "groups").iterdir()) == sorted(
+        g["id"] for g in doc["groups"]
+    )
     assert [tick["second"] for tick in doc["timeline"]] == list(
         range(1, len(doc["timeline"]) + 1)
     )
@@ -207,8 +214,8 @@ def test_report_md_lists_every_group(counted):
     md = (folder / "report.md").read_text().splitlines()
 
     assert md[0] == f"# damlforge-fuzz run {doc['run']['started']}"
-    assert f"## {_groups(len(doc['groups']))}" in md
-    for group in doc["groups"]:
+    assert f"## {_groups(len(crash(doc)))}" in md
+    for group in crash(doc):
         [row] = [line for line in md if line.startswith(f"| {group['id']} |")]
         name = Path(group["input_file"]).name
         assert row.startswith(f"| {group['id']} | {group['count']} | {group['exception']}")
@@ -222,7 +229,7 @@ def test_report_md_explains_exactly_the_stages_of_its_groups_in_pipeline_order(c
     _, _, folder, doc = counted
     md = (folder / "report.md").read_text()
 
-    present = {group["stage"] for group in doc["groups"]}
+    present = {group["stage"] for group in crash(doc)}
     expected = [f"- `{stage}`: {STAGE_TEXT[stage]}" for stage in Stage if stage in present]
     section = md.split("\n## Stages\n\n", 1)[1].split("\n\n", 1)[0]
     assert section.splitlines() == expected
@@ -233,7 +240,7 @@ def test_report_md_shows_each_shrunk_input_in_a_code_block(counted):
     md = (folder / "report.md").read_text()
 
     shrunk_inputs = md.split("\n## Shrunk inputs\n", 1)[1]
-    for group in doc["groups"]:
+    for group in crash(doc):
         assert f"```python\n{group['shrunk']}```\n" in shrunk_inputs, group["id"]
 
 
@@ -328,12 +335,12 @@ def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, c
     printed = dict(zip(COUNTS, map(int, FINAL_LINE.fullmatch(final).groups()[1:])))
     assert printed == doc["totals"]
     assert printed["inputs"] - printed["skipped"] == 99
-    assert sum(group["count"] for group in doc["groups"]) == printed["crash"]
+    assert sum(group["count"] for group in crash(doc)) == printed["crash"]
     assert "- Stopped early by Ctrl-C. The report covers the inputs so far." in (
         (folder / "report.md").read_text().splitlines()
     )
-    assert doc["groups"], "99 inputs should crash forge at least once"
-    for group in doc["groups"]:
+    assert crash(doc), "99 inputs should crash forge at least once"
+    for group in crash(doc):
         assert (folder / group["shrunk_file"]).read_text() == group["shrunk"]
 
 
@@ -354,7 +361,7 @@ def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeyp
     assert status == 130
     assert len(lines) == 3
     assert doc["run"]["interrupted"] is True
-    first, *rest = doc["groups"]
+    first, *rest = crash(doc)
     assert rest, "400 inputs should crash forge in at least two groups"
     assert (folder / first["shrunk_file"]).read_text() == first["shrunk"]
     assert [(g["shrunk"], g["shrunk_file"]) for g in rest] == [(None, None)] * len(rest)
@@ -392,7 +399,7 @@ def test_writing_again_leaves_no_stale_group_folder(tmp_path):
 
     report.write()
     assert sorted(path.name for path in (report.folder / "groups").iterdir()) == [
-        group.id for group in report.groups.values()
+        group.id for group in [*report.groups.values(), *report.loop_groups()]
     ]
 
 

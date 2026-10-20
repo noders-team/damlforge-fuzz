@@ -346,9 +346,9 @@ def test_crash_groups_come_first_and_bad_daml_ids_follow_the_first_input(runs):
     kinds = [group["kind"] for group in doc["groups"]]
     bad = bad_groups(doc)
 
-    assert kinds == sorted(kinds, key=["crash", "bad_daml"].index)
+    assert kinds == sorted(kinds, key=["crash", "bad_daml", "bad_loop"].index)
     assert [without_second(g) for g in doc["groups"] if g["kind"] == "crash"] == [
-        without_second(g) for g in plain_doc["groups"]
+        without_second(g) for g in plain_doc["groups"] if g["kind"] == "crash"
     ]
     assert [g["id"] for g in bad] == [f"d{n:02d}" for n in range(1, len(bad) + 1)]
     firsts = [g["first_seen"]["input"] for g in bad]

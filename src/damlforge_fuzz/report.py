@@ -37,10 +37,11 @@ import time
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, TypeAlias
 
 from damlforge_fuzz.compiler import FORGE_VERSION, STAGE_TEXT, Crash, CrashKey, Ok, Seed, Stage
 from damlforge_fuzz.damlc import DamlError, DamlErrorKey, DamlSource, build_daml
+from damlforge_fuzz.loopcheck import LOOP_CHECK_TEXT, LoopBug, LoopCheck
 from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried
 from damlforge_fuzz.shrinker import shrink, shrunk_path
 
@@ -156,6 +157,49 @@ class BadDamlGroup:
     """"groups/d01/Iou.daml". `dpm build` in groups/d01 shows the error again."""
 
 
+DamlcVerdict: TypeAlias = Literal["builds", "rejects"] | None
+"""damlc's verdict on a Daml text in report.json. None when the run has no damlc, or
+when Ctrl-C or a dpm failure stopped damlc before it built the text."""
+
+
+@dataclass(slots=True)
+class LoopGroup:
+    """All OK inputs whose first loop check is `check` and whose Daml damlc judges the same way.
+
+    Without damlc, `damlc` is None for every input, so there is one group per
+    check. The group's first input, the lowest input number, supplies every
+    field except `count`. Not shrunk.
+    """
+
+    id: str
+    """"l01", "l02", ... in first-input order. A series of its own, like d01."""
+    kind: Literal["bad_loop"]
+    check: LoopCheck
+    """The first check that the first input fails."""
+    checks: list[LoopCheck]
+    """Every check that the first input fails, in check order. checks[0] == check."""
+    message: str
+    """The first input's LoopBug.detail for `check`."""
+    daml_line: int
+    """The line in `daml` that `message` names."""
+    damlc: DamlcVerdict
+    """The same for every input of the group, because it is part of the group key."""
+    damlc_error: str | None
+    """damlc's first error line for `daml` when `damlc` is "rejects", else None."""
+    count: int
+    """OK inputs in this group."""
+    first_seen: FirstSeen
+    seed: str
+    input: str
+    input_file: str
+    """"groups/l01/loop_give.vy", with a copy of the seed's daml.yaml next to it when it has one."""
+    daml: str
+    """forge's Daml for `input`."""
+    daml_file: str
+    """"groups/l01/LoopGive.daml". `damlforge-fuzz check` on input_file prints BAD_LOOP
+    with the same checks again."""
+
+
 @dataclass(frozen=True, slots=True)
 class DamlcSummary:
     """report.json "damlc": what the damlc step did. None when the run had no --damlc.
@@ -193,6 +237,30 @@ class _Damlc:
     interrupted: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class _LoopText:
+    """One Daml text of one seed and the first loop check of its input: a key of Report._loops.
+
+    `check` is in the key because L3 also reads the .vy text, so two inputs
+    with one Daml text can fail different checks.
+    """
+
+    seed: str
+    daml: str
+    check: LoopCheck
+
+
+@dataclass(slots=True)
+class _LoopInputs:
+    """The OK inputs with one _LoopText: the first of them, and how many there are."""
+
+    first_seen: FirstSeen
+    input: str
+    module_name: str
+    bugs: tuple[LoopBug, ...]
+    count: int = 0
+
+
 @dataclass(slots=True)
 class Report:
     """The accumulator the run loop feeds, and the model report.json serializes.
@@ -202,12 +270,13 @@ class Report:
     - totals.crash == sum(group.count for group in groups.values());
     - groups is in first-seen order, which is input-number order, and the
       ids are g01, g02, ... in that order;
-    - with damlc, every distinct Daml text of an OK input is in _damlc.texts.
+    - with damlc, every distinct Daml text of an OK input is in _damlc.texts;
+    - every OK input with loop bugs is counted in _loops, with or without damlc;
     - timeline holds one Tick for each whole second that has passed, seconds
       1, 2, ... with no gap. to_json() adds the final partial second, so the
       document's last tick always equals its totals.
 
-    The run loop and shrink() are the only writers. Make one with Report.open.
+    The run loop, check_daml(), and shrink() are the only writers. Make one with Report.open.
     """
 
     run: Run
@@ -221,6 +290,8 @@ class Report:
     """Group.seed -> the Seed, so write() can copy its daml.yaml."""
     _damlc: _Damlc | None = field(default=None, repr=False)
     """None when the run has no damlc step. Then the report is unit 5's, with "damlc": null."""
+    _loops: dict[_LoopText, _LoopInputs] = field(default_factory=dict, repr=False)
+    """The OK inputs with loop bugs, in first-seen order. loop_groups() reads it."""
 
     @classmethod
     def open(
@@ -275,7 +346,8 @@ class Report:
     def add(self, tried: Tried) -> None:
         """Count `tried`, close every whole second before it, and group it if it crashed.
 
-        With damlc, an OK input's Daml text is kept, once per distinct text.
+        With damlc, an OK input's Daml text is kept, once per distinct text. An
+        OK input with loop bugs is kept once per Daml text and first check.
         """
         elapsed = time.monotonic() - self._start
         while len(self.timeline) < int(elapsed):
@@ -291,6 +363,19 @@ class Report:
                     FirstSeen(round(elapsed, 2), tried.input.number), seed, tried.input.text
                 )
             text.count += 1
+        if isinstance(ok, Ok) and ok.loop_bugs:
+            seed = str(tried.seed.path)
+            key = _LoopText(seed, ok.daml, ok.loop_key)
+            kept = self._loops.get(key)
+            if kept is None:
+                self._seeds[seed] = tried.seed
+                kept = self._loops[key] = _LoopInputs(
+                    FirstSeen(round(elapsed, 2), tried.input.number),
+                    tried.input.text,
+                    ok.module_name,
+                    ok.loop_bugs,
+                )
+            kept.count += 1
         if not isinstance(crash := tried.outcome, Crash):
             return
         group = self.groups.get(crash.key)
@@ -401,6 +486,58 @@ class Report:
             group.count += text.count
         return list(groups.values())
 
+    def loop_groups(self) -> list[LoopGroup]:
+        """One group per first loop check and damlc verdict, ids l01, l02, ... in first-input order.
+
+        Without damlc the verdict is None, so there is at most one group per
+        check. Derived on every call, like bad_daml_groups(), so report.json,
+        report.md, the group folders, and the run's lines cannot disagree.
+        """
+        groups: dict[tuple[LoopCheck, DamlcVerdict], LoopGroup] = {}
+        for key, kept in self._loops.items():
+            verdict, error = self._damlc_verdict(key.seed, key.daml, kept.module_name)
+            group = groups.get((key.check, verdict))
+            if group is None:
+                group_id = f"l{len(groups) + 1:02d}"
+                folder = f"groups/{group_id}"
+                first = kept.bugs[0]
+                group = groups[(key.check, verdict)] = LoopGroup(
+                    id=group_id,
+                    kind="bad_loop",
+                    check=key.check,
+                    checks=[bug.check for bug in kept.bugs],
+                    message=first.detail,
+                    daml_line=first.daml_line,
+                    damlc=verdict,
+                    damlc_error=error,
+                    count=0,
+                    first_seen=kept.first_seen,
+                    seed=key.seed,
+                    input=kept.input,
+                    input_file=f"{folder}/{Path(key.seed).name}",
+                    daml=key.daml,
+                    daml_file=f"{folder}/{kept.module_name}.daml",
+                )
+            group.count += kept.count
+        return list(groups.values())
+
+    def _damlc_verdict(
+        self, seed: str, daml: str, module_name: str
+    ) -> tuple[DamlcVerdict, str | None]:
+        """damlc's verdict on one Daml text, and its first error line when it rejects the text.
+
+        Read from the damlc step's verdicts, with no build of its own: every OK
+        text is in _damlc.texts. (None, None) without damlc, and for a text that
+        Ctrl-C or a dpm failure left unbuilt.
+        """
+        if self._damlc is None:
+            return None, None
+        source = DamlSource(daml, module_name, self._seeds[seed].daml_yaml)
+        if source not in self._damlc.verdicts:
+            return None, None
+        error = self._damlc.verdicts[source]
+        return ("builds", None) if error is None else ("rejects", error.message)
+
     def to_json(self) -> dict[str, Any]:
         """The report.json document. The only code that builds its shape. Pure."""
         timeline = list(self.timeline)
@@ -413,12 +550,15 @@ class Report:
             "totals": asdict(self.totals),
             "timeline": [asdict(tick) for tick in timeline],
             "damlc": None if self.damlc is None else asdict(self.damlc),
-            "groups": [asdict(g) for g in [*self.groups.values(), *self.bad_daml_groups()]],
+            "groups": [
+                asdict(g)
+                for g in [*self.groups.values(), *self.bad_daml_groups(), *self.loop_groups()]
+            ],
         }
 
     def markdown(self) -> str:
         """report.md: the run settings, the totals, one table row per group, the
-        stages those groups crashed in, and each shrunk input."""
+        stages those groups crashed in, each shrunk input, and the loop check."""
         run, totals = self.run, self.totals
         if run.count is not None:
             limit = f"{run.count} inputs"
@@ -480,6 +620,7 @@ class Report:
             lines += [group.shrunk.rstrip("\n"), fence]
         if self.damlc is not None:
             lines += self._damlc_markdown(self.damlc)
+        lines += self._loops_markdown()
         return "\n".join(lines) + "\n"
 
     def _damlc_markdown(self, damlc: DamlcSummary) -> list[str]:
@@ -525,6 +666,59 @@ class Report:
             ]
         return lines
 
+    def _loops_markdown(self) -> list[str]:
+        groups = self.loop_groups()
+        inputs = sum(group.count for group in groups)
+        present = {check for group in groups for check in group.checks}
+        lines = [
+            "",
+            "## Loop check",
+            "",
+            BAD_LOOP_TEXT,
+            "",
+            f"{inputs} OK input{' has' if inputs == 1 else 's have'} loop bugs.",
+        ]
+        if present:
+            lines.append("")
+            lines += [
+                f"- `{check}`: {LOOP_CHECK_TEXT[check]}" for check in LoopCheck if check in present
+            ]
+        lines += ["", f"## {len(groups)} loop group{'' if len(groups) == 1 else 's'}"]
+        if groups:
+            lines += [
+                "",
+                "| Group | Check | Checks | Count | damlc | Seed | First seen | Input | Daml |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        for group in groups:
+            if self._damlc is None:
+                damlc = "-"
+            else:
+                damlc = group.damlc or "not built"
+            cells = [
+                group.id,
+                group.check,
+                " ".join(group.checks),
+                str(group.count),
+                damlc,
+                group.seed,
+                f"input {group.first_seen.input}, {group.first_seen.second} s",
+                f"[{Path(group.input_file).name}]({group.input_file})",
+                f"[{Path(group.daml_file).name}]({group.daml_file})",
+            ]
+            lines.append("| " + " | ".join(cell.replace("|", "\\|") for cell in cells) + " |")
+        if groups:
+            lines += ["", "### Loop bugs", ""]
+            for group in groups:
+                line = (
+                    f"- {group.id}, {Path(group.daml_file).name} line {group.daml_line}: "
+                    f"{_inline_code(group.message)}"
+                )
+                if group.damlc_error is not None:
+                    line += f". damlc: {_inline_code(group.damlc_error)}"
+                lines.append(line)
+        return lines
+
     def write(self) -> None:
         """Write groups/, report.md, and report.json into the run folder.
 
@@ -554,6 +748,14 @@ class Report:
             saved.write_text(bad.input, encoding="utf-8", newline="")
             shutil.copyfile(self._seeds[bad.seed].daml_yaml, saved.parent / "daml.yaml")
             (self.folder / bad.daml_file).write_text(bad.daml, encoding="utf-8", newline="")
+        for loop in self.loop_groups():
+            saved = self.folder / loop.input_file
+            saved.parent.mkdir(parents=True)
+            saved.write_text(loop.input, encoding="utf-8", newline="")
+            daml_yaml = self._seeds[loop.seed].daml_yaml
+            if daml_yaml is not None:
+                shutil.copyfile(daml_yaml, saved.parent / "daml.yaml")
+            (self.folder / loop.daml_file).write_text(loop.daml, encoding="utf-8", newline="")
         (self.folder / "report.md").write_text(self.markdown(), encoding="utf-8")
         document = json.dumps(self.to_json(), indent=2, ensure_ascii=False) + "\n"
         (self.folder / "report.json").write_text(document, encoding="utf-8")
@@ -566,6 +768,16 @@ BAD_DAML_TEXT: Final = (
     "and forge's Daml, so `dpm build` in the folder shows the error again."
 )
 """What BAD_DAML means, in plain English, for report.md."""
+
+BAD_LOOP_TEXT: Final = (
+    "BAD_LOOP means that forge said OK and wrote Daml, but the loop check finds a loop "
+    "bug, L1 to L4, in that Daml. The check reads forge's Daml and the .vy text, "
+    "with no damlc. An input goes to the group of its first check. With --damlc, the "
+    "groups are also split by whether damlc builds the Daml. A group that builds is the "
+    "most serious case: damlc accepts the wrong code. Each group folder has the input, "
+    "its daml.yaml when the seed has one, and forge's Daml."
+)
+"""What BAD_LOOP means, in plain English, for report.md."""
 
 
 def _inline_code(text: str) -> str:

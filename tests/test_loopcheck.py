@@ -2,9 +2,14 @@
 
 The pairs are in tests/loops/, with the checks each one must give in
 EXPECTED.tsv. The tests on the pairs do not run forge, so a forge fix does not
-change them. The live tests at the end show when forge writes other Daml today.
+change them. The live tests show when forge writes other Daml today. The run
+tests check relations, as test_report.py does, so they hold on any forge version.
 """
 
+import collections
+import contextlib
+import io
+import json
 import re
 from pathlib import Path
 
@@ -14,13 +19,16 @@ from conftest import PROJECT, SEED_FILES
 from damlforge_fuzz import (
     FORGE_VERSION,
     LOOP_CHECK_TEXT,
+    DamlSource,
     LoopBug,
     LoopCheck,
     Ok,
     Seed,
+    build_daml,
     compile_and_sort,
     find_loop_bugs,
 )
+from damlforge_fuzz.cli import main
 
 LOOPS = Path(__file__).parent / "loops"
 EXPECTED = {
@@ -178,3 +186,149 @@ def test_forge_still_writes_the_saved_daml_and_its_ok_carries_the_loop_bugs(name
     seed = Seed.load(LOOPS / f"{name}.vy")
     vy, daml = pair(name)
     assert compile_and_sort(seed.text, seed) == Ok(daml, seed.module_name, find_loop_bugs(vy, daml))
+
+
+LOOP_SEEDS = [str(path.parent.relative_to(PROJECT)) for path in SEED_FILES if "loop_" in path.name]
+REPORT_LINE = re.compile(r"\d+ crash groups?, report in (.+)")
+
+
+def run(reports, *argv):
+    """main(["run", *argv, "--reports", reports]) in PROJECT: status, stdout lines, folder, report.json."""
+    out = io.StringIO()
+    with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
+        patch.chdir(PROJECT)
+        status = main(["run", *argv, "--reports", str(reports)])
+    lines = out.getvalue().splitlines()
+    folder = PROJECT / REPORT_LINE.fullmatch(lines[-1]).group(1)
+    return status, lines, folder, json.loads((folder / "report.json").read_text())
+
+
+def loop_groups(doc):
+    return [group for group in doc["groups"] if group["kind"] == "bad_loop"]
+
+
+@pytest.fixture(scope="module")
+def loop_run(tmp_path_factory):
+    """`run contracts/loop_* --count 1100 --random-seed 1`, with the current change rules."""
+    return run(
+        tmp_path_factory.mktemp("reports"), *LOOP_SEEDS, "--count", "1100", "--random-seed", "1"
+    )
+
+
+@pytest.fixture(scope="module")
+def loop_run_damlc(dpm, tmp_path_factory):
+    """The same run with --damlc."""
+    reports = tmp_path_factory.mktemp("reports")
+    return run(reports, *LOOP_SEEDS, "--count", "1100", "--random-seed", "1", "--damlc")
+
+
+def test_a_run_on_the_loop_seeds_makes_one_loop_group_per_first_check(loop_run):
+    _, _, folder, doc = loop_run
+    loops = loop_groups(doc)
+
+    assert loops, "1100 inputs on the loop seeds should give a loop bug at least once"
+    assert [g["id"] for g in loops] == [f"l{n:02d}" for n in range(1, len(loops) + 1)]
+    firsts = [g["first_seen"]["input"] for g in loops]
+    assert firsts == sorted(firsts)
+    assert len({g["check"] for g in loops}) == len(loops)
+    for group in loops:
+        assert set(group) == {
+            "id", "kind", "check", "checks", "message", "daml_line", "damlc", "damlc_error",
+            "count", "first_seen", "seed", "input", "input_file", "daml", "daml_file",
+        }  # fmt: skip
+        assert group["checks"][0] == group["check"]
+        assert group["checks"] == sorted(group["checks"])
+        assert set(group["checks"]) <= {check.value for check in LoopCheck}
+        assert (group["damlc"], group["damlc_error"]) == (None, None)
+        assert type(group["count"]) is int and group["count"] >= 1
+        assert group["input_file"] == f"groups/{group['id']}/{Path(group['seed']).name}"
+        module = re.fullmatch(r"module (\w+) where", group["daml"].splitlines()[0]).group(1)
+        assert group["daml_file"] == f"groups/{group['id']}/{module}.daml"
+        assert (folder / group["input_file"]).read_text() == group["input"]
+        assert (folder / group["daml_file"]).read_text() == group["daml"]
+        seed_yaml = (PROJECT / group["seed"]).parent / "daml.yaml"
+        assert (
+            folder / "groups" / group["id"] / "daml.yaml"
+        ).read_bytes() == seed_yaml.read_bytes()
+
+
+def test_each_saved_loop_input_gives_its_group_again(loop_run):
+    _, _, folder, doc = loop_run
+
+    for group in loop_groups(doc):
+        seed = Seed.load(folder / group["input_file"])
+        outcome = compile_and_sort(seed.text, seed)
+        assert isinstance(outcome, Ok) and outcome.daml == group["daml"], group["id"]
+        first = outcome.loop_bugs[0]
+        assert [bug.check for bug in outcome.loop_bugs] == group["checks"], group["id"]
+        assert (first.detail, first.daml_line) == (group["message"], group["daml_line"])
+
+
+def test_report_md_explains_the_loop_check_and_lists_every_loop_group(loop_run):
+    _, _, folder, doc = loop_run
+    md = (folder / "report.md").read_text().splitlines()
+    loops = loop_groups(doc)
+
+    assert f"## {len(loops)} loop group{'' if len(loops) == 1 else 's'}" in md
+    for check in {check for group in loops for check in group["checks"]}:
+        assert f"- `{check}`: {LOOP_CHECK_TEXT[check]}" in md
+    for group in loops:
+        [row] = [line for line in md if line.startswith(f"| {group['id']} |")]
+        name, daml = Path(group["input_file"]).name, Path(group["daml_file"]).name
+        assert row == (
+            f"| {group['id']} | {group['check']} | {' '.join(group['checks'])} | "
+            f"{group['count']} | - | {group['seed']} | input {group['first_seen']['input']}, "
+            f"{group['first_seen']['second']} s | [{name}]({group['input_file']}) | "
+            f"[{daml}]({group['daml_file']}) |"
+        )
+
+
+def test_with_damlc_each_loop_group_has_the_verdict_a_fresh_build_gives(loop_run_damlc):
+    _, _, _, doc = loop_run_damlc
+    loops = loop_groups(doc)
+    sources = {
+        group["id"]: DamlSource(
+            group["daml"],
+            Path(group["daml_file"]).stem,
+            (PROJECT / group["seed"]).parent / "daml.yaml",
+        )
+        for group in loops
+    }
+
+    verdicts = dict(build_daml(set(sources.values())))
+    for group in loops:
+        error = verdicts[sources[group["id"]]]
+        expected = ("builds", None) if error is None else ("rejects", error.message)
+        assert (group["damlc"], group["damlc_error"]) == expected, group["id"]
+    assert len({(g["check"], g["damlc"]) for g in loops}) == len(loops)
+
+
+def test_with_damlc_the_loop_groups_split_the_same_inputs_by_verdict(loop_run, loop_run_damlc):
+    plain, damlc = loop_groups(loop_run[3]), loop_groups(loop_run_damlc[3])
+
+    def per_check(groups):
+        counts = collections.Counter()
+        for group in groups:
+            counts[group["check"]] += group["count"]
+        return counts
+
+    assert per_check(damlc) == per_check(plain)
+    for group in plain:
+        first = min(
+            (g for g in damlc if g["check"] == group["check"]),
+            key=lambda g: g["first_seen"]["input"],
+        )
+        assert first["first_seen"]["input"] == group["first_seen"]["input"]
+
+
+def test_groups_of_each_kind_from_one_seed_have_their_own_folder(loop_run_damlc):
+    _, _, folder, doc = loop_run_damlc
+    kinds = collections.defaultdict(set)
+    for group in doc["groups"]:
+        kinds[group["seed"]].add(group["kind"])
+        assert group["input_file"] == f"groups/{group['id']}/{Path(group['seed']).name}"
+        assert (folder / group["input_file"]).read_text() == group["input"]
+
+    assert any(found == {"crash", "bad_daml", "bad_loop"} for found in kinds.values()), kinds
+    files = [group["input_file"] for group in doc["groups"]]
+    assert len(set(files)) == len(files)

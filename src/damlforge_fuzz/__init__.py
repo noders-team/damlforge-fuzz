@@ -71,6 +71,8 @@ so each Ok carries its loop bugs::
         outcome.loop_bugs[0].detail  # "the return in a loop of choice GiveUntil at Daml line 14 ..."
     find_loop_bugs(vy_text, daml_text)  # the same check on a saved .vy text and its Daml
 
+    report.loop_groups()  # [LoopGroup], ids l01, l02, ...: one per first check (and damlc verdict)
+
 Import from this package only. The modules behind it are not part of the API.
 """
 
@@ -105,6 +107,7 @@ if TYPE_CHECKING:
         DamlcSummary,
         FirstSeen,
         Group,
+        LoopGroup,
         Report,
         Run,
         Tick,
@@ -121,7 +124,8 @@ _HOME = {
     **dict.fromkeys(["Change", "Input", "RULE_NAMES", "input_sequence"], "mutate"),
     **dict.fromkeys(["Count", "Limit", "Seconds", "Totals", "Tried", "fuzz"], "runner"),
     **dict.fromkeys(
-        ["BadDamlGroup", "DamlcSummary", "FirstSeen", "Group", "Report", "Run", "Tick"], "report"
+        ["BadDamlGroup", "DamlcSummary", "FirstSeen", "Group", "LoopGroup", "Report", "Run", "Tick"],
+        "report",
     ),
     **dict.fromkeys(
         ["DamlError", "DamlErrorKey", "DamlSource", "DamlcUnavailable", "build_daml"], "damlc"
