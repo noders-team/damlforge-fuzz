@@ -1,14 +1,26 @@
-"""The loop check, on saved pairs of a .vy text and forge's Daml for it.
+"""The loop check, on saved pairs of a .vy text and forge's Daml for it, and on live forge.
 
 The pairs are in tests/loops/, with the checks each one must give in
-EXPECTED.tsv. These tests need no forge, so a forge fix does not change them.
+EXPECTED.tsv. The tests on the pairs do not run forge, so a forge fix does not
+change them. The live tests at the end show when forge writes other Daml today.
 """
 
+import re
 from pathlib import Path
 
 import pytest
+from conftest import PROJECT, SEED_FILES
 
-from damlforge_fuzz import LOOP_CHECK_TEXT, LoopBug, LoopCheck, find_loop_bugs
+from damlforge_fuzz import (
+    FORGE_VERSION,
+    LOOP_CHECK_TEXT,
+    LoopBug,
+    LoopCheck,
+    Ok,
+    Seed,
+    compile_and_sort,
+    find_loop_bugs,
+)
 
 LOOPS = Path(__file__).parent / "loops"
 EXPECTED = {
@@ -21,8 +33,30 @@ EXPECTED = {
 }
 
 
+FIXTURE_FORGE = re.search(r"DamlForge v([\d.]+)", (LOOPS / "EXPECTED.tsv").read_text()).group(1)
+"""The forge version that wrote the Daml in tests/loops/."""
+
+
 def pair(name):
     return (LOOPS / f"{name}.vy").read_text(), (LOOPS / f"{name}.daml").read_text()
+
+
+def version(text):
+    return tuple(int(part) for part in re.findall(r"\d+", text)[:3])
+
+
+@pytest.fixture
+def fixture_forge():
+    """Skip a test of forge's own output on a forge older than the one that wrote tests/loops/.
+
+    An older forge, such as v0.0.7, writes other Daml and has other loop bugs.
+    A newer forge must still write the saved Daml, so a change in forge fails
+    these tests and shows which saved Daml to write again.
+    """
+    if version(FORGE_VERSION) < version(FIXTURE_FORGE):
+        pytest.skip(
+            f"tests/loops/ holds the Daml of DamlForge {FIXTURE_FORGE}, not {FORGE_VERSION}"
+        )
 
 
 @pytest.mark.parametrize("name", EXPECTED)
@@ -111,3 +145,36 @@ def test_a_daml_text_that_forge_cannot_write_does_not_raise(daml):
 
 def test_every_check_has_a_text():
     assert list(LOOP_CHECK_TEXT) == list(LoopCheck)
+
+
+@pytest.mark.parametrize("path", SEED_FILES, ids=lambda path: path.stem)
+def test_every_seed_is_ok_with_no_loop_bug(path):
+    seed = Seed.load(path)
+    outcome = compile_and_sort(seed.text, seed)
+    assert isinstance(outcome, Ok)
+    assert (outcome.loop_bugs, outcome.loop_key) == ((), None)
+
+
+BUG_PROGRAMS = {
+    "b17_create_append": "L1",
+    "b18_fetch_in_sum": "L1",
+    "b19_fetch_in_if_test": "L2 L4",
+    "b20_fetch_in_plain_function": "L2 L4",
+    "b21_return_in_create_loop": "L3",
+}
+
+
+@pytest.mark.parametrize("name", BUG_PROGRAMS)
+def test_each_bug_program_is_ok_with_its_loop_checks(name, fixture_forge):
+    seed = Seed.load(PROJECT / "bugs" / "loops" / f"{name}.vy")
+    outcome = compile_and_sort(seed.text, seed)
+    assert isinstance(outcome, Ok)
+    assert " ".join(bug.check for bug in outcome.loop_bugs) == BUG_PROGRAMS[name]
+    assert outcome.loop_key == BUG_PROGRAMS[name].split()[0]
+
+
+@pytest.mark.parametrize("name", EXPECTED)
+def test_forge_still_writes_the_saved_daml_and_its_ok_carries_the_loop_bugs(name, fixture_forge):
+    seed = Seed.load(LOOPS / f"{name}.vy")
+    vy, daml = pair(name)
+    assert compile_and_sort(seed.text, seed) == Ok(daml, seed.module_name, find_loop_bugs(vy, daml))

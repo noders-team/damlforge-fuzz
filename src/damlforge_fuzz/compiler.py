@@ -6,6 +6,10 @@ later unit relies on:
 - how a .vy file on disk becomes the context forge compiles a text in (Seed);
 - which exceptions are forge's own errors and which are forge bugs (Ok, Rejected, Crash);
 - what makes two crashes "the same crash" (CrashKey).
+
+Every Ok also carries the loop check's findings on its Daml (Ok.loop_bugs).
+loopcheck.py decides which loops are wrong and needs no forge. This module only
+runs it, so every caller of compile_and_sort gets the same findings.
 """
 
 from __future__ import annotations
@@ -19,6 +23,8 @@ import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar, Final, TypeAlias
+
+from damlforge_fuzz.loopcheck import LoopBug, LoopCheck, find_loop_bugs
 
 try:
     import forge
@@ -152,13 +158,25 @@ class Seed:
 
 @dataclass(frozen=True, slots=True)
 class Ok:
-    """forge wrote Daml. `daml` is module `module_name`, so it belongs in `<module_name>.daml`."""
+    """forge wrote Daml. `daml` is module `module_name`, so it belongs in `<module_name>.daml`.
+
+    `loop_bugs` is what the loop check finds in that Daml: at most one LoopBug
+    per check, in check order, and empty when the loops look right. Totals
+    still counts an Ok with loop bugs as OK, because forge said OK.
+    """
 
     label: ClassVar[str] = "OK"
     stage: ClassVar[Stage] = Stage.EMIT
 
     daml: str
     module_name: str
+    loop_bugs: tuple[LoopBug, ...] = ()
+    """Empty by default, so a test can make Ok("", "Iou"). compile_and_sort fills it."""
+
+    @property
+    def loop_key(self) -> LoopCheck | None:
+        """The first loop check this Daml fails, or None. It names the input's loop group."""
+        return self.loop_bugs[0].check if self.loop_bugs else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +239,8 @@ def compile_and_sort(text: str, seed: Seed) -> Outcome:
     - Returns an outcome for any text. It raises only KeyboardInterrupt,
       SystemExit, or an exception with no forge frame in its traceback, which
       is a bug in the fuzzer, not in forge.
+    - An Ok carries find_loop_bugs(text, daml). A bug in the loop check is a
+      fuzzer bug: it propagates and is never sorted as a forge crash.
     - Silent. It writes nothing to stdout or stderr.
     - Deterministic in (text, seed). The caller's warning filters do not change the
       result, and the filters are the same after the call as before it.
@@ -255,7 +275,8 @@ def compile_and_sort(text: str, seed: Seed) -> Outcome:
                 if where is None:
                     raise
             return Crash(stage, type(error).__name__, _message(error), where)
-    return Ok(daml, seed.module_name)
+        # After the try, so an exception here is never sorted as a forge crash.
+        return Ok(daml, seed.module_name, find_loop_bugs(text, daml))
 
 
 _NO_STABLE_LINE: Final = (RecursionError, MemoryError)

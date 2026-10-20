@@ -60,13 +60,16 @@ groups the texts damlc rejects (BAD_DAML). It needs dpm and the Daml SDK::
     report.bad_daml_groups()   # [BadDamlGroup], ids d01, d02, ...
 
 Unit 8 checks the loops in forge's Daml (BAD_LOOP). The check reads the .vy
-text and the Daml, and needs no forge and no damlc::
+text and the Daml, and needs no forge and no damlc. compile_and_sort runs it,
+so each Ok carries its loop bugs::
 
-    from damlforge_fuzz import LoopCheck, find_loop_bugs
+    from damlforge_fuzz import find_loop_bugs
 
-    bugs = find_loop_bugs(vy_text, daml_text)  # (LoopBug, ...): at most one per check
-    bugs[0].check   # LoopCheck.L3, the first check that fails
-    bugs[0].detail  # "the return in a loop of choice GiveUntil at Daml line 14 is lost ..."
+    outcome = compile_and_sort(text, seed)
+    if isinstance(outcome, Ok) and outcome.loop_bugs:
+        outcome.loop_key             # LoopCheck.L3, the first check that fails
+        outcome.loop_bugs[0].detail  # "the return in a loop of choice GiveUntil at Daml line 14 ..."
+    find_loop_bugs(vy_text, daml_text)  # the same check on a saved .vy text and its Daml
 
 Import from this package only. The modules behind it are not part of the API.
 """
