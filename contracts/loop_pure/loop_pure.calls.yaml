@@ -1,4 +1,3 @@
-# The calls that `run --compare` makes on each input of loop_pure.vy.
 # A negative number shows a lost `if` or a lost assert. `bob` is in `ps`,
 # so a lost return changes the result of has_party.
 - function: total_of

@@ -28,9 +28,9 @@ With --damlc, a BAD_LOOP line ends with damlc's verdict, `; damlc builds` or
 not BAD_DAML, because the loop bug names the cause.
 
 With --compare, each OK file that has a calls file next to it (FILE.calls.yaml)
-runs in Python and in Daml Script, on the calls of that file, in one batch. A
-file whose Daml does not do what the .vy code does prints BAD_RUN, the kind of
-the first difference, the call, and what Python does:
+runs in Python and in Daml Script, on the calls of that file. A file whose
+Daml does not do what the .vy code does prints BAD_RUN, the kind of the first
+difference, the call, and what Python does:
 
     BAD_RUN  emit   b23.vy  daml_passes in Iou.Check #2: fails: positive
 
@@ -87,10 +87,10 @@ With --damlc, the shrink of a loop group also keeps damlc's verdict, so it
 builds the Daml of the candidates: a few seconds per loop group.
 
 With --compare, the seeds that have a calls file are compared. Before input 1,
-each of them runs its own calls in Python and in Daml, in one batch. When dpm
-is missing, no seed has a calls file, a calls file does not fit its seed, or
-a seed's Daml does not do what its .vy code does, `run` prints one line to
-stderr and exits 2. After the damlc step, it runs each distinct .vy text of
+each of them runs its own calls in Python and in Daml. When dpm is missing,
+no seed has a calls file, a calls file does not fit its seed, or a seed's
+Daml does not do what its .vy code does, `run` prints one line to stderr and
+exits 2. After the damlc step, it runs each distinct .vy text of
 the OK inputs of those seeds, groups the inputs that differ (BAD_RUN) by the
 kind of their first difference and their first loop check, and prints one
 more line after the loops line. Run groups are not shrunk:
@@ -299,7 +299,7 @@ def _check(paths: Sequence[Path], damlc: bool, compare: bool) -> int:
         if seed.path in calls and isinstance(outcome, Ok)
     }
     try:
-        results = dict(run_and_compare(inputs, verdicts)) if inputs else {}
+        results = dict(run_and_compare(inputs, verdicts))
     except DamlcUnavailable as error:
         print(f"damlforge-fuzz check: compare: {error}", file=sys.stderr)
         return 2
@@ -453,9 +453,9 @@ def _load_calls(seeds: Sequence[Seed]) -> dict[Path, Calls]:
 def _check_calls(seeds: Sequence[Seed], calls: dict[Path, Calls]) -> None:
     """Raise ValueError when a seed with calls does not run the same in Python and in Daml.
 
-    One batch of the seeds themselves, before input 1. Such a difference
-    would be in almost every input, and it means that the calls file or the
-    seed is wrong. Raises DamlcUnavailable when dpm cannot build or test.
+    It runs the seeds themselves, before input 1, because a seed's own
+    difference would be in almost every input. Raises DamlcUnavailable when
+    dpm cannot build or test.
     """
     from damlforge_fuzz import (
         Compared,
@@ -476,7 +476,7 @@ def _check_calls(seeds: Sequence[Seed], calls: dict[Path, Calls]) -> None:
                 f"--compare needs seeds that forge compiles: {_line(seed.path, outcome)}"
             )
         inputs[seed.path] = CompareInput(seed.text, outcome, seed, calls[seed.path])
-    for path, result in run_and_compare(inputs) if inputs else ():
+    for path, result in run_and_compare(inputs):
         match result:
             case Compared(difference=None, skipped=()):
                 continue
@@ -635,7 +635,7 @@ def _loops_line(groups: Sequence[LoopGroup], damlc: bool) -> str:
 
 
 def _compare_line(compare: CompareSummary, groups: int) -> str:
-    """'compare: 195 inputs compared, 6 differ, 3 run groups'. The verb agrees: '1 differs'."""
+    """'compare: 195 inputs compared, 6 differ, 3 run groups'."""
     return (
         f"compare: {_plural(compare.compared, 'input')} compared, {compare.differ} "
         f"{'differs' if compare.differ == 1 else 'differ'}, {_plural(groups, 'run group')}"
@@ -744,10 +744,7 @@ def _bad_loop_line(
 
 
 def _bad_run_line(path: Path, difference: Difference, check: LoopCheck | None) -> str:
-    """'BAD_RUN  emit   b23.vy  daml_passes in Iou.Check #2: fails: positive'.
-
-    When the file also has a loop bug, the line ends with '; loop check L3'.
-    """
+    """'BAD_RUN  emit   b23.vy  daml_passes in Iou.Check #2: fails: positive'."""
     line = (
         f"{difference.label:<9}{'emit':<7}{path}  "
         f"{difference.kind} in {difference.call}: {difference.python}"

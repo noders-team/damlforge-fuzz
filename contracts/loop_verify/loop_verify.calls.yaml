@@ -1,4 +1,3 @@
-# The calls that `run --compare` makes on each input of loop_verify.vy.
 # In the second call, one contract has another issuer, so the assert fails.
 - choice: Iou.Sum
   contract: {issuer: alice, owner: bob, amount: "1.0"}

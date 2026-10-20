@@ -1,7 +1,7 @@
 """The compare step: calls files, the Python side, `check --compare`, and `run --compare`.
 
 Tests that run Daml need the `dpm` fixture. The tests that name a difference
-that DamlForge 0.0.11 makes, such as the lost assert of b23 in bugs/loops/,
+that one forge version makes, such as the lost assert of b23 in bugs/loops/,
 also need `fixture_forge`, as the bug programs in test_loopcheck.py do. The run
 tests check relations, so they hold on any forge version.
 """
@@ -38,8 +38,6 @@ from damlforge_fuzz.report import BAD_RUN_TEXT
 def copy_seed(
     folder: Path, name: str, old: str = "", new: str = "", calls: str | None = None
 ) -> Path:
-    """Copy contracts/<name>/ to `folder`, replace `old` with `new` once in the .vy
-    file, write `calls` as its calls file when given, and return the .vy path."""
     shutil.copytree(CONTRACTS / name, folder)
     vy = folder / f"{name}.vy"
     text = vy.read_text()
@@ -251,8 +249,7 @@ REPORT_LINE = re.compile(r"(\d+) crash groups?, report in (.+)")
 @pytest.fixture(scope="module")
 def compare_run(dpm, tmp_path_factory):
     """`run contracts/loop_* --count 136 --random-seed 251 --compare`: status,
-    stdout lines, run folder, report.json. Before input 1, all five loop seeds
-    run their own calls in Python and in Daml."""
+    stdout lines, run folder, report.json."""
     reports = tmp_path_factory.mktemp("reports")
     out = io.StringIO()
     with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):

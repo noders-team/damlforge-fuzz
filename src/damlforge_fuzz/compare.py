@@ -15,10 +15,8 @@ The kind comes from the ok/failed lines of `dpm test`, never from a failure
 message. A batch runs one script per call, which is ok exactly when Daml
 gives Python's outcome. Only the inputs with a failed script run again, with
 one script per question (does the call run, is the result equal, are the
-contracts equal), and the first failed question names the kind. Measured on
-100 inputs of two calls each: 10.8 s with one script per call, 21.6 s with
-three. So the second run costs one small `dpm test` (about 4 s) per batch
-with a difference, not two more scripts for every call.
+contracts equal), and the first failed question names the kind. Split
+scripts for every call would double the time of every batch.
 """
 
 from __future__ import annotations
@@ -45,7 +43,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, TypeAlias, Type
 import yaml
 
 from damlforge_fuzz.damlc import (
-    DamlcUnavailable,
     DamlError,
     DamlSource,
     _ANSI,
@@ -69,7 +66,7 @@ about 18 s, and a Ctrl-C loses at most the batch that is running."""
 LINES: Final = 100_000
 """The Python lines one call may run. A deterministic limit, unlike a clock, so
 a run skips the same calls on every machine. `while True: pass` stops in
-about 0.1 s."""
+about 5 ms."""
 
 DifferenceKind: TypeAlias = Literal["result", "contracts", "daml_fails", "daml_passes"]
 """How Daml differs from Python in one call:
@@ -77,7 +74,7 @@ DifferenceKind: TypeAlias = Literal["result", "contracts", "daml_fails", "daml_p
 - "result": both run, the results differ;
 - "contracts": both run, the results are equal, the contracts made differ;
 - "daml_fails": Python runs, Daml fails;
-- "daml_passes": Python fails (an assert), Daml runs.
+- "daml_passes": Python fails, Daml runs.
 """
 
 K = TypeVar("K")
@@ -172,9 +169,9 @@ def load_calls(seed: Seed) -> Calls | None:
     """The calls file next to seed.path, checked against the seed's text, or None if there is none.
 
     Raises OSError when the file cannot be read, and ValueError, which names
-    the file and the call, when the file does not fit the seed: an unknown
-    function, choice, field, or parameter, a value that does not fit its
-    type, or a type that a calls file cannot give.
+    the file, and the call when the error is in one, when the file does not
+    fit the seed: an unknown function, choice, field, or parameter, a value
+    that does not fit its type, or a type that a calls file cannot give.
     """
     path = calls_path(seed.path)
     if not path.is_file():
@@ -265,8 +262,9 @@ def run_and_compare(
     builds forge's Daml of the rest, except the texts in `verdicts` (damlc's
     verdicts from an earlier build), and the inputs whose Daml it rejects are
     yielded as Dropped. The rest run in batches of BATCH, one after the
-    other, and a batch's results are yielded when it ends. So a
-    KeyboardInterrupt loses only the batch that is running.
+    other, and a batch's results are yielded when it ends. An input whose
+    test module damlc rejects is Dropped too. A KeyboardInterrupt loses only
+    the batch that is running.
 
     Raises DamlcUnavailable when dpm is missing or fails and names no module.
     """
@@ -310,9 +308,6 @@ def group_daml_yaml(daml_yaml: Path) -> str:
     """The daml.yaml of a run group folder: the seed's, with `source: daml` and daml-script."""
     config = yaml.safe_load(daml_yaml.read_text(encoding="utf-8"))
     return yaml.safe_dump(_with_script({**config, "source": "daml"}), sort_keys=False)
-
-
-# ---------------------------------------------------------------- calls files
 
 
 _PARTY: Final = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
@@ -414,7 +409,6 @@ class _Loader:
         )
 
     def annotation(self, node: ast.expr | None, what: str, returns: bool = False) -> _Type:
-        """The _Type of an annotation of the seed."""
         match node:
             case ast.Name(id="Party" | "Decimal" | "int" | "bool" as name):
                 return _Scalar(name)
@@ -504,9 +498,6 @@ def _shapes(tree: ast.Module) -> dict[str, str]:
     return shapes
 
 
-# ------------------------------------------------------------------- Python
-
-
 @dataclass(frozen=True, slots=True)
 class _Runs:
     """Python ran the call. The Daml literals that Daml must give."""
@@ -520,7 +511,7 @@ class _Runs:
 
 @dataclass(frozen=True, slots=True)
 class _Fails:
-    """Python failed the call with an AssertionError."""
+    """Python failed the call: an assert, or a create or a fetch that Daml does not authorize."""
 
     message: str
 
@@ -618,7 +609,7 @@ def _statement_forge_drops(tree: ast.Module) -> str | None:
 
     Python runs every statement of the module and of a class body, but forge
     writes only definitions. A module-level `assert False` fails every call in
-    Python, and forge drops it: 10 false alarms in the prototype before this rule.
+    Python, and forge drops it.
     """
     for node in tree.body:
         if not (isinstance(node, _RUNS_IN_FORGE) or _is_docstring(node)):
@@ -679,8 +670,7 @@ def _runnable(tree: ast.Module) -> CodeType:
     its fields without a value and its methods. Annotations are not evaluated.
 
     `is` becomes `==` and `is not` becomes `!=`, as forge writes them. In
-    Python, `o is stop` compares two str objects, not two parties: 2 false
-    alarms in 5000 inputs before this rule.
+    Python, `o is stop` compares two str objects, not two parties.
     """
     body: list[ast.stmt] = []
     for node in tree.body:
@@ -719,9 +709,7 @@ def _run_call(
     In a choice, a create and a fetch follow Daml's authorization rules, as
     the Daml of the choice does: the choice's controllers and the signatories
     of its contract authorize them. A create needs every signatory of the new
-    contract, and a fetch needs one stakeholder. Without this rule, a change
-    such as `signatory: list[Party] = [owner]` made Daml fail where Python
-    ran: 1 false alarm in 5000 inputs.
+    contract, and a fetch needs one stakeholder.
     """
     ledger: dict[_Ref, object] = {}
     made: list[object] = []
@@ -780,15 +768,13 @@ def _run_call(
         "fetch": fetch,
     }
     try:
-        with _quiet():
-            # Only definitions run here (see _statement_forge_drops), so no line budget.
+        with _quiet(), _line_budget(LINES):
             exec(code, namespace)
             for name, value in list(namespace.items()):
                 if isinstance(value, type) and value.__module__ == "vy":
                     # dataclass reads the class's module from sys.modules, and "vy" is not there.
                     value.__module__ = __name__
                     classes[name] = dataclasses.dataclass(value)
-        with _quiet(), _line_budget(LINES):
             args = {name: python(t, v) for name, t, v in call.params}
             if call.template is None:
                 result = namespace[call.name](**args)
@@ -885,9 +871,6 @@ def _line_budget(lines: int) -> Iterator[None]:
         sys.settrace(previous)
 
 
-# ------------------------------------------------------------- Daml literals
-
-
 def _decimal(raw: str | int | float | Decimal) -> Decimal | None:
     try:
         number = Decimal(str(raw))
@@ -951,9 +934,6 @@ class _Literal:
             case _ContractId(template) if isinstance(value, _Ref | NewContract):
                 return self.contract_id(value, template)
         raise _Unfit(f"{value!r} is not a {t}")
-
-
-# -------------------------------------------------------------- Daml Script
 
 
 def _test_module(module: str, imported: str, calls: Calls, plan: _Plan, split: bool) -> str:
@@ -1081,9 +1061,6 @@ def _observe(t: _Type, var: str, depth: int = 1) -> str | None:
             inner = _observe(item, f"x{depth}", depth + 1)
             return None if inner is None else f"mapA (\\x{depth} -> {inner}) {var}"
     return None
-
-
-# ------------------------------------------------------------------ batches
 
 
 _SUMMARY: Final = re.compile(

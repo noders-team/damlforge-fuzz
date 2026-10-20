@@ -250,13 +250,13 @@ class RunGroup:
     The loop check is in the key, so inputs that a loop check already names,
     such as L3, do not hide the inputs that only the run shows. The group's
     first input, the lowest input number, supplies every field except `count`.
-    Not shrunk: each shrink candidate would need its own `dpm test`, seconds.
     """
 
     id: str
     """"r01", "r02", ... in first-input order. A series of its own, like d01."""
     kind: Literal["bad_run"]
     difference: DifferenceKind
+    """The kind of the first difference: "result", "contracts", "daml_fails", or "daml_passes"."""
     call: str
     """The first call that differs, as "Iou.GiveAll #1": the call's place in the calls file."""
     loop_check: LoopCheck | None
