@@ -1,5 +1,5 @@
 """The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`; unit 4 adds its report;
-unit 5 adds shrinking and `shrink`; unit 6 adds --damlc.
+unit 5 adds shrinking and `shrink`; unit 6 adds --damlc; unit 8 adds the loop check.
 
     damlforge-fuzz check [--damlc] PATH [PATH ...]
 
@@ -17,46 +17,66 @@ damlc's first error line:
 
     BAD_DAML emit   iou.vy  Variable not in scope: str : Decimal -> Text
 
-Exit status: 0 when every file is OK, 1 when any file is REJECTED, CRASH, or
-BAD_DAML, 2 for a usage error (a missing path, a folder with no .vy file, an
-unreadable file, or DamlForge not installed; with --damlc, also a file with no
-daml.yaml, or dpm or its SDK missing). A usage error prints no result lines:
-every path is loaded before anything compiles.
+The loop check reads the Daml of each OK file, with no damlc. A file whose
+Daml has a loop bug prints BAD_LOOP, every check it fails, and the first bug:
+
+    BAD_LOOP emit   b19.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
+
+With --damlc, a BAD_LOOP line ends with damlc's verdict, `; damlc builds` or
+`; damlc rejects: <first error line>`. A file with a loop bug prints BAD_LOOP,
+not BAD_DAML, because the loop bug names the cause.
+
+Exit status: 0 when every file is OK, 1 when any file is REJECTED, CRASH,
+BAD_DAML, or BAD_LOOP, 2 for a usage error (a missing path, a folder with no
+.vy file, an unreadable file, or DamlForge not installed; with --damlc, also a
+file with no daml.yaml, or dpm or its SDK missing). A usage error prints no
+result lines: every path is loaded before anything compiles.
 
     damlforge-fuzz run [SEED_FOLDER ...] (--seconds N | --count N) [--random-seed S]
                        [--reports DIR] [--damlc]
 
 `run` changes copies of the seeds at random and compiles each copy. Without a
 SEED_FOLDER it uses contracts/. Without --random-seed it picks one. It prints
-three lines, the last two when the run ends (the numbers are examples):
+four lines, the last three when the run ends (the numbers are examples):
 
     random seed 48213, 4 seeds, 60 seconds
     random seed 48213: 31200 inputs, 7300 OK, 21000 rejected, 1900 crash, 1000 skipped
+    loops: 19 inputs with loop findings, 3 loop groups
     14 crash groups, report in reports/2026-10-19T13-50-00Z
 
 The first two lines hold no time, so two --count runs with one random seed
 print the same first two lines. `--count 31200 --random-seed 48213` repeats
-the 60-second run above. The third line names the run folder, which every run
-makes under --reports (default: reports): report.json, report.md, and one
-folder per crash group with the group's first input and its shrunk copy.
-Between the second and the third line, `run` shrinks each group's input.
+the 60-second run above. The loops line counts the OK inputs whose Daml has a
+loop bug (BAD_LOOP) and their loop groups, one for each first check. The last
+line names the run folder, which every run makes under --reports (default:
+reports): report.json, report.md, and one folder per group with the group's
+first input, and for a crash group its shrunk copy. Between the loops line and
+the last line, `run` shrinks the input of each crash group.
+
+Before input 1, `run` compiles each seed. When the loop check finds a bug in
+a seed, it prints one line to stderr and exits 2, because that bug would be
+in almost every input.
 
 With --damlc, `run` first builds the Daml of the unchanged seeds. When dpm or
 the SDK is missing, or a seed's Daml does not build, it prints one line to
 stderr and exits 2 before input 1. After the inputs it builds each distinct
 Daml text of the OK inputs, groups the ones damlc rejects (BAD_DAML) in the
-report, and prints one more line before the last:
+report, and prints one more line before the loops line. The loop groups are
+then also split by damlc's verdict, and the loops line counts the groups whose
+Daml damlc builds:
 
     damlc: 200 Daml texts, 157 bad, 22 bad Daml groups
+    loops: 19 inputs with loop findings, 4 loop groups, 1 builds with damlc
 
-Exit status: 0 when no input crashed and no Daml was bad, 1 when any input
-crashed or any Daml text was bad, 2 for a usage error (as for check, and a
---reports folder that cannot be made, a report that cannot be written, or dpm
-failing during the damlc step), 130 on Ctrl-C, after all the lines and the
-report for the inputs so far. A first Ctrl-C stops the inputs, and the run
-still builds the Daml and shrinks. A Ctrl-C while damlc builds keeps the
-batches already built and stops the damlc step. A Ctrl-C while it shrinks
-stops the shrinking: the groups not shrunk yet get "shrunk": null.
+Exit status: 0 when no input crashed, no Daml was bad, and no loop group was
+found, 1 when any input crashed, any Daml text was bad, or the report has a
+loop group, 2 for a usage error (as for check, and a --reports folder that
+cannot be made, a report that cannot be written, or dpm failing during the
+damlc step), 130 on Ctrl-C, after all the lines and the report for the inputs
+so far. A first Ctrl-C stops the inputs, and the run still builds the Daml and
+shrinks. A Ctrl-C while damlc builds keeps the batches already built and stops
+the damlc step. A Ctrl-C while it shrinks stops the shrinking: the groups not
+shrunk yet get "shrunk": null.
 
     damlforge-fuzz shrink FILE
 
@@ -84,7 +104,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from damlforge_fuzz import DamlcSummary, DamlError, Limit, Outcome, Seed, Totals
+    from damlforge_fuzz import (
+        DamlcSummary,
+        DamlError,
+        Limit,
+        LoopBug,
+        LoopGroup,
+        Outcome,
+        Seed,
+        Totals,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -198,9 +227,16 @@ def _check(paths: Sequence[Path], damlc: bool) -> int:
         return 2
     status = 0
     for seed, outcome in zip(seeds, outcomes, strict=True):
-        error = verdicts.get(sources.get(seed.path))
-        print(_line(seed.path, outcome) if error is None else _bad_daml_line(seed.path, error))
-        if not isinstance(outcome, Ok) or error is not None:
+        source = sources.get(seed.path)
+        error = verdicts.get(source)
+        bugs = outcome.loop_bugs if isinstance(outcome, Ok) else ()
+        if bugs:
+            print(_bad_loop_line(seed.path, bugs, source in verdicts, error))
+        elif error is not None:
+            print(_bad_daml_line(seed.path, error))
+        else:
+            print(_line(seed.path, outcome))
+        if not isinstance(outcome, Ok) or error is not None or bugs:
             status = 1
     return status
 
@@ -222,7 +258,7 @@ def _run(
         seeds = [Seed.load(path) for path in _vy_files(seed_folders or [Path("contracts")])]
         if damlc:
             _need_daml_yaml(seeds)
-            _seeds_build(seeds)
+        _check_seeds(seeds, damlc)
     except (OSError, ValueError, DamlcUnavailable) as error:
         print(f"damlforge-fuzz run: {error}", file=sys.stderr)
         return 2
@@ -254,6 +290,8 @@ def _run(
         dpm_failed = True
     if report.damlc is not None:
         print(_damlc_line(report.damlc, len(report.bad_daml_groups())), flush=True)
+    loop_groups = report.loop_groups()
+    print(_loops_line(loop_groups, damlc), flush=True)
     try:
         report.shrink()
     except KeyboardInterrupt:
@@ -268,7 +306,8 @@ def _run(
         return 2
     if report.run.interrupted:
         return 130
-    return 1 if report.totals.crash or (report.damlc and report.damlc.bad_texts) else 0
+    bad = report.totals.crash or (report.damlc and report.damlc.bad_texts) or loop_groups
+    return 1 if bad else 0
 
 
 def _need_daml_yaml(seeds: Sequence[Seed]) -> None:
@@ -278,23 +317,35 @@ def _need_daml_yaml(seeds: Sequence[Seed]) -> None:
             raise ValueError(f"--damlc needs a daml.yaml for {seed.path}, and found none")
 
 
-def _seeds_build(seeds: Sequence[Seed]) -> None:
-    """Raise ValueError unless forge compiles every seed and damlc builds its Daml.
+def _check_seeds(seeds: Sequence[Seed], damlc: bool) -> None:
+    """Raise ValueError when the loop check finds a bug in a seed. With damlc, also
+    when forge does not compile a seed or damlc rejects a seed's Daml.
 
-    One build before input 1, so a missing dpm or SDK fails in about a second,
-    not after the run, and no bad Daml group comes from a seed itself. Raises
-    DamlcUnavailable when dpm cannot build.
+    One compile per seed, before input 1, in every run: a seed's own loop bug
+    would be in almost every input. Without damlc, a seed that forge does not
+    compile is still accepted. With damlc, one build of all the seeds' Daml, so
+    a missing dpm or SDK fails in about a second, not after the run, and no bad
+    Daml group comes from a seed itself. Raises DamlcUnavailable when dpm
+    cannot build.
     """
     from damlforge_fuzz import DamlSource, Ok, build_daml, compile_and_sort
 
     sources = {}
     for seed in seeds:
         outcome = compile_and_sort(seed.text, seed)
+        if isinstance(outcome, Ok) and outcome.loop_bugs:
+            raise ValueError(
+                f"the loop check finds a bug in seed {seed.path}: {_bugs_text(outcome.loop_bugs)}"
+            )
+        if not damlc:
+            continue
         if not isinstance(outcome, Ok):
             raise ValueError(
                 f"--damlc needs seeds that forge compiles: {_line(seed.path, outcome)}"
             )
         sources[DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)] = seed
+    if not damlc:
+        return
     for source, error in build_daml(sources):
         if error is not None:
             raise ValueError(
@@ -360,6 +411,23 @@ def _damlc_line(damlc: DamlcSummary, groups: int) -> str:
         f"damlc: {_plural(damlc.checked_texts, 'Daml text')}, {damlc.bad_texts} bad, "
         f"{_plural(groups, 'bad Daml group')}"
     )
+
+
+def _loops_line(groups: Sequence[LoopGroup], damlc: bool) -> str:
+    """'loops: 19 inputs with loop findings, 4 loop groups, 1 builds with damlc'.
+
+    Every number comes from the groups. The last part is there only with
+    --damlc. Its verb agrees with the groups: '1 builds', '7 build'.
+    """
+    inputs = sum(group.count for group in groups)
+    line = (
+        f"loops: {_plural(inputs, 'input')} with loop findings, "
+        f"{_plural(len(groups), 'loop group')}"
+    )
+    if damlc:
+        builds = sum(group.damlc == "builds" for group in groups)
+        line += f", {builds} {'builds' if builds == 1 else 'build'} with damlc"
+    return line
 
 
 def _final_line(random_seed: int, totals: Totals) -> str:
@@ -447,6 +515,25 @@ def _line(path: Path, outcome: Outcome) -> str:
 def _bad_daml_line(path: Path, error: DamlError) -> str:
     """'BAD_DAML emit   iou.vy  Variable not in scope: ...': forge wrote Daml, damlc rejects it."""
     return f"{error.label:<9}{'emit':<7}{path}  {error.message}"
+
+
+def _bad_loop_line(
+    path: Path, bugs: Sequence[LoopBug], built: bool, error: DamlError | None
+) -> str:
+    """'BAD_LOOP emit   b19.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20'.
+
+    When damlc built the Daml (`built`), the line ends with '; damlc builds' or
+    '; damlc rejects: ' and damlc's first error line.
+    """
+    line = f"{bugs[0].label:<9}{'emit':<7}{path}  {_bugs_text(bugs)}"
+    if not built:
+        return line
+    return line + ("; damlc builds" if error is None else f"; damlc rejects: {error.message}")
+
+
+def _bugs_text(bugs: Sequence[LoopBug]) -> str:
+    """'L2 L4: fetch at Daml line 22 in the pure foldl of line 20': every check, then the first bug."""
+    return f"{' '.join(bug.check for bug in bugs)}: {bugs[0].detail}"
 
 
 def _detail(outcome: Outcome) -> str:

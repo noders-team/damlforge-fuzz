@@ -13,7 +13,7 @@ import difflib
 from pathlib import Path
 
 from damlforge_fuzz import Count, Crash, Ok, Rejected, Seed, fuzz
-from damlforge_fuzz.cli import _vy_files
+from damlforge_fuzz.cli import _bugs_text, _vy_files
 
 
 def main() -> None:
@@ -42,6 +42,8 @@ def _result(outcome) -> str:
     match outcome:
         case None:
             return "SKIPPED (the changes left the text as it was, so forge did not compile it)"
+        case Ok(loop_bugs=bugs) if bugs:
+            return f"BAD_LOOP (forge wrote Daml with a loop bug) {_bugs_text(bugs)}"
         case Ok():
             return "OK (forge wrote Daml)"
         case Rejected(stage=stage, message=message):

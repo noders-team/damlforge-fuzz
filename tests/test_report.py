@@ -128,13 +128,19 @@ def test_report_json_has_every_field_with_its_type(counted):
 
 
 def test_group_counts_add_up_to_the_printed_crash_count(counted):
-    status, (start, final, report_line), folder, doc = counted
+    status, (start, final, loops_line, report_line), folder, doc = counted
 
     assert start == "random seed 1, 9 seeds, 400 inputs"
     printed = dict(zip(COUNTS, map(int, FINAL_LINE.fullmatch(final).groups()[1:])))
     assert printed == doc["totals"]
     assert sum(group["count"] for group in crash(doc)) == printed["crash"]
     assert status == 1
+    loops = [group for group in doc["groups"] if group["kind"] == "bad_loop"]
+    inputs = sum(group["count"] for group in loops)
+    assert loops_line == (
+        f"loops: {inputs} input{'' if inputs == 1 else 's'} with loop findings, "
+        f"{len(loops)} loop group{'' if len(loops) == 1 else 's'}"
+    )
     assert report_line == f"{_groups(len(crash(doc)))}, report in {folder}"
 
 
@@ -280,7 +286,7 @@ def test_the_run_folder_is_named_after_the_start_and_never_reused(tmp_path, monk
 
 
 @pytest.mark.parametrize(
-    ("outcome", "status", "third_line"),
+    ("outcome", "status", "last_line"),
     [
         (Ok("", "Iou"), 0, "0 crash groups, report in {}"),
         (Crash(Stage.LOWER, "KeyError", "'x'", ForgeLine("forge/x.py", 1)), 1,
@@ -288,8 +294,8 @@ def test_the_run_folder_is_named_after_the_start_and_never_reused(tmp_path, monk
     ],
     ids=["no-crash", "one-key"],
 )  # fmt: skip
-def test_the_third_line_counts_the_groups(
-    outcome, status, third_line, tmp_path, monkeypatch, capsys
+def test_the_last_line_counts_the_crash_groups(
+    outcome, status, last_line, tmp_path, monkeypatch, capsys
 ):
     monkeypatch.setattr("damlforge_fuzz.runner.compile_and_sort", lambda text, seed: outcome)
     monkeypatch.chdir(PROJECT)
@@ -298,7 +304,7 @@ def test_the_third_line_counts_the_groups(
         capsys, tmp_path, "contracts/iou", "--count", "50", "--random-seed", "1"
     )
     assert result_status == status
-    assert lines[2] == third_line.format(folder)
+    assert lines[-1] == last_line.format(folder)
     assert len(doc["groups"]) == status
 
 
@@ -327,7 +333,7 @@ def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, c
     monkeypatch.setattr("damlforge_fuzz.runner.compile_and_sort", interrupted_at_call_100)
     monkeypatch.chdir(PROJECT)
 
-    status, (_, final, _), folder, doc = run(
+    status, (_, final, _, _), folder, doc = run(
         capsys, tmp_path, "--count", "400", "--random-seed", "1"
     )
     assert status == 130
@@ -359,7 +365,7 @@ def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeyp
 
     status, lines, folder, doc = run(capsys, tmp_path, "--count", "400", "--random-seed", "1")
     assert status == 130
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert doc["run"]["interrupted"] is True
     first, *rest = crash(doc)
     assert rest, "400 inputs should crash forge in at least two groups"

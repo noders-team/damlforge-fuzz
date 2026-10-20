@@ -312,9 +312,15 @@ def bad_groups(doc):
 def test_damlc_adds_one_line_and_changes_no_other(runs):
     (status, lines, folder, doc), (_, plain, plain_folder, plain_doc) = runs
 
-    assert len(lines) == 4 and len(plain) == 3
+    assert len(lines) == 5 and len(plain) == 4
     assert lines[:2] == plain[:2]
-    assert lines[3] == plain[2].replace(str(plain_folder), str(folder))
+    assert lines[4] == plain[3].replace(str(plain_folder), str(folder))
+    loops = [group for group in doc["groups"] if group["kind"] == "bad_loop"]
+    builds = sum(group["damlc"] == "builds" for group in loops)
+    assert lines[3] == plain[2].split(", ")[0] + (
+        f", {len(loops)} loop group{'' if len(loops) == 1 else 's'}, "
+        f"{builds} build{'s' if builds == 1 else ''} with damlc"
+    )
     checked, bad, groups = map(int, DAMLC_LINE.fullmatch(lines[2]).groups())
     damlc = doc["damlc"]
     assert (checked, bad, groups) == (
@@ -390,7 +396,12 @@ def test_each_saved_bad_daml_input_is_bad_daml_again_with_check(runs, capsys):
     for group in bad_groups(doc):
         path = folder / group["input_file"]
         assert main(["check", "--damlc", str(path)]) == 1
-        assert capsys.readouterr().out == f"BAD_DAML emit   {path}  {group['message']}\n"
+        out = capsys.readouterr().out
+        # A loop bug names the cause, so check prints BAD_LOOP with damlc's error at the end.
+        assert out == f"BAD_DAML emit   {path}  {group['message']}\n" or (
+            out.startswith(f"BAD_LOOP emit   {path}  ")
+            and out.endswith(f"; damlc rejects: {group['message']}\n")
+        ), out
 
 
 def test_report_md_explains_bad_daml_and_lists_every_group(runs):
@@ -433,7 +444,7 @@ def test_ctrl_c_during_damlc_keeps_the_finished_batches(dpm, tmp_path, monkeypat
 
     status, lines, folder, doc = run(tmp_path, "--count", "300", "--random-seed", "1", "--damlc")
     assert status == 130
-    assert len(lines) == 4
+    assert len(lines) == 5
     assert doc["run"]["interrupted"] is True
     assert doc["damlc"]["interrupted"] is True
     assert doc["damlc"]["checked_texts"] == 5

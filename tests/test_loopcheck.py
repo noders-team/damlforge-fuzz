@@ -164,21 +164,24 @@ def test_every_seed_is_ok_with_no_loop_bug(path):
 
 
 BUG_PROGRAMS = {
-    "b17_create_append": "L1",
-    "b18_fetch_in_sum": "L1",
-    "b19_fetch_in_if_test": "L2 L4",
-    "b20_fetch_in_plain_function": "L2 L4",
-    "b21_return_in_create_loop": "L3",
+    "b17_create_append": "L1: foldlA at Daml line 20 with no import DA.Action",
+    "b18_fetch_in_sum": "L1: foldlA at Daml line 20 with no import DA.Action",
+    "b19_fetch_in_if_test": "L2 L4: fetch at Daml line 22 in the pure foldl of line 20",
+    "b20_fetch_in_plain_function": "L2 L4: fetch at Daml line 9 in the pure foldl of line 7",
+    "b21_return_in_create_loop": "L3: the return in a loop of choice GiveUntil at Daml line 14 "
+    "is lost (1 loop with a return, 0 early-return helpers)",
 }
+"""Each bug program in bugs/loops/: every check it fails, and its first bug."""
 
 
 @pytest.mark.parametrize("name", BUG_PROGRAMS)
-def test_each_bug_program_is_ok_with_its_loop_checks(name, fixture_forge):
+def test_each_bug_program_is_ok_with_its_loop_bugs(name, fixture_forge):
     seed = Seed.load(PROJECT / "bugs" / "loops" / f"{name}.vy")
     outcome = compile_and_sort(seed.text, seed)
     assert isinstance(outcome, Ok)
-    assert " ".join(bug.check for bug in outcome.loop_bugs) == BUG_PROGRAMS[name]
-    assert outcome.loop_key == BUG_PROGRAMS[name].split()[0]
+    checks = " ".join(bug.check for bug in outcome.loop_bugs)
+    assert f"{checks}: {outcome.loop_bugs[0].detail}" == BUG_PROGRAMS[name]
+    assert outcome.loop_key == checks.split()[0]
 
 
 @pytest.mark.parametrize("name", EXPECTED)
@@ -332,3 +335,112 @@ def test_groups_of_each_kind_from_one_seed_have_their_own_folder(loop_run_damlc)
     assert any(found == {"crash", "bad_daml", "bad_loop"} for found in kinds.values()), kinds
     files = [group["input_file"] for group in doc["groups"]]
     assert len(set(files)) == len(files)
+
+
+def loops_line(groups):
+    inputs = sum(group["count"] for group in groups)
+    return (
+        f"loops: {inputs} input{'' if inputs == 1 else 's'} with loop findings, "
+        f"{len(groups)} loop group{'' if len(groups) == 1 else 's'}"
+    )
+
+
+def test_the_loops_line_comes_before_the_last_line_and_counts_the_loop_groups(
+    loop_run, loop_run_damlc
+):
+    status, lines, _, doc = loop_run
+    assert len(lines) == 4 and lines[2] == loops_line(loop_groups(doc))
+    assert status == 1
+
+    _, lines, _, doc = loop_run_damlc
+    builds = sum(group["damlc"] == "builds" for group in loop_groups(doc))
+    assert len(lines) == 5 and lines[2].startswith("damlc: ")
+    assert lines[3] == (
+        f"{loops_line(loop_groups(doc))}, {builds} build{'s' if builds == 1 else ''} with damlc"
+    )
+
+
+def test_a_run_whose_only_finding_is_a_loop_bug_returns_1(tmp_path, monkeypatch):
+    bug = LoopBug(LoopCheck.L4, 5, "fetch at Daml line 5 is used as a value, not bound with <-")
+    monkeypatch.setattr(
+        "damlforge_fuzz.runner.compile_and_sort", lambda text, seed: Ok("", "Iou", (bug,))
+    )
+
+    status, lines, _, doc = run(tmp_path, "contracts/iou", "--count", "50", "--random-seed", "1")
+    ok = int(re.search(r", (\d+) OK,", lines[1]).group(1))
+    assert ", 0 crash, " in lines[1]
+    assert lines[2] == f"loops: {ok} inputs with loop findings, 1 loop group"
+    assert [(g["id"], g["check"], g["count"]) for g in doc["groups"]] == [("l01", "L4", ok)]
+    assert status == 1
+
+
+def test_check_prints_bad_loop_for_each_bug_program_and_returns_1(
+    fixture_forge, monkeypatch, capsys
+):
+    monkeypatch.chdir(PROJECT)
+
+    assert main(["check", "bugs/loops"]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        f"BAD_LOOP emit   bugs/loops/{name}.vy  {bugs}" for name, bugs in BUG_PROGRAMS.items()
+    ]
+
+
+def test_check_damlc_ends_each_bad_loop_line_with_damlcs_verdict(
+    dpm, fixture_forge, monkeypatch, capsys
+):
+    monkeypatch.chdir(PROJECT)
+    no_foldl_a = "damlc rejects: Variable not in scope: foldlA"
+    no_field = (
+        "damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ "
+        "on value of type ‘Update"
+    )
+    verdicts = [no_foldl_a, no_foldl_a, no_field, no_field, "damlc builds"]
+
+    assert main(["check", "--damlc", "bugs/loops"]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        f"BAD_LOOP emit   bugs/loops/{name}.vy  {bugs}; {verdict}"
+        for (name, bugs), verdict in zip(BUG_PROGRAMS.items(), verdicts, strict=True)
+    ]
+
+
+def test_a_seed_with_a_loop_bug_stops_the_run_before_input_1(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(PROJECT)
+    reports = tmp_path / "reports"
+
+    status = main(
+        ["run", "bugs/loops/b17_create_append.vy", "--count", "10", "--reports", str(reports)]
+    )
+    out, err = capsys.readouterr()
+    assert (status, out) == (2, "")
+    assert err == (
+        "damlforge-fuzz run: the loop check finds a bug in seed bugs/loops/b17_create_append.vy: "
+        "L1: foldlA at Daml line 20 with no import DA.Action\n"
+    )
+    assert not reports.exists()
+
+
+def test_check_shows_each_saved_loop_group_again(loop_run, capsys):
+    _, _, folder, doc = loop_run
+
+    for group in loop_groups(doc):
+        path = folder / group["input_file"]
+        assert main(["check", str(path)]) == 1
+        assert capsys.readouterr().out == (
+            f"BAD_LOOP emit   {path}  {' '.join(group['checks'])}: {group['message']}\n"
+        )
+
+
+def test_check_damlc_shows_each_saved_loop_group_again_with_its_verdict(loop_run_damlc, capsys):
+    _, _, folder, doc = loop_run_damlc
+
+    for group in loop_groups(doc):
+        path = folder / group["input_file"]
+        verdict = (
+            "damlc builds"
+            if group["damlc"] == "builds"
+            else f"damlc rejects: {group['damlc_error']}"
+        )
+        assert main(["check", "--damlc", str(path)]) == 1
+        assert capsys.readouterr().out == (
+            f"BAD_LOOP emit   {path}  {' '.join(group['checks'])}: {group['message']}; {verdict}\n"
+        )
