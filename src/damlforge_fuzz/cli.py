@@ -1,5 +1,6 @@
 """The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`; unit 4 adds its report;
-unit 5 adds shrinking and `shrink`; unit 6 adds --damlc; unit 8 adds the loop check.
+unit 5 adds shrinking and `shrink`; unit 6 adds --damlc; unit 8 adds the loop check; unit 10
+shrinks the loop groups.
 
     damlforge-fuzz check [--damlc] PATH [PATH ...]
 
@@ -50,8 +51,8 @@ the 60-second run above. The loops line counts the OK inputs whose Daml has a
 loop bug (BAD_LOOP) and their loop groups, one for each first check. The last
 line names the run folder, which every run makes under --reports (default:
 reports): report.json, report.md, and one folder per group with the group's
-first input, and for a crash group its shrunk copy. Between the loops line and
-the last line, `run` shrinks the input of each crash group.
+first input and its shrunk copy. Between the loops line and the last line,
+`run` shrinks the input of each crash group and each loop group.
 
 Before input 1, `run` compiles each seed. When the loop check finds a bug in
 a seed, it prints one line to stderr and exits 2, because that bug would be
@@ -68,15 +69,19 @@ Daml damlc builds:
     damlc: 200 Daml texts, 157 bad, 22 bad Daml groups
     loops: 19 inputs with loop findings, 4 loop groups, 1 builds with damlc
 
+With --damlc, the shrink of a loop group also keeps damlc's verdict, so it
+builds the Daml of the candidates: a few seconds per loop group.
+
 Exit status: 0 when no input crashed, no Daml was bad, and no loop group was
 found, 1 when any input crashed, any Daml text was bad, or the report has a
 loop group, 2 for a usage error (as for check, and a --reports folder that
 cannot be made, a report that cannot be written, or dpm failing during the
-damlc step), 130 on Ctrl-C, after all the lines and the report for the inputs
-so far. A first Ctrl-C stops the inputs, and the run still builds the Daml and
-shrinks. A Ctrl-C while damlc builds keeps the batches already built and stops
-the damlc step. A Ctrl-C while it shrinks stops the shrinking: the groups not
-shrunk yet get "shrunk": null.
+damlc step or the shrinking, after the report is written), 130 on Ctrl-C,
+after all the lines and the report for the inputs so far. A first Ctrl-C
+stops the inputs, and the run still builds the Daml and shrinks. A Ctrl-C
+while damlc builds keeps the batches already built and stops the damlc step.
+A Ctrl-C while it shrinks stops the shrinking: the groups not shrunk yet get
+"shrunk": null.
 
     damlforge-fuzz shrink FILE
 
@@ -296,6 +301,9 @@ def _run(
         report.shrink()
     except KeyboardInterrupt:
         report.interrupt()
+    except DamlcUnavailable as error:
+        print(f"damlforge-fuzz run: damlc: {error}", file=sys.stderr)
+        dpm_failed = True
     try:
         report.write()
     except OSError as error:

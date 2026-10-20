@@ -25,6 +25,8 @@ This module imports the compiler, so it loads forge. It owns three decisions:
           groups/l01/loop_give.vy    the first input of the loop group
           groups/l01/daml.yaml       a copy of the seed's daml.yaml, when it has one
           groups/l01/LoopGive.daml   forge's Daml for that input
+          groups/l01/shrunk/loop_give.vy    the shrunk input
+          groups/l01/shrunk/LoopGive.daml   forge's Daml for the shrunk input
 
 Time enters a run only here: Report.add reads the clock. fuzz() and the
 inputs never see it, so `--count N --random-seed S` gives the same inputs, the
@@ -44,11 +46,20 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Literal
 
-from damlforge_fuzz.compiler import FORGE_VERSION, STAGE_TEXT, Crash, CrashKey, Ok, Seed, Stage
+from damlforge_fuzz.compiler import (
+    FORGE_VERSION,
+    STAGE_TEXT,
+    Crash,
+    CrashKey,
+    Ok,
+    Seed,
+    Stage,
+    compile_and_sort,
+)
 from damlforge_fuzz.damlc import DamlcVerdict, DamlError, DamlErrorKey, DamlSource, build_daml
 from damlforge_fuzz.loopcheck import LOOP_CHECK_TEXT, LoopBug, LoopCheck
 from damlforge_fuzz.runner import Count, Limit, Seconds, Totals, Tried
-from damlforge_fuzz.shrinker import same_crash, shrink, shrunk_path
+from damlforge_fuzz.shrinker import same_crash, same_loop, shrink, shrunk_path
 
 SCHEMA: Final = 1
 """The version of the report.json shape. Raise it when a change breaks readers:
@@ -168,7 +179,7 @@ class LoopGroup:
 
     Without damlc, `damlc` is None for every input, so there is one group per
     check. The group's first input, the lowest input number, supplies every
-    field except `count`. Not shrunk.
+    field except `count` and the four shrunk fields.
     """
 
     id: str
@@ -198,6 +209,18 @@ class LoopGroup:
     daml_file: str
     """"groups/l01/LoopGive.daml". `damlforge-fuzz check` on input_file prints BAD_LOOP
     with the same checks again."""
+    shrunk: str | None = None
+    """The shortest text the shrinker found by deleting lines of `input` that
+    still has `check` as its first check and, when `damlc` is not None, the
+    same damlc verdict. Its lines are a subsequence of `input`'s lines. The
+    four shrunk fields are None together, only when Ctrl-C or a dpm failure
+    stopped the shrinking before this group."""
+    shrunk_file: str | None = None
+    """Where write() saves `shrunk`: "groups/l01/shrunk/loop_give.vy"."""
+    shrunk_daml: str | None = None
+    """forge's Daml for `shrunk`."""
+    shrunk_daml_file: str | None = None
+    """"groups/l01/shrunk/LoopGive.daml"."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,6 +273,14 @@ class _LoopText:
     check: LoopCheck
 
 
+@dataclass(frozen=True, slots=True)
+class _Shrunk:
+    """A loop group's shrunk input and forge's Daml for it. One object, so both are set at once."""
+
+    vy: str
+    daml: str
+
+
 @dataclass(slots=True)
 class _LoopInputs:
     """The OK inputs with one _LoopText: the first of them, and how many there are."""
@@ -259,6 +290,7 @@ class _LoopInputs:
     module_name: str
     bugs: tuple[LoopBug, ...]
     count: int = 0
+    shrunk: _Shrunk | None = None
 
 
 @dataclass(slots=True)
@@ -403,19 +435,33 @@ class Report:
         self.run = replace(self.run, interrupted=True)
 
     def shrink(self) -> None:
-        """Shrink each group that has no shrunk input yet, in group order.
+        """Shrink each group that has no shrunk input yet: the crash groups, then
+        the loop groups, each in id order.
 
-        Each group shrinks with the run's own Seed and the group's key, so the
-        shrinker compiles exactly as the run did. shrunk and shrunk_file are
-        set together after shrink() returns, so a Ctrl-C in the middle of a
-        group leaves that group untouched. A second call finishes the groups
-        that a Ctrl-C skipped. KeyboardInterrupt propagates to the caller.
+        Each group shrinks with the run's own Seed, so the shrinker compiles
+        exactly as the run did. A crash group keeps its CrashKey. A loop group
+        keeps its first check and its damlc verdict, so call check_daml()
+        first. With a verdict, damlc builds the Daml of the candidates that
+        keep the check, once per Daml text: a few seconds per group. Without
+        one, a loop group shrinks by the check only.
+
+        A group's shrunk fields are set together after its shrink returns, so
+        a Ctrl-C in the middle of a group leaves that group untouched. A second
+        call finishes the groups that a Ctrl-C skipped. KeyboardInterrupt and
+        DamlcUnavailable propagate to the caller.
         """
         for key, group in self.groups.items():
             if group.shrunk is None:
                 text = shrink(group.input, self._seeds[group.seed], same_crash(key))
                 group.shrunk = text
                 group.shrunk_file = str(shrunk_path(PurePosixPath(group.input_file)))
+        for loop in self.loop_groups():
+            kept = self._loops[_LoopText(loop.seed, loop.daml, loop.check)]
+            if kept.shrunk is None:
+                seed = self._seeds[loop.seed]
+                text = shrink(loop.input, seed, same_loop(loop.check, loop.damlc, seed))
+                daml = loop.daml if text == loop.input else compile_and_sort(text, seed).daml
+                kept.shrunk = _Shrunk(text, daml)
 
     def check_daml(self) -> None:
         """Build with damlc every kept Daml text that has no verdict yet, in first-seen order.
@@ -518,6 +564,10 @@ class Report:
                     daml=key.daml,
                     daml_file=f"{folder}/{kept.module_name}.daml",
                 )
+                if kept.shrunk is not None:
+                    group.shrunk, group.shrunk_daml = kept.shrunk.vy, kept.shrunk.daml
+                    group.shrunk_file = str(shrunk_path(PurePosixPath(group.input_file)))
+                    group.shrunk_daml_file = str(shrunk_path(PurePosixPath(group.daml_file)))
             group.count += kept.count
         return list(groups.values())
 
@@ -614,10 +664,8 @@ class Report:
         if shrunk:
             lines += ["", "## Shrunk inputs"]
         for group in shrunk:
-            # One backtick more than the longest run in the text, so the text cannot end the block.
-            fence = "`" * max([3, *(len(run) + 1 for run in re.findall("`+", group.shrunk))])
-            lines += ["", f"### {group.id}: {_exception_at(group)}", "", f"{fence}python"]
-            lines += [group.shrunk.rstrip("\n"), fence]
+            lines += ["", f"### {group.id}: {_exception_at(group)}", ""]
+            lines += _code_block(group.shrunk, "python")
         if self.damlc is not None:
             lines += self._damlc_markdown(self.damlc)
         lines += self._loops_markdown()
@@ -687,8 +735,9 @@ class Report:
         if groups:
             lines += [
                 "",
-                "| Group | Check | Checks | Count | damlc | Seed | First seen | Input | Daml |",
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| Group | Check | Checks | Count | damlc | Seed | First seen | Input | Daml "
+                "| Shrunk |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
             ]
         for group in groups:
             if self._damlc is None:
@@ -705,6 +754,7 @@ class Report:
                 f"input {group.first_seen.input}, {group.first_seen.second} s",
                 f"[{Path(group.input_file).name}]({group.input_file})",
                 f"[{Path(group.daml_file).name}]({group.daml_file})",
+                _shrunk_cell(group),
             ]
             lines.append("| " + " | ".join(cell.replace("|", "\\|") for cell in cells) + " |")
         if groups:
@@ -717,6 +767,14 @@ class Report:
                 if group.damlc_error is not None:
                     line += f". damlc: {_inline_code(group.damlc_error)}"
                 lines.append(line)
+        shrunk = [group for group in groups if group.shrunk is not None]
+        if shrunk:
+            lines += ["", "## Shrunk loop inputs"]
+        for group in shrunk:
+            verdict = "" if group.damlc is None else f", damlc {group.damlc}"
+            lines += ["", f"### {group.id}: {group.check}{verdict}", ""]
+            lines += _code_block(group.shrunk, "python") + [""]
+            lines += _code_block(group.shrunk_daml, "daml")
         return lines
 
     def write(self) -> None:
@@ -756,6 +814,13 @@ class Report:
             if daml_yaml is not None:
                 shutil.copyfile(daml_yaml, saved.parent / "daml.yaml")
             (self.folder / loop.daml_file).write_text(loop.daml, encoding="utf-8", newline="")
+            if loop.shrunk_file is not None:
+                shrunk = self.folder / loop.shrunk_file
+                shrunk.parent.mkdir()
+                shrunk.write_text(loop.shrunk, encoding="utf-8", newline="")
+                (self.folder / loop.shrunk_daml_file).write_text(
+                    loop.shrunk_daml, encoding="utf-8", newline=""
+                )
         (self.folder / "report.md").write_text(self.markdown(), encoding="utf-8")
         document = json.dumps(self.to_json(), indent=2, ensure_ascii=False) + "\n"
         (self.folder / "report.json").write_text(document, encoding="utf-8")
@@ -775,7 +840,8 @@ BAD_LOOP_TEXT: Final = (
     "with no damlc. An input goes to the group of its first check. With --damlc, the "
     "groups are also split by whether damlc builds the Daml. A group that builds is the "
     "most serious case: damlc accepts the wrong code. Each group folder has the input, "
-    "its daml.yaml when the seed has one, and forge's Daml."
+    "its daml.yaml when the seed has one, forge's Daml, and in shrunk/ the shrunk input "
+    "and its Daml."
 )
 """What BAD_LOOP means, in plain English, for report.md."""
 
@@ -792,7 +858,14 @@ def _exception_at(group: Group) -> str:
     return group.exception if group.where is None else f"{group.exception} at {group.where}"
 
 
-def _shrunk_cell(group: Group) -> str:
+def _code_block(text: str, language: str) -> list[str]:
+    """`text` as a fenced Markdown code block: the opening fence, the text, the closing fence."""
+    # One backtick more than the longest run in the text, so the text cannot end the block.
+    fence = "`" * max([3, *(len(run) + 1 for run in re.findall("`+", text))])
+    return [f"{fence}{language}", text.rstrip("\n"), fence]
+
+
+def _shrunk_cell(group: Group | LoopGroup) -> str:
     """'[3 of 42 lines](groups/g02/shrunk/escrow.vy)', or 'not shrunk'."""
     if group.shrunk is None:
         return "not shrunk"

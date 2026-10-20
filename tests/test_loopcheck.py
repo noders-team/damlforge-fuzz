@@ -19,6 +19,7 @@ from conftest import PROJECT, SEED_FILES
 from damlforge_fuzz import (
     FORGE_VERSION,
     LOOP_CHECK_TEXT,
+    DamlcUnavailable,
     DamlSource,
     LoopBug,
     LoopCheck,
@@ -288,6 +289,7 @@ def test_a_run_on_the_loop_seeds_makes_one_loop_group_per_first_check(loop_run):
         assert set(group) == {
             "id", "kind", "check", "checks", "message", "daml_line", "damlc", "damlc_error",
             "count", "first_seen", "seed", "input", "input_file", "daml", "daml_file",
+            "shrunk", "shrunk_file", "shrunk_daml", "shrunk_daml_file",
         }  # fmt: skip
         assert group["checks"][0] == group["check"]
         assert group["checks"] == sorted(group["checks"])
@@ -303,6 +305,38 @@ def test_a_run_on_the_loop_seeds_makes_one_loop_group_per_first_check(loop_run):
         assert (
             folder / "groups" / group["id"] / "daml.yaml"
         ).read_bytes() == seed_yaml.read_bytes()
+        shrunk = f"groups/{group['id']}/shrunk"
+        assert group["shrunk_file"] == f"{shrunk}/{Path(group['seed']).name}"
+        assert group["shrunk_daml_file"] == f"{shrunk}/{module}.daml"
+        assert (folder / group["shrunk_file"]).read_text() == group["shrunk"]
+        assert (folder / group["shrunk_daml_file"]).read_text() == group["shrunk_daml"]
+
+
+def test_each_shrunk_loop_input_is_shorter_and_made_of_its_inputs_lines(loop_run):
+    _, _, _, doc = loop_run
+
+    for group in loop_groups(doc):
+        full = group["input"].splitlines(keepends=True)
+        small = group["shrunk"].splitlines(keepends=True)
+        assert len(small) < len(full), group["id"]
+        rest = iter(full)
+        assert all(line in rest for line in small), f"{group['id']}: not a subsequence"
+
+
+def test_check_shows_each_shrunk_loop_input_in_its_group(loop_run, capsys):
+    _, _, folder, doc = loop_run
+
+    for group in loop_groups(doc):
+        path = folder / group["shrunk_file"]
+        seed = Seed.load(path)
+        outcome = compile_and_sort(seed.text, seed)
+        assert isinstance(outcome, Ok) and outcome.daml == group["shrunk_daml"], group["id"]
+        bugs = outcome.loop_bugs
+        assert bugs[0].check == group["check"], group["id"]
+        assert main(["check", str(path)]) == 1
+        assert capsys.readouterr().out == (
+            f"BAD_LOOP emit   {path}  {' '.join(bug.check for bug in bugs)}: {bugs[0].detail}\n"
+        )
 
 
 def test_each_saved_loop_input_gives_its_group_again(loop_run):
@@ -328,12 +362,19 @@ def test_report_md_explains_the_loop_check_and_lists_every_loop_group(loop_run):
     for group in loops:
         [row] = [line for line in md if line.startswith(f"| {group['id']} |")]
         name, daml = Path(group["input_file"]).name, Path(group["daml_file"]).name
+        lines = f"{len(group['shrunk'].splitlines())} of {len(group['input'].splitlines())} lines"
         assert row == (
             f"| {group['id']} | {group['check']} | {' '.join(group['checks'])} | "
             f"{group['count']} | - | {group['seed']} | input {group['first_seen']['input']}, "
             f"{group['first_seen']['second']} s | [{name}]({group['input_file']}) | "
-            f"[{daml}]({group['daml_file']}) |"
+            f"[{daml}]({group['daml_file']}) | [{lines}]({group['shrunk_file']}) |"
         )
+    section = "\n".join(md).split("\n## Shrunk loop inputs\n", 1)[1]
+    for group in loops:
+        assert (
+            f"\n### {group['id']}: {group['check']}\n\n```python\n{group['shrunk']}```\n\n"
+            f"```daml\n{group['shrunk_daml'].rstrip()}\n```\n"
+        ) in section + "\n", group["id"]
 
 
 def test_with_damlc_each_loop_group_has_the_verdict_a_fresh_build_gives(loop_run_damlc):
@@ -370,7 +411,44 @@ def test_with_damlc_report_md_shows_each_loop_groups_verdict(loop_run_damlc):
             f"- {group['id']}, {Path(group['daml_file']).name} line {group['daml_line']}: "
             f"`{group['message']}`{damlc}"
         )
+        assert f"### {group['id']}: {group['check']}, damlc {group['damlc']}" in md
     assert set(cells) == {"builds", "rejects"}
+
+
+def test_check_damlc_shows_each_shrunk_loop_input_with_its_groups_verdict(loop_run_damlc, capsys):
+    _, _, folder, doc = loop_run_damlc
+
+    for group in loop_groups(doc):
+        path = folder / group["shrunk_file"]
+        assert main(["check", "--damlc", str(path)]) == 1
+        out = capsys.readouterr().out
+        assert out.startswith(f"BAD_LOOP emit   {path}  {group['check']}"), out
+        if group["damlc"] == "builds":
+            assert out.endswith("; damlc builds\n"), out
+        else:
+            assert "; damlc rejects: " in out, out
+
+
+def test_dpm_failing_while_a_loop_group_shrinks_returns_2_after_the_report(
+    dpm, tmp_path, monkeypatch, capsys
+):
+    def dpm_fails(sources):
+        raise DamlcUnavailable("dpm build exited with 1")
+
+    monkeypatch.setattr("damlforge_fuzz.shrinker.build_daml", dpm_fails)
+
+    status, lines, folder, doc = run(
+        tmp_path, *LOOP_SEEDS, "--count", "150", "--random-seed", "1", "--damlc"
+    )
+    assert status == 2
+    assert capsys.readouterr().err == "damlforge-fuzz run: damlc: dpm build exited with 1\n"
+    assert len(lines) == 5
+    crash = [group for group in doc["groups"] if group["kind"] == "crash"]
+    assert crash and all(group["shrunk"] is not None for group in crash)
+    loops = loop_groups(doc)
+    assert loops and all(group["damlc"] is not None for group in loops)
+    assert [group["shrunk"] for group in loops] == [None] * len(loops)
+    assert not list(folder.glob("groups/l*/shrunk"))
 
 
 def test_with_damlc_the_loop_groups_split_the_same_inputs_by_verdict(loop_run, loop_run_damlc):

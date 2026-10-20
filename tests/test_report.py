@@ -18,7 +18,7 @@ from pathlib import Path
 
 import forge
 import pytest
-from conftest import CONTRACTS, PROJECT
+from conftest import CONTRACTS, PROJECT, SEED_FILES
 
 from damlforge_fuzz import (
     STAGE_TEXT,
@@ -31,8 +31,10 @@ from damlforge_fuzz import (
     Report,
     Seed,
     Stage,
+    compile_and_sort,
     fuzz,
     input_sequence,
+    shrink,
 )
 from damlforge_fuzz.cli import main
 
@@ -321,8 +323,6 @@ def test_a_reports_path_that_is_a_file_returns_2_and_prints_nothing(
 
 
 def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, capsys):
-    from damlforge_fuzz import compile_and_sort
-
     calls = itertools.count(1)
 
     def interrupted_at_call_100(text, seed):
@@ -351,8 +351,6 @@ def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, c
 
 
 def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeypatch, capsys):
-    from damlforge_fuzz import shrink
-
     calls = itertools.count(1)
 
     def interrupted_in_group_2(text, seed, keep):
@@ -376,6 +374,48 @@ def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeyp
     assert all(
         line.endswith(" | not shrunk |") for line in md if line.startswith(("| g02 |", "| g03 |"))
     )
+
+
+def test_ctrl_c_in_a_loop_group_leaves_it_not_shrunk_and_a_second_shrink_finishes_it(
+    tmp_path, monkeypatch
+):
+    seeds = [Seed.load(path) for path in SEED_FILES if "loop_" in path.name]
+    report = Report.open(seeds, 1, Count(300), tmp_path)
+    for tried in fuzz(seeds, 1, Count(300)):
+        report.add(tried)
+    calls = itertools.count(1)
+
+    def interrupted_in_loop_group_2(text, seed, keep):
+        if next(calls) == len(report.groups) + 2:
+            raise KeyboardInterrupt
+        return shrink(text, seed, keep)
+
+    monkeypatch.setattr("damlforge_fuzz.report.shrink", interrupted_in_loop_group_2)
+    with pytest.raises(KeyboardInterrupt):
+        report.shrink()
+    monkeypatch.undo()
+
+    first, second, *rest = report.loop_groups()
+    assert first.shrunk is not None and first.shrunk_daml is not None
+    assert (second.shrunk, second.shrunk_file, second.shrunk_daml, second.shrunk_daml_file) == (
+        None, None, None, None
+    )  # fmt: skip
+    report.write()
+    assert sorted(p.name for p in (report.folder / "groups" / "l01" / "shrunk").iterdir()) == [
+        Path(first.daml_file).name, Path(first.input_file).name
+    ]  # fmt: skip
+    assert not (report.folder / "groups" / "l02" / "shrunk").exists()
+    [row] = [line for line in report.markdown().splitlines() if line.startswith("| l02 |")]
+    assert row.endswith(" | not shrunk |"), row
+
+    report.shrink()
+    again, second, *rest = report.loop_groups()
+    assert (again.shrunk, again.shrunk_daml) == (first.shrunk, first.shrunk_daml)
+    for group in [second, *rest]:
+        assert len(group.shrunk.splitlines()) < len(group.input.splitlines()), group.id
+        assert group.shrunk_file == f"groups/{group.id}/shrunk/{Path(group.seed).name}"
+        outcome = compile_and_sort(group.shrunk, Seed.load(Path(group.seed)))
+        assert (outcome.daml, outcome.loop_key) == (group.shrunk_daml, group.check), group.id
 
 
 def test_the_timeline_has_one_tick_per_second(tmp_path, monkeypatch, capsys):
