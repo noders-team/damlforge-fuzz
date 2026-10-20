@@ -225,6 +225,11 @@ def test_plan_check_2_the_seeds_build(dpm, monkeypatch, capsys):
         "OK       emit   contracts/ballot/ballot.vy",
         "OK       emit   contracts/escrow/escrow.vy",
         "OK       emit   contracts/iou/iou.vy",
+        "OK       emit   contracts/loop_count/loop_count.vy",
+        "OK       emit   contracts/loop_give/loop_give.vy",
+        "OK       emit   contracts/loop_many/loop_many.vy",
+        "OK       emit   contracts/loop_pure/loop_pure.vy",
+        "OK       emit   contracts/loop_verify/loop_verify.vy",
     ]
 
 

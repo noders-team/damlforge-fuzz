@@ -74,7 +74,7 @@ def test_no_seed_folder_means_every_seed_in_contracts(monkeypatch, run):
     monkeypatch.chdir(PROJECT)
 
     _, lines = run("--count", "1", "--random-seed", "1")
-    assert lines[0] == "random seed 1, 4 seeds, 1 input"
+    assert lines[0] == "random seed 1, 9 seeds, 1 input"
 
 
 def test_a_run_on_iou_compiles_only_changed_copies_of_iou():

@@ -1,0 +1,7 @@
+sdk-version: 3.5.2
+name: damlforge-fuzz-loop-bugs
+source: .
+version: 0.1.0
+dependencies:
+  - daml-prim
+  - daml-stdlib

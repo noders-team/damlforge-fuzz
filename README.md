@@ -121,15 +121,20 @@ Run these commands from the root of this repository.
    OK       emit   contracts/ballot/ballot.vy
    OK       emit   contracts/escrow/escrow.vy
    OK       emit   contracts/iou/iou.vy
+   OK       emit   contracts/loop_count/loop_count.vy
+   OK       emit   contracts/loop_give/loop_give.vy
+   OK       emit   contracts/loop_many/loop_many.vy
+   OK       emit   contracts/loop_pure/loop_pure.vy
+   OK       emit   contracts/loop_verify/loop_verify.vy
    ```
 
 2. Fuzz the seeds for 60 seconds:
 
    ```
    $ damlforge-fuzz run --seconds 60
-   random seed 756405, 4 seeds, 60 seconds
-   random seed 756405: 70051 inputs, 13183 OK, 47799 rejected, 3990 crash, 5079 skipped
-   15 crash groups, report in reports/2026-10-19T19-20-19Z
+   random seed 140572, 9 seeds, 60 seconds
+   random seed 140572: 94483 inputs, 17026 OK, 63453 rejected, 7092 crash, 6912 skipped
+   14 crash groups, report in reports/2026-10-20T07-50-26Z
    ```
 
 3. Open `report.md` in the report folder.
@@ -230,11 +235,21 @@ To repeat a run exactly, give its random seed and its number of inputs.
 For example, this command repeats the 60-second run in [Quick start](#quick-start):
 
 ```sh
-damlforge-fuzz run --count 70051 --random-seed 756405
+damlforge-fuzz run --count 94483 --random-seed 140572
 ```
 
 Do not use `--seconds` to repeat a run.
 The number of copies in a time limit changes with the speed of the machine.
+
+`report.json` records the seeds of a run in `run.seeds`.
+A run without `SEED_FOLDER` uses every seed in `contracts/`, so a new seed in `contracts/` changes the copies of such a run.
+To repeat a run from before a seed was added, name the seeds of that run.
+For example, the report in `reports/2026-10-19T18-45-34Z` comes from a run on the four seeds that `contracts/` had before the loop seeds.
+This command makes the same copies:
+
+```sh
+damlforge-fuzz run contracts/asset_proposal contracts/ballot contracts/escrow contracts/iou --damlc --count 20000 --random-seed 1
+```
 
 ### `damlforge-fuzz shrink`
 
@@ -265,10 +280,10 @@ That is a bug in forge: its check stage let through a program that it then trans
 
 ```
 $ damlforge-fuzz run --damlc --count 2000 --random-seed 1
-random seed 1, 4 seeds, 2000 inputs
-random seed 1: 2000 inputs, 369 OK, 1356 rejected, 128 crash, 147 skipped
-damlc: 200 Daml texts, 157 bad, 22 bad Daml groups
-11 crash groups, report in reports/2026-10-19T19-20-07Z
+random seed 1, 9 seeds, 2000 inputs
+random seed 1: 2000 inputs, 334 OK, 1377 rejected, 139 crash, 150 skipped
+damlc: 200 Daml texts, 152 bad, 20 bad Daml groups
+10 crash groups, report in reports/2026-10-20T07-52-29Z
 ```
 
 The `damlc:` line comes before the last line:
@@ -342,7 +357,7 @@ These are the usage errors:
 ## Reports
 
 Every run writes a report folder in `reports/`.
-The folder name is the UTC time when the run started, such as `reports/2026-10-19T19-20-07Z`.
+The folder name is the UTC time when the run started, such as `reports/2026-10-20T07-52-29Z`.
 If a folder with that name exists, the run adds `-2`, `-3`, and so on.
 To put the report folders in a different folder, give `--reports DIR`.
 
@@ -400,7 +415,8 @@ To see a `damlc` error again without the fuzzer, run `dpm build` in the bad Daml
 
 ### Shrunk inputs
 
-A crashing input has 30 to 45 lines, but usually only a few of them cause the crash.
+The seeds have 18 to 41 lines, and a crashing input has about as many as its seed.
+Usually only a few of these lines cause the crash.
 After the last copy, the run shrinks the first input of each crash group:
 
 1. The shrinker deletes lines, first in large blocks, then one line or one indented block at a time.
@@ -408,7 +424,8 @@ After the last copy, the run shrinks the first input of each crash group:
 3. It stops when it cannot delete one more line.
 
 The shrunk input has only lines of the full input, in the same order, and no line is changed.
-For the 11 groups of a 2000-copy run, shrinking took less than half a second, and the shrunk inputs have 2 to 12 lines.
+For the 10 crash groups of the 2000-copy run in [Check the Daml with damlc](#check-the-daml-with-damlc), shrinking took about 0.1 seconds.
+The inputs of these groups have 19 to 41 lines, and the shrunk inputs have 1 to 7 lines.
 
 The shrunk input is in `shrunk/` in the group folder, with the same file name as the full input.
 The same file name keeps the Daml module name.
@@ -486,6 +503,34 @@ Separate projects let the fuzzer run on the seeds that you choose.
 | `contracts/ballot/` | `Ballot` | `CastVote`, `Close` |
 | `contracts/escrow/` | `Payout`, `Escrow` | `Release`, `Refund` |
 | `contracts/iou/` | `Iou` | `Transfer`, `Split` |
+| `contracts/loop_count/` | `Iou` | `Count` |
+| `contracts/loop_give/` | `Iou` | `GiveAll` |
+| `contracts/loop_many/` | `Iou` | `Many` |
+| `contracts/loop_pure/` | `Iou` | `Check` |
+| `contracts/loop_verify/` | `Iou` | `Sum` |
+
+### Loop seeds
+
+The `contracts/loop_*` seeds hold `for` loops.
+forge writes a loop with a ledger action, such as `create` or `fetch`, as `foldlA`.
+`loop_many`, `loop_give`, and `loop_count` each have one such loop in a choice, and `loop_verify` has one in a `@ledger_effect` function.
+`loop_pure` has loops without a ledger action, and forge writes them in three other ways.
+It writes the sum with an `if` as `foldl`, the two nested loops as two `foldl`, the loop with an early `return` as a recursive helper function, and the loop with only an `assert` as `all`.
+
+Each loop seed has at most one loop with a ledger action.
+forge adds `import DA.Action (foldlA)` once, for the whole Daml module.
+Some forge bugs write `foldlA` for a loop but do not add the import.
+When a seed has a second `foldlA` loop, that loop adds the import anyway.
+Then `damlc` builds the Daml, and the fuzzer does not see the bug.
+
+To fuzz only the loop seeds, name their folders:
+
+```sh
+damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1
+```
+
+damlforge-fuzz has no option such as `--loops`.
+To fuzz one area of forge, name the seed folders for that area.
 
 ### Check the seeds
 
@@ -524,6 +569,11 @@ To check one seed, run the command in the loop yourself, for example `forge dar 
 A seed that fails a check is a bug in the seed.
 Fix the seed before you use it, so that every crash that the fuzzer finds comes from an edit and not from the seed.
 
+A seed with a `for` loop has two more rules:
+
+- At most one loop in the file has a ledger action, such as `create` or `fetch`. [Loop seeds](#loop-seeds) tells why.
+- No loop uses the code of a known forge loop bug in `bugs/loops/`. Some of these bugs, such as a `return` in a loop that creates a contract, give Daml that `damlc` builds, so the checks do not find them.
+
 ## Development
 
 ### Project layout
@@ -543,6 +593,7 @@ damlforge-fuzz/
 │   └── show_inputs.py    prints each copy of a run, its changes, and its result
 ├── contracts/            the seeds, one Daml project for each seed
 ├── reports/              the reports that are kept in git
+├── bugs/                 hand-written programs that prove forge bugs, with their write-ups
 ├── docs/                 design notes and the progress log
 └── pyproject.toml
 ```

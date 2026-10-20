@@ -1,0 +1,30 @@
+module Test where
+
+import Daml.Script
+import DA.Assert
+import DA.List (sort)
+import B21ReturnInCreateLoop
+
+giveUntil : [Party] -> Party -> Script [Party]
+giveUntil owners stop = do
+  issuer <- allocateParty "issuer"
+  cid <- submit issuer do createCmd Iou with issuer, owner = issuer, amount = 1.0
+  submit issuer do exerciseCmd cid GiveUntil with owners, stop
+  ious <- query @Iou issuer
+  pure (sort [i.owner | (_, i) <- ious, i.owner /= issuer])
+
+control_every_owner_gets_an_iou : Script ()
+control_every_owner_gets_an_iou = do
+  alice <- allocateParty "alice"
+  bob <- allocateParty "bob"
+  stop <- allocateParty "stop"
+  given <- giveUntil [alice, bob] stop
+  given === sort [alice, bob]
+
+return_stops_the_loop : Script ()
+return_stops_the_loop = do
+  alice <- allocateParty "alice"
+  stop <- allocateParty "stop"
+  bob <- allocateParty "bob"
+  given <- giveUntil [alice, stop, bob] stop
+  given === [alice]

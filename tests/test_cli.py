@@ -10,7 +10,9 @@ from conftest import BITAND, CONTRACTS, OWNER_FIELD, PROJECT, copy_iou
 from damlforge_fuzz.cli import main
 
 
-def test_check_on_the_contracts_folder_prints_four_ok_lines_and_returns_0(monkeypatch, capsys):
+def test_check_on_the_contracts_folder_prints_an_ok_line_for_each_seed_and_returns_0(
+    monkeypatch, capsys
+):
     monkeypatch.chdir(PROJECT)
 
     assert main(["check", "contracts"]) == 0
@@ -19,6 +21,11 @@ def test_check_on_the_contracts_folder_prints_four_ok_lines_and_returns_0(monkey
         "OK       emit   contracts/ballot/ballot.vy",
         "OK       emit   contracts/escrow/escrow.vy",
         "OK       emit   contracts/iou/iou.vy",
+        "OK       emit   contracts/loop_count/loop_count.vy",
+        "OK       emit   contracts/loop_give/loop_give.vy",
+        "OK       emit   contracts/loop_many/loop_many.vy",
+        "OK       emit   contracts/loop_pure/loop_pure.vy",
+        "OK       emit   contracts/loop_verify/loop_verify.vy",
     ]
 
 
@@ -59,7 +66,7 @@ def test_check_lists_a_file_once_when_two_arguments_cover_it(monkeypatch, capsys
     monkeypatch.chdir(PROJECT)
 
     assert main(["check", "contracts", "contracts/iou"]) == 0
-    assert len(capsys.readouterr().out.splitlines()) == 4
+    assert len(capsys.readouterr().out.splitlines()) == 9
 
 
 def test_check_skips_hidden_folders(tmp_path, capsys):
