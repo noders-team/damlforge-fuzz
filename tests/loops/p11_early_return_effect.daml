@@ -1,0 +1,30 @@
+module P11EarlyReturnEffect where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice FindBig : Decimal
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        _ <-
+          foldlA
+            (\() c -> do
+              i <- fetch c
+              if i.amount > (100.0 : Decimal)
+                then do
+                  pure (i.amount)
+                else do
+                  pure ())
+            () cids
+        pure ((0.0 : Decimal))

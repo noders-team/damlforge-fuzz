@@ -1,0 +1,25 @@
+module P14Range where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice R : Int
+      with
+        n : Int
+      controller owner
+      do
+        let self = this
+        let total = 0
+        let _damlforge_total2 =
+              foldl
+                (\total i ->
+                  let _damlforge_total1 = total + i in
+                  _damlforge_total1)
+                total [0 .. (n) - 1]
+        pure (_damlforge_total2)

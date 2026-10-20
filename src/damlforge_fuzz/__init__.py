@@ -59,6 +59,15 @@ groups the texts damlc rejects (BAD_DAML). It needs dpm and the Daml SDK::
     report.check_daml()        # after the inputs: every distinct Daml text
     report.bad_daml_groups()   # [BadDamlGroup], ids d01, d02, ...
 
+Unit 8 checks the loops in forge's Daml (BAD_LOOP). The check reads the .vy
+text and the Daml, and needs no forge and no damlc::
+
+    from damlforge_fuzz import LoopCheck, find_loop_bugs
+
+    bugs = find_loop_bugs(vy_text, daml_text)  # (LoopBug, ...): at most one per check
+    bugs[0].check   # LoopCheck.L3, the first check that fails
+    bugs[0].detail  # "the return in a loop of choice GiveUntil at Daml line 14 is lost ..."
+
 Import from this package only. The modules behind it are not part of the API.
 """
 
@@ -86,6 +95,7 @@ if TYPE_CHECKING:
         DamlSource,
         build_daml,
     )
+    from damlforge_fuzz.loopcheck import LOOP_CHECK_TEXT, LoopBug, LoopCheck, find_loop_bugs
     from damlforge_fuzz.mutate import RULE_NAMES, Change, Input, input_sequence
     from damlforge_fuzz.report import (
         BadDamlGroup,
@@ -114,9 +124,10 @@ _HOME = {
         ["DamlError", "DamlErrorKey", "DamlSource", "DamlcUnavailable", "build_daml"], "damlc"
     ),
     **dict.fromkeys(["shrink", "shrunk_path"], "shrinker"),
+    **dict.fromkeys(["LOOP_CHECK_TEXT", "LoopBug", "LoopCheck", "find_loop_bugs"], "loopcheck"),
 }
-"""The module that holds each public name. compiler, runner, and report load forge; mutate
-and damlc do not."""
+"""The module that holds each public name. compiler, runner, and report load forge; mutate,
+damlc, and loopcheck do not."""
 
 __all__ = sorted(_HOME)
 

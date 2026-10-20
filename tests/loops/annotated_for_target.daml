@@ -1,0 +1,21 @@
+module AnnotatedForTarget where
+
+f : [Int] -> Int
+f xs =
+  let n = 0 in
+  let _damlforge_n2 =
+        foldl
+          (\n x ->
+            let _damlforge_n1 = n + x in
+            _damlforge_n1)
+          n xs
+  in
+  _damlforge_n2
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]

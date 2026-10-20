@@ -1,0 +1,25 @@
+module P03PureAccInChoice where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Sum : Decimal
+      with
+        xs : [Decimal]
+      controller owner
+      do
+        let self = this
+        let total = (0.0 : Decimal)
+        let _damlforge_total2 =
+              foldl
+                (\total x ->
+                  let _damlforge_total1 = total + x in
+                  _damlforge_total1)
+                total xs
+        pure (_damlforge_total2)

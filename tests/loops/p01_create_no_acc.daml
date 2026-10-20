@@ -1,0 +1,26 @@
+module P01CreateNoAcc where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Many : Bool
+      with
+        owners : [Party]
+      controller owner
+      do
+        let self = this
+        _ <-
+          foldlA
+            (\() o -> do
+              create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+              pure ())
+            () owners
+        pure (True)

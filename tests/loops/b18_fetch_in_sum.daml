@@ -1,0 +1,26 @@
+module B18FetchInSum where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Total : Decimal
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        let total = (0.0 : Decimal)
+        _damlforge_total3 <-
+          foldlA
+            (\total c -> do
+              _damlforge_effect1 <- fetch c
+              let _damlforge_total2 = total + _damlforge_effect1.amount
+              pure _damlforge_total2)
+            total cids
+        pure (_damlforge_total3)

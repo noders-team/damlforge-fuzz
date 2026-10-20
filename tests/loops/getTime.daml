@@ -1,0 +1,17 @@
+module GetTime where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice T : Bool
+      controller owner
+      do
+        let self = this
+        now <- getTime
+        pure (True)

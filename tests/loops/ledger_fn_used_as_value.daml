@@ -1,0 +1,17 @@
+module LedgerFnUsedAsValue where
+
+mk : Party -> Party -> Decimal -> Update (ContractId Iou)
+mk issuer o a = do
+  create (Iou with issuer = issuer, owner = o, amount = a)
+
+pure_wrap : Party -> Party -> Decimal -> (ContractId Iou)
+pure_wrap issuer o a =
+  mk issuer o a
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]

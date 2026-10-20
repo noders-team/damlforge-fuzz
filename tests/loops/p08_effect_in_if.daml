@@ -1,0 +1,32 @@
+module P08EffectInIf where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Pick : Int
+      with
+        owners : [Party]
+      controller owner
+      do
+        let self = this
+        let n = 0
+        _damlforge_n2 <-
+          foldlA
+            (\n o -> do
+              if o /= self.owner
+                then do
+                  create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+                  let _damlforge_n1 = n + 1
+                  pure _damlforge_n1
+                else do
+                  pure n)
+            n owners
+        pure (_damlforge_n2)

@@ -1,0 +1,37 @@
+module EffectLoopWrappingReturnLoop where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+
+    nonconsuming choice Find : Bool
+      with
+        groups : [[Party]]
+      controller owner
+      do
+        let self = this
+        _ <-
+          foldlA
+            (\() g -> do
+              create (Iou with issuer = self.issuer, owner = self.owner, amount = self.amount)
+              let _damlforge_maybe1 = _damlforge_loop1 self g
+              case _damlforge_maybe1 of
+                Some _damlforge_early2 -> pure _damlforge_early2
+                None -> do
+                  pure ())
+            () groups
+        pure (False)
+
+_damlforge_loop1 (self : Iou) [] = None
+_damlforge_loop1 self (o :: _damlforge_rest) =
+  if o == self.owner
+    then
+      Some True
+    else
+      _damlforge_loop1 self _damlforge_rest

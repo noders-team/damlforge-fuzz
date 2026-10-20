@@ -1,0 +1,29 @@
+module B19FetchInIfTest where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice CountLarger : Int
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        let n = 0
+        let _damlforge_n2 =
+              foldl
+                (\n c ->
+                  if (fetch c).amount > self.amount
+                    then
+                      let _damlforge_n1 = n + 1 in
+                      _damlforge_n1
+                    else
+                      n)
+                n cids
+        pure (_damlforge_n2)

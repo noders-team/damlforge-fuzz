@@ -1,0 +1,24 @@
+module EffectInForList where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+
+    nonconsuming choice B : Int
+      with
+        c : ContractId Iou
+      controller owner
+      do
+        let self = this
+        let n = 0
+        let _damlforge_n2 =
+              foldl
+                (\n p ->
+                  let _damlforge_n1 = n + 1 in
+                  _damlforge_n1)
+                n [(fetch c).owner]
+        pure (_damlforge_n2)

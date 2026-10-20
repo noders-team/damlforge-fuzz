@@ -1,0 +1,25 @@
+module EffectFnReturnInLoop where
+
+import DA.Action (foldlA)
+
+first_big : [ContractId Iou] -> Update Decimal
+first_big cids = do
+  _ <-
+    foldlA
+      (\() c -> do
+        i <- fetch c
+        if i.amount > (1.0 : Decimal)
+          then do
+            pure (i.amount)
+          else do
+            pure ())
+      () cids
+  pure ((0.0 : Decimal))
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]

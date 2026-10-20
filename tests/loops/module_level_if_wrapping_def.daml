@@ -1,0 +1,9 @@
+module ModuleLevelIfWrappingDef where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]

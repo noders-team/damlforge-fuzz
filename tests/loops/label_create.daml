@@ -1,0 +1,32 @@
+module LabelCreate where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+    currency : Text
+  where
+    signatory [issuer]
+    observer [owner]
+    ensure amount > (0.0 : Decimal)
+
+    choice Transfer : ContractId Iou
+      with
+        new_owner : Party
+      controller owner
+      do
+        let self = this
+        create (Iou with issuer = self.issuer, owner = new_owner, amount = self.amount, currency = self.currency)
+
+    choice Split : (ContractId Iou, ContractId Iou)
+      with
+        split_amount : Decimal
+      controller owner
+      do
+        let self = this
+        assertMsg "split amount must be positive" (split_amount > (0.0 : Decimal))
+        assertMsg "split amount must be less than the full amount" (all (\_k -> split_amount < self.amount) ([0 .. (2) - 1]))
+        first <- create (Iou with issuer = self.issuer, owner = self.owner, amount = split_amount, create = self.currency)
+        rest <- create (Iou with issuer = self.issuer, owner = self.owner, amount = self.amount - split_amount, currency = self.currency)
+        pure (first, rest)

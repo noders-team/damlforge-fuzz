@@ -1,0 +1,25 @@
+module ExerciseArchive where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+
+    nonconsuming choice Bye : Bool
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        _ <-
+          foldlA
+            (\() c -> do
+              archive c
+              pure ())
+            () cids
+        pure (True)

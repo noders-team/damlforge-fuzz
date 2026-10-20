@@ -1,0 +1,13 @@
+module LoopDroppedNoAccNoEffect where
+
+f : [Int] -> Int
+f xs =
+  0
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]

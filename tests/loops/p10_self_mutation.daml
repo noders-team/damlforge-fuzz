@@ -1,0 +1,26 @@
+module P10SelfMutation where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    choice Bump : (ContractId Iou, ContractId Iou)
+      with
+        xs : [Decimal]
+      controller owner
+      do
+        let self = this
+        let _damlforge_self3 =
+              foldl
+                (\self x ->
+                  let _damlforge_self2 = self { amount = self.amount + x } in
+                  _damlforge_self2)
+                self xs
+        _damlforge_new_self <- create _damlforge_self3
+        _damlforge_effect1 <- create (Iou with issuer = _damlforge_self3.issuer, owner = _damlforge_self3.owner, amount = _damlforge_self3.amount)
+        pure (_damlforge_new_self, _damlforge_effect1)

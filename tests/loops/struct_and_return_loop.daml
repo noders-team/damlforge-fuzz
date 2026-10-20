@@ -1,0 +1,30 @@
+module StructAndReturnLoop where
+
+data Terms = Terms
+  with
+    amount : Decimal
+  deriving (Eq, Show)
+
+has : [Party] -> Party -> Bool
+has ps p =
+  let _damlforge_maybe1 = _damlforge_loop1 p ps in
+  case _damlforge_maybe1 of
+    Some _damlforge_early2 -> _damlforge_early2
+    None ->
+      False
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    terms : Terms
+  where
+    signatory [issuer]
+
+_damlforge_loop1 p [] = None
+_damlforge_loop1 p (q :: _damlforge_rest) =
+  if q == p
+    then
+      Some True
+    else
+      _damlforge_loop1 p _damlforge_rest

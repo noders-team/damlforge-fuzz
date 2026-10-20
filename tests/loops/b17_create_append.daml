@@ -1,0 +1,26 @@
+module B17CreateAppend where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice GiveEach : [ContractId Iou]
+      with
+        owners : [Party]
+      controller issuer
+      do
+        let self = this
+        let (cids : [ContractId Iou]) = []
+        _damlforge_cids3 <-
+          foldlA
+            (\cids o -> do
+              _damlforge_cids_item1 <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+              let _damlforge_cids2 = cids <> [_damlforge_cids_item1]
+              pure _damlforge_cids2)
+            cids owners
+        pure (_damlforge_cids3)

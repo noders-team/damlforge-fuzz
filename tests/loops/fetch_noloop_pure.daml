@@ -1,0 +1,15 @@
+module FetchNoloopPure where
+
+amount_of : (ContractId Iou) -> Decimal
+amount_of c =
+  let _damlforge_effect1 = fetch c in
+  _damlforge_effect1.amount
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]

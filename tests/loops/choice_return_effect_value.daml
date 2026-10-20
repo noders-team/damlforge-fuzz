@@ -1,0 +1,18 @@
+module ChoiceReturnEffectValue where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+
+    nonconsuming choice Amt : Decimal
+      with
+        c : ContractId Iou
+      controller owner
+      do
+        let self = this
+        _damlforge_effect1 <- fetch c
+        pure (_damlforge_effect1.amount)

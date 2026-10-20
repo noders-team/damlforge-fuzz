@@ -1,0 +1,33 @@
+module P09NestedEffect where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Grid : Int
+      with
+        groups : [[Party]]
+      controller owner
+      do
+        let self = this
+        let n = 0
+        _damlforge_n3 <-
+          foldlA
+            (\n g -> do
+              _damlforge_n2 <-
+                foldlA
+                  (\n o -> do
+                    create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+                    let _damlforge_n1 = n + 1
+                    pure _damlforge_n1)
+                  n g
+              pure _damlforge_n2)
+            n groups
+        pure (_damlforge_n3)

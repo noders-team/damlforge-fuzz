@@ -1,0 +1,31 @@
+module LoopGive where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice GiveAll : ()
+      with
+        owners : [Party]
+        stop : Party
+      controller issuer
+      do
+        let self = this
+        _ <-
+          foldlA
+            (\() o -> do
+              if o /= stop
+                then do
+                  create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+                  pure ()
+                else do
+                  pure ())
+            () owners
+        pure ()

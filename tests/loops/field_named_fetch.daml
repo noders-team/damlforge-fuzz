@@ -1,0 +1,16 @@
+module FieldNamedFetch where
+
+template Iou
+  with
+    issuer : Party
+    fetch : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [fetch]
+
+    nonconsuming choice Dup : ContractId Iou
+      controller issuer
+      do
+        let self = this
+        create (Iou with issuer = self.issuer, fetch = self.fetch, amount = self.amount)

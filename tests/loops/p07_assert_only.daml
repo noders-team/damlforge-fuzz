@@ -1,0 +1,19 @@
+module P07AssertOnly where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Check : Bool
+      with
+        xs : [Decimal]
+      controller owner
+      do
+        let self = this
+        assertMsg "positive" (all (\x -> x > (0.0 : Decimal)) xs)
+        pure (True)

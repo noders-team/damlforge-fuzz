@@ -1,0 +1,30 @@
+module RetInPureChoice where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Find : Bool
+      with
+        ps : [Party]
+      controller owner
+      do
+        let self = this
+        let _damlforge_maybe1 = _damlforge_loop1 self ps
+        case _damlforge_maybe1 of
+          Some _damlforge_early2 -> pure _damlforge_early2
+          None -> do
+            pure (False)
+
+_damlforge_loop1 (self : Iou) [] = None
+_damlforge_loop1 self (q :: _damlforge_rest) =
+  if q == self.owner
+    then
+      Some True
+    else
+      _damlforge_loop1 self _damlforge_rest

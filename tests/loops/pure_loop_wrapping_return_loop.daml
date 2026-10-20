@@ -1,0 +1,13 @@
+module PureLoopWrappingReturnLoop where
+
+find : [[Party]] -> Party -> Bool
+find groups p =
+  False
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]

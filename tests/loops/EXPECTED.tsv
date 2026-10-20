@@ -1,0 +1,74 @@
+# Each fixture is <name>.vy and forge's Daml for it in <name>.daml, written by
+# DamlForge v0.0.11 with the file in this folder. test_loopcheck.py checks
+# that forge still writes this Daml, and that the loop check gives these checks.
+# fixture	expected loop checks (empty = none)	where it comes from
+p01_create_no_acc		foldlA, import present
+p02_create_append	L1	b17 shape: foldlA, no import DA.Action
+p03_pure_acc_in_choice		pure foldl inside a choice is correct
+p04_nested_effect	L1	b18 shape
+p05_user_effect_fn		user @ledger_effect fn called in a loop: foldlA, import present
+p06_assert_acc_pure		assert + accumulator in a pure function: foldl with `error`, correct
+p07_assert_only		assertion-only loop: all
+p08_effect_in_if		create inside if inside loop: foldlA
+p09_nested_effect		nested foldlA
+p10_self_mutation		self mutation in a loop: foldl over self record, correct
+p11_early_return_effect	L3	return in a loop with fetch: return lost in foldlA (damlc rejects this one)
+p12_ledger_fn_loop		foldlA in a @ledger_effect fn
+p13_effect_in_pure_fn	L2 L4	b20 shape: let i = fetch c inside foldl
+p14_range		foldl over range
+p15_effect_in_test	L2 L4	b19 shape: (fetch c).amount in an if test inside foldl
+p16_effect_assign_local		cid <- create inside foldlA
+b17_create_append	L1	bug program bugs/loops/b17_create_append.vy
+b18_fetch_in_sum	L1	bug program bugs/loops/b18_fetch_in_sum.vy
+b19_fetch_in_if_test	L2 L4	bug program bugs/loops/b19_fetch_in_if_test.vy
+b20_fetch_in_plain_function	L2 L4	bug program bugs/loops/b20_fetch_in_plain_function.vy
+b21_return_in_create_loop	L3	bug program bugs/loops/b21_return_in_create_loop.vy; damlc builds this Daml
+asset_proposal		seed contracts/asset_proposal/asset_proposal.vy
+ballot		seed contracts/ballot/ballot.vy
+escrow		seed contracts/escrow/escrow.vy
+iou		seed contracts/iou/iou.vy
+loop_count		seed contracts/loop_count/loop_count.vy
+loop_give		seed contracts/loop_give/loop_give.vy
+loop_many		seed contracts/loop_many/loop_many.vy
+loop_pure		seed contracts/loop_pure/loop_pure.vy; has a correct _damlforge_loop helper for an early return in a pure fn
+loop_verify		seed contracts/loop_verify/loop_verify.vy
+fp_l3_toplevel_for		mutation input: module-level `for` whose Python body swallows class methods; a `return` in a nested def is NOT a return in the loop. Prototype L3 gave a false hit here.
+nested_pure	L3	opus probe: forge drops a loop whose return is in an inner loop: `first_pos xss = 0`
+nested_choice	L3	opus probe: the return in an inner foldlA works as `continue`
+two_fns	L3	opus probe: has_party has its helper, GiveUntil lost its return; the prototype missed it
+annot_for		opus probe: `for q: Party in ps:`, which Python's ast cannot read
+oneliner		opus probe: `if q == p: return True` on one line
+swallowed		opus probe: a module-level for swallows the choice; forge writes no choice at all
+ret_in_pure_choice		opus probe: a choice with a correct _damlforge_loop helper
+getTime		opus probe: `now <- getTime`
+fetch_noloop_pure	L4	opus probe: b20 with no loop: `let _damlforge_effect1 = fetch c in`
+module_return		opus probe: forge ignores a module-level `return` and writes has_party with its helper
+class_return		opus probe: forge ignores a class-level `return` and writes choice Find with its helper
+dead_loop		opus probe: fuzz input 15538: a loop after `return` never runs; forge writes `has_party ps p = ()`
+label_create		opus probe: fuzz input 12281: `create = self.currency` is a record label, not the action
+type_create		opus probe: fuzz input 14363: `[ContractId create]` is a type, not the action
+def_in_module_for		fable edge program
+undecorated_method		fable edge program
+effect_loop_wrapping_return_loop	L3	fable edge program
+pure_loop_wrapping_return_loop	L3	fable edge program
+field_named_fetch		fable edge program
+now_in_pure_loop	L2 L4	fable edge program
+return_in_choice_loop_no_effect		fable edge program
+loop_dropped_no_acc_no_effect		fable edge program
+effect_fn_return_in_loop	L3	fable edge program
+struct_and_return_loop		fable edge program
+inline_if_return		fable edge program
+effect_in_assert_test	L4	fable edge program
+effect_in_for_list	L4	fable edge program
+bare_effect_stmt_in_pure_fn_loop	L2 L4	fable edge program
+bare_effect_stmt_in_pure_fn_no_acc		fable edge program
+annotated_for_target		fable edge program
+exercise_archive		fable edge program
+choice_return_effect_value		fable edge program
+ledger_fn_used_as_value	L4	fable edge program
+module_level_if_wrapping_def		fable edge program
+return_in_else_of_loop_if		fable edge program
+return_after_nested_for_in_outer		fable edge program
+value_create		fuzz input: `owner = create,` passes create as a value, not a call
+class_level_for		fuzz input: a `for` with a `return` in the class body, not in a function
+gettime_value	L4	fuzz input 8302 of random seed 2 on contracts/: `((getTime).terms).deadline` uses getTime as a value

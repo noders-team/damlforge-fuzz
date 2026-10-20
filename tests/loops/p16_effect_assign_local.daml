@@ -1,0 +1,26 @@
+module P16EffectAssignLocal where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice M : Bool
+      with
+        owners : [Party]
+      controller owner
+      do
+        let self = this
+        _ <-
+          foldlA
+            (\() o -> do
+              cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+              pure ())
+            () owners
+        pure (True)

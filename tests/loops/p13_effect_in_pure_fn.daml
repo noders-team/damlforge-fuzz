@@ -1,0 +1,31 @@
+module P13EffectInPureFn where
+
+verify : [ContractId Iou] -> Party -> Decimal
+verify cids p =
+  let total = (0.0 : Decimal) in
+  let _damlforge_total2 =
+        foldl
+          (\total c ->
+            let i = fetch c in
+            let _damlforge_total1 = total + i.amount in
+            _damlforge_total1)
+          total cids
+  in
+  _damlforge_total2
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice V : Decimal
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        pure (verify cids self.issuer)

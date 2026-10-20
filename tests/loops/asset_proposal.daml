@@ -1,0 +1,39 @@
+module AssetProposal where
+
+template Asset
+  with
+    issuer : Party
+    owner : Party
+    name : Text
+  where
+    signatory [issuer, owner]
+
+    choice Give : ContractId AssetProposal
+      with
+        new_owner : Party
+      controller owner
+      do
+        let self = this
+        assertMsg "cannot give an asset to its current owner" (new_owner /= self.owner)
+        create (AssetProposal with issuer = self.issuer, owner = new_owner, name = self.name)
+
+template AssetProposal
+  with
+    issuer : Party
+    owner : Party
+    name : Text
+  where
+    signatory [issuer]
+    observer [owner]
+
+    choice Accept : ContractId Asset
+      controller owner
+      do
+        let self = this
+        create (Asset with issuer = self.issuer, owner = self.owner, name = self.name)
+
+    choice Reject : ()
+      controller owner
+      do
+        let self = this
+        pure ()

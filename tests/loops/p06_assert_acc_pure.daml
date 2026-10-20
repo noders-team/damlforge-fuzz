@@ -1,0 +1,31 @@
+module P06AssertAccPure where
+
+checked_sum : [Int] -> Int
+checked_sum xs =
+  let total = 0 in
+  let _damlforge_total2 =
+        foldl
+          (\total x ->
+            if x > 0
+              then
+                let _damlforge_total1 = total + x in
+                _damlforge_total1
+              else error "positive")
+          total xs
+  in
+  _damlforge_total2
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Noop : Int
+      controller owner
+      do
+        let self = this
+        pure (checked_sum [1, 2])
