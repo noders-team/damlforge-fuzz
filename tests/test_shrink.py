@@ -170,7 +170,35 @@ def test_shrunk_file_crashes_in_the_same_group_as_its_input(planted, capsys):
     assert full.split("  ")[-1] == small.split("  ")[-1], (full, small)
 
 
-def test_shrink_file_on_a_file_that_does_not_crash_returns_1_and_writes_nothing(
+def test_shrink_file_writes_a_bad_loop_file_shrunk_by_its_first_check(has_party, capsys):
+    assert main(["shrink", str(has_party)]) == 0
+    out = has_party.parent / "shrunk" / "loop_pure.vy"
+    assert out.read_text() == LOST_RETURN
+    assert capsys.readouterr().out == (
+        f"shrunk {has_party} from 12 to 4 lines: {out}\n" + LOST_RETURN
+    )
+
+
+def test_shrink_file_damlc_keeps_damlcs_verdict_on_a_bad_loop_file(dpm, has_party, capsys):
+    assert main(["shrink", "--damlc", str(has_party)]) == 0
+    out = has_party.parent / "shrunk" / "loop_pure.vy"
+    assert out.read_text() == LOST_RETURN + "    return False\n"
+    assert capsys.readouterr().out == (
+        f"shrunk {has_party} from 12 to 5 lines: {out}\n" + LOST_RETURN + "    return False\n"
+    )
+
+
+def test_shrink_file_damlc_refuses_a_file_without_daml_yaml(write_vy, capsys):
+    path = write_vy("has_party.vy", HAS_PARTY)
+
+    assert main(["shrink", "--damlc", str(path)]) == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err == f"damlforge-fuzz shrink: --damlc needs a daml.yaml for {path}, and found none\n"
+    assert not (path.parent / "shrunk").exists()
+
+
+def test_shrink_file_on_a_file_with_no_crash_and_no_loop_bug_returns_1_and_writes_nothing(
     tmp_path, capsys
 ):
     iou = copy_iou(tmp_path / "iou", "@template", "@template", count=1)
@@ -178,7 +206,7 @@ def test_shrink_file_on_a_file_that_does_not_crash_returns_1_and_writes_nothing(
     assert main(["shrink", str(iou)]) == 1
     out, err = capsys.readouterr()
     assert out == ""
-    assert err == f"{iou} does not crash forge: OK emit\n"
+    assert err == f"{iou} does not crash forge and has no loop bug: OK emit\n"
     assert not (iou.parent / "shrunk").exists()
 
 

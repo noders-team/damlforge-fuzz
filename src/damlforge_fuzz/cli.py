@@ -83,20 +83,22 @@ while damlc builds keeps the batches already built and stops the damlc step.
 A Ctrl-C while it shrinks stops the shrinking: the groups not shrunk yet get
 "shrunk": null.
 
-    damlforge-fuzz shrink FILE
+    damlforge-fuzz shrink [--damlc] FILE
 
 `shrink` compiles FILE as `check` does. When it crashes, it deletes lines while
-the text still crashes in the same group, writes the result to shrunk/ next to
-FILE under the same name, and prints a line and the shrunk text:
+the text still crashes in the same group. When it is BAD_LOOP, it deletes lines
+while the first loop check stays the same, and with --damlc also damlc's
+verdict on the Daml. It writes the result to shrunk/ next to FILE under the
+same name, and prints a line and the shrunk text:
 
     shrunk groups/g02/escrow.vy from 42 to 3 lines: groups/g02/shrunk/escrow.vy
     @template
     ...
 
-Exit status: 0 when the shrunk file is written, 1 when FILE does not crash
-(one line to stderr, nothing written), 2 for a usage error (as for check, and
-a FILE that is a folder or already in a shrunk/ folder), 130 on Ctrl-C
-(nothing written).
+Exit status: 0 when the shrunk file is written, 1 when FILE does not crash and
+has no loop bug (one line to stderr, nothing written), 2 for a usage error (as
+for check, and a FILE that is a folder or already in a shrunk/ folder), 130 on
+Ctrl-C (nothing written).
 """
 
 from __future__ import annotations
@@ -184,16 +186,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     shrink = commands.add_parser(
         "shrink",
-        help="delete lines of a crashing .vy file while it still crashes the same way",
+        help="delete lines of a .vy file while it still crashes forge or has the same loop bug",
         description="Delete lines of FILE while forge still crashes on it with the same "
-        "exception at the same forge line, and write the result to shrunk/ next to FILE.",
+        "exception at the same forge line, or, for a BAD_LOOP file, while its first loop "
+        "check stays the same. Write the result to shrunk/ next to FILE.",
     )
-    shrink.add_argument("file", type=Path, metavar="FILE", help="a .vy file that crashes forge")
+    shrink.add_argument(
+        "--damlc",
+        action="store_true",
+        help="for a BAD_LOOP file, also keep damlc's verdict on its Daml "
+        "(needs dpm and the Daml SDK)",
+    )
+    shrink.add_argument(
+        "file", type=Path, metavar="FILE", help="a .vy file that crashes forge or has a loop bug"
+    )
     args = parser.parse_args(argv)
     if args.command == "check":
         return _check(args.paths, args.damlc)
     if args.command == "shrink":
-        return _shrink(args.file)
+        return _shrink(args.file, args.damlc)
     return _run(
         args.seed_folders, args.seconds, args.count, args.random_seed, args.reports, args.damlc
     )
@@ -361,9 +372,21 @@ def _check_seeds(seeds: Sequence[Seed], damlc: bool) -> None:
             )
 
 
-def _shrink(path: Path) -> int:
+def _shrink(path: Path, damlc: bool) -> int:
     try:
-        from damlforge_fuzz import Crash, Seed, compile_and_sort, same_crash, shrink, shrunk_path
+        from damlforge_fuzz import (
+            Crash,
+            DamlcUnavailable,
+            DamlSource,
+            Ok,
+            Seed,
+            build_daml,
+            compile_and_sort,
+            same_crash,
+            same_loop,
+            shrink,
+            shrunk_path,
+        )
     except ImportError as error:
         print(f"damlforge-fuzz: {error}", file=sys.stderr)
         return 2
@@ -375,19 +398,34 @@ def _shrink(path: Path) -> int:
         if path.is_dir():
             raise IsADirectoryError(f"{path} is a folder, not a .vy file")
         seed = Seed.load(path)
+        if damlc:
+            _need_daml_yaml([seed])
     except (OSError, ValueError) as error:
         print(f"damlforge-fuzz shrink: {error}", file=sys.stderr)
         return 2
     try:
         outcome = compile_and_sort(seed.text, seed)
-        if not isinstance(outcome, Crash):
-            detail = _detail(outcome)
-            result = f"{outcome.label} {outcome.stage}" + (f"  {detail}" if detail else "")
-            print(f"{path} does not crash forge: {result}", file=sys.stderr)
-            return 1
-        text = shrink(seed.text, seed, same_crash(outcome.key))
+        match outcome:
+            case Crash(key=key):
+                keep = same_crash(key)
+            case Ok(loop_key=check) if check is not None:
+                verdict = None
+                if damlc:
+                    source = DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)
+                    [(_, error)] = build_daml([source])
+                    verdict = "builds" if error is None else "rejects"
+                keep = same_loop(check, verdict, seed)
+            case _:
+                detail = _detail(outcome)
+                result = f"{outcome.label} {outcome.stage}" + (f"  {detail}" if detail else "")
+                print(f"{path} does not crash forge and has no loop bug: {result}", file=sys.stderr)
+                return 1
+        text = shrink(seed.text, seed, keep)
     except KeyboardInterrupt:
         return 130
+    except DamlcUnavailable as error:
+        print(f"damlforge-fuzz shrink: damlc: {error}", file=sys.stderr)
+        return 2
     out = shrunk_path(path)
     try:
         out.parent.mkdir(exist_ok=True)
