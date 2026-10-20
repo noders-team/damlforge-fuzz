@@ -342,6 +342,23 @@ def test_with_damlc_each_loop_group_has_the_verdict_a_fresh_build_gives(loop_run
     assert len({(g["check"], g["damlc"]) for g in loops}) == len(loops)
 
 
+def test_with_damlc_report_md_shows_each_loop_groups_verdict(loop_run_damlc):
+    _, _, folder, doc = loop_run_damlc
+    md = (folder / "report.md").read_text().splitlines()
+    cells = []
+    for group in loop_groups(doc):
+        [row] = [line for line in md if line.startswith(f"| {group['id']} |")]
+        [bug] = [line for line in md if line.startswith(f"- {group['id']}, ")]
+        damlc = "" if group["damlc"] == "builds" else f". damlc: `{group['damlc_error']}`"
+        cells.append(row.split(" | ")[4])
+        assert cells[-1] == group["damlc"], group["id"]
+        assert bug == (
+            f"- {group['id']}, {Path(group['daml_file']).name} line {group['daml_line']}: "
+            f"`{group['message']}`{damlc}"
+        )
+    assert set(cells) == {"builds", "rejects"}
+
+
 def test_with_damlc_the_loop_groups_split_the_same_inputs_by_verdict(loop_run, loop_run_damlc):
     plain, damlc = loop_groups(loop_run[3]), loop_groups(loop_run_damlc[3])
 

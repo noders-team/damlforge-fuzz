@@ -24,6 +24,8 @@ from damlforge_fuzz import (
     DamlcUnavailable,
     DamlError,
     DamlSource,
+    LoopBug,
+    LoopCheck,
     Ok,
     Seed,
     build_daml,
@@ -454,3 +456,29 @@ def test_ctrl_c_during_damlc_keeps_the_finished_batches(dpm, tmp_path, monkeypat
     assert (
         "Ctrl-C stopped damlc, so some texts were not built." in (folder / "report.md").read_text()
     )
+
+
+def test_ctrl_c_during_damlc_leaves_an_unbuilt_loop_group_not_built(dpm, tmp_path, monkeypatch):
+    bug = LoopBug(LoopCheck.L4, 5, "fetch at Daml line 5 is used as a value, not bound with <-")
+    monkeypatch.setattr(
+        "damlforge_fuzz.runner.compile_and_sort", lambda text, seed: Ok("", "Iou", (bug,))
+    )
+
+    def ctrl_c(sources):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("damlforge_fuzz.report.build_daml", ctrl_c)
+
+    status, lines, folder, doc = run(
+        tmp_path, "contracts/iou", "--count", "50", "--random-seed", "1", "--damlc"
+    )
+    ok = int(FINAL_LINE.fullmatch(lines[1])[1])
+    assert status == 130
+    assert lines[2:4] == [
+        "damlc: 0 Daml texts, 0 bad, 0 bad Daml groups",
+        f"loops: {ok} inputs with loop findings, 1 loop group, 0 build with damlc",
+    ]
+    assert [(g["id"], g["damlc"], g["damlc_error"]) for g in doc["groups"]] == [("l01", None, None)]
+    md = (folder / "report.md").read_text().splitlines()
+    [row] = [line for line in md if line.startswith("| l01 |")]
+    assert row.split(" | ")[:5] == ["| l01", "L4", "L4", str(ok), "not built"]
