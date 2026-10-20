@@ -82,16 +82,14 @@ def _make_input(
     # shifts only its own input. The draw order below is part of the sequence.
     rng = random.Random(f"{random_seed}:{number}")
     seed = rng.randrange(len(texts))
-    lines = texts[seed].split("\n")
+    lines = tuple(texts[seed].split("\n"))
     changes = []
     for _ in range(rng.randint(1, _MAX_CHANGES)):
         i = rng.randrange(len(lines))
         rule = rng.choice(_RULES)
-        new = rule.apply(rng, lines[i], _Context(donor_lines, lines))
+        new = rule.apply(rng, i, _Context(donor_lines, lines))
         if new is not None:
-            lines[i : i + 1] = new
-            if not lines:
-                lines = [""]
+            lines = tuple(new) or ("",)
         changes.append(Change(rule.name, i + 1))
     text = "\n".join(lines)
     return Input(number, seed, text, tuple(changes), text != texts[seed])
@@ -105,13 +103,29 @@ class _Context:
     """
 
     donor_lines: tuple[str, ...]
-    lines: Sequence[str]
+    lines: tuple[str, ...]
 
 
-# A rule gets the line it changes and returns the lines that replace it: []
-# deletes it, [x, line] inserts x above it, [new] edits it. None means the rule
-# does not fit the line, such as "operator" on a line with no operator.
-_Apply = Callable[[random.Random, str, _Context], "list[str] | None"]
+# A rule gets the index of the line it starts at and returns every line of the
+# new text. None means the rule does not fit there, such as "operator" on a
+# line with no operator.
+_Apply = Callable[[random.Random, int, _Context], "list[str] | None"]
+
+# A line rule gets only its line and returns the lines that replace it: []
+# deletes it, [x, line] inserts x above it, [new] edits it.
+_LineChange = Callable[[random.Random, str, _Context], "list[str] | None"]
+
+
+def _line_rule(change: _LineChange) -> _Apply:
+    """A rule that changes only its own line."""
+
+    def apply(rng: random.Random, i: int, ctx: _Context) -> list[str] | None:
+        new = change(rng, ctx.lines[i], ctx)
+        if new is None:
+            return None
+        return [*ctx.lines[:i], *new, *ctx.lines[i + 1 :]]
+
+    return apply
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,14 +202,14 @@ def _replace_token(
 ) -> _Apply:
     """A word rule: replace one random match of `pattern` in the line with `pick(...)`."""
 
-    def apply(rng: random.Random, line: str, ctx: _Context) -> list[str] | None:
+    def change(rng: random.Random, line: str, ctx: _Context) -> list[str] | None:
         matches = list(pattern.finditer(line))
         if not matches:
             return None
         match = rng.choice(matches)
         return [line[: match.start()] + pick(rng, ctx) + line[match.end() :]]
 
-    return apply
+    return _line_rule(change)
 
 
 def _a_name_in_the_text(rng: random.Random, ctx: _Context) -> str:
@@ -210,10 +224,10 @@ def _a_name_in_the_text(rng: random.Random, ctx: _Context) -> str:
 # and the same rule added first kept 86. README.md lists the rules, and a test
 # checks that the two lists match.
 _RULES: Final[tuple[_Rule, ...]] = (
-    _Rule("delete_line", _delete_line),
-    _Rule("copy_line", _copy_line),
-    _Rule("donor_line", _donor_line),
-    _Rule("insert_statement", _insert_statement),
+    _Rule("delete_line", _line_rule(_delete_line)),
+    _Rule("copy_line", _line_rule(_copy_line)),
+    _Rule("donor_line", _line_rule(_donor_line)),
+    _Rule("insert_statement", _line_rule(_insert_statement)),
     _Rule("literal", _replace_token(_TOKEN, lambda rng, ctx: rng.choice(_LITERALS))),
     _Rule("operator", _replace_token(_OPERATOR, lambda rng, ctx: rng.choice(_OPERATORS))),
     _Rule("type", _replace_token(_NAME, lambda rng, ctx: rng.choice(_TYPES))),
