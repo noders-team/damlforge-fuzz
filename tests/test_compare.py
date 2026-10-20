@@ -327,11 +327,15 @@ def test_check_compare_prints_bad_run_for_the_bug_programs_and_each_saved_run_gr
     _, _, folder, doc = compare_run
     groups = run_groups(doc)
     same = copy_seed(tmp_path / "is", "loop_give", "if o != stop:", "if o is not stop:")
+    issuer = "signatory: list[Party] = [issuer]"
+    owner = issuer.replace("[issuer]", "[owner]")
+    signed_by_owner = copy_seed(tmp_path / "owner", "loop_many", issuer, owner)
     saved = [folder / group["input_file"] for group in groups]
     bugs = ["b21_return_in_create_loop", "b22_return_in_inner_loop", "b23_pass_in_loop"]
     monkeypatch.chdir(PROJECT)
 
-    paths = [*(f"bugs/loops/{name}.vy" for name in bugs), str(same), "contracts/iou", *saved]
+    paths = [*(f"bugs/loops/{name}.vy" for name in bugs), same, signed_by_owner, "contracts/iou"]
+    paths += saved
     assert main(["check", "--compare", *map(str, paths)]) == 1
     assert capsys.readouterr().out.splitlines() == [
         "BAD_RUN  emit   bugs/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: "
@@ -342,6 +346,7 @@ def test_check_compare_prints_bad_run_for_the_bug_programs_and_each_saved_run_gr
         "BAD_RUN  emit   bugs/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: "
         "fails: positive",
         f"OK       emit   {same}",
+        f"OK       emit   {signed_by_owner}",
         "OK       emit   contracts/iou/iou.vy",
     ] + [
         f"BAD_RUN  emit   {path}  {g['difference']} in {g['call']}: {g['python']}"

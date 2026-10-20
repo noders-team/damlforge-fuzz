@@ -545,6 +545,23 @@ class _TooLong(Exception):
     """The call ran more than LINES lines of Python."""
 
 
+class _Unauthorized(Exception):
+    """A create or a fetch in Python that Daml's authorization rules refuse."""
+
+
+@dataclass(frozen=True, slots=True)
+class _Authority:
+    """The parties of the input's templates and choices, as Python expressions of the
+    fields (and of a choice's parameters), compiled from the .vy text."""
+
+    signatories: dict[str, CodeType]
+    """Template -> its `signatory` value."""
+    observers: dict[str, CodeType]
+    """Template -> its `observer` value. A template may have none."""
+    controllers: dict[str, CodeType]
+    """"Template.Choice" -> the `controller` of its @choice."""
+
+
 @dataclass(frozen=True, slots=True)
 class _Ref:
     """A contract ID in Python: a key of the call's ledger."""
@@ -573,6 +590,7 @@ def _plan(item: CompareInput) -> _Plan | Skipped:
         return Skipped((unfit,))
     shapes = _shapes(tree)
     try:
+        authority = _authority(tree)
         code = _runnable(tree)
     except SyntaxError as error:
         return Skipped((f"Python cannot compile the text: {error}",))
@@ -581,7 +599,7 @@ def _plan(item: CompareInput) -> _Plan | Skipped:
         if any(shapes.get(key) != item.calls.shapes[key] for key in call.shape_keys):
             skipped.append(f"{call.label}: a definition it needs differs from the seed's")
             continue
-        outcome = _run_call(code, call, item.calls)
+        outcome = _run_call(code, authority, call, item.calls)
         if isinstance(outcome, str):
             skipped.append(f"{call.label}: {outcome}")
         elif isinstance(outcome, _Fails) and call.template is None:
@@ -630,6 +648,32 @@ _AS_FORGE_WRITES: Final[dict[type[ast.cmpop], ast.cmpop]] = {
 }
 
 
+def _authority(tree: ast.Module) -> _Authority:
+    """The party expressions of each class and choice of the module."""
+    authority = _Authority({}, {}, {})
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for member in node.body:
+            if isinstance(member, ast.AnnAssign) and isinstance(member.target, ast.Name):
+                parties = {"signatory": authority.signatories, "observer": authority.observers}
+                if member.target.id in parties and member.value is not None:
+                    parties[member.target.id][node.name] = _expression(member.value)
+            if isinstance(member, ast.FunctionDef):
+                for decorator in member.decorator_list:
+                    if isinstance(decorator, ast.Call) and _decorator_name(decorator) == "choice":
+                        for keyword in decorator.keywords:
+                            if keyword.arg == "controller":
+                                key = f"{node.name}.{member.name}"
+                                authority.controllers[key] = _expression(keyword.value)
+    return authority
+
+
+def _expression(node: ast.expr) -> CodeType:
+    with _quiet():
+        return compile(ast.Expression(node), "<vy>", "eval", dont_inherit=True)
+
+
 def _runnable(tree: ast.Module) -> CodeType:
     """The module as Python: no forge import, no decorator, and in a class only
     its fields without a value and its methods. Annotations are not evaluated.
@@ -667,22 +711,55 @@ def _runnable(tree: ast.Module) -> CodeType:
         )
 
 
-def _run_call(code: CodeType, call: Call, calls: Calls) -> _Runs | _Fails | str:
-    """Run one call in a fresh module with a fresh ledger. A str says why it is skipped."""
+def _run_call(
+    code: CodeType, authority: _Authority, call: Call, calls: Calls
+) -> _Runs | _Fails | str:
+    """Run one call in a fresh module with a fresh ledger. A str says why it is skipped.
+
+    In a choice, a create and a fetch follow Daml's authorization rules, as
+    the Daml of the choice does: the choice's controllers and the signatories
+    of its contract authorize them. A create needs every signatory of the new
+    contract, and a fetch needs one stakeholder. Without this rule, a change
+    such as `signatory: list[Party] = [owner]` made Daml fail where Python
+    ran: 1 false alarm in 5000 inputs.
+    """
     ledger: dict[_Ref, object] = {}
     made: list[object] = []
     classes: dict[str, type] = {}
+    authorizers: set[str] | None = None
+
+    def parties(
+        expressions: dict[str, CodeType], key: str, contract: object, **extra: Any
+    ) -> set[str]:
+        value = eval(expressions[key], namespace, {**vars(contract), **extra})
+        found = value if isinstance(value, list) else [value]
+        if not all(isinstance(party, str) for party in found):
+            raise TypeError(f"the parties of {key} are not parties: {value!r}")
+        return set(found)
 
     def create(contract: object) -> _Ref:
         if type(contract) not in classes.values():
             raise TypeError(f"create({contract!r}) needs a contract")
+        template = type(contract).__name__
+        if (
+            authorizers is not None
+            and not parties(authority.signatories, template, contract) <= authorizers
+        ):
+            raise _Unauthorized(f"create of {template} without the authority of its signatories")
         ref = _Ref(len(ledger))
         ledger[ref] = contract
         made.append(contract)
         return ref
 
     def fetch(ref: _Ref) -> object:
-        return ledger[ref]
+        contract = ledger[ref]
+        template = type(contract).__name__
+        stakeholders = parties(authority.signatories, template, contract)
+        if template in authority.observers:
+            stakeholders |= parties(authority.observers, template, contract)
+        if authorizers is not None and not stakeholders & authorizers:
+            raise _Unauthorized(f"fetch of {template} without the authority of a stakeholder")
+        return contract
 
     def python(t: _Type, value: Any) -> Any:
         match t, value:
@@ -718,8 +795,14 @@ def _run_call(code: CodeType, call: Call, calls: Calls) -> _Runs | _Fails | str:
             else:
                 cls = classes[call.template]
                 contract = cls(**{name: python(t, v) for name, t, v in call.contract})
+                choice = f"{call.template}.{call.name}"
+                authorizers = parties(authority.signatories, call.template, contract) | parties(
+                    authority.controllers, choice, contract, **args
+                )
                 result = getattr(cls, call.name)(contract, **args)
     except AssertionError as error:
+        return _Fails(str(error))
+    except _Unauthorized as error:
         return _Fails(str(error))
     except Exception as error:
         return f"{type(error).__name__}: {str(error).partition(chr(10))[0]}"
