@@ -30,15 +30,17 @@ This is the real output:
 
 ```
 $ damlforge-fuzz check --damlc bugs/loops
-BAD_DAML emit   bugs/loops/b17_create_append.vy  Variable not in scope: foldlA
-BAD_DAML emit   bugs/loops/b18_fetch_in_sum.vy  Variable not in scope: foldlA
-BAD_DAML emit   bugs/loops/b19_fetch_in_if_test.vy  Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_DAML emit   bugs/loops/b20_fetch_in_plain_function.vy  Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-OK       emit   bugs/loops/b21_return_in_create_loop.vy
+BAD_LOOP emit   bugs/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
+BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
+BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
+BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
+BAD_LOOP emit   bugs/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
 ```
 
 The command exits with 1.
-b21 is OK here, because its bug shows only when the contract runs. [The proof for b21](#the-proof-for-b21) runs it.
+Each line names the checks of the [loop check](../../README.md#loop-check) that the program fails, and ends with the verdict of `damlc`.
+b21 is the only program whose Daml `damlc` builds, because its bug shows only when the contract runs.
+The loop check finds it without a run: the `return` has no early-return helper in the Daml (`L3`). [The proof for b21](#the-proof-for-b21) runs the contract.
 
 ## How forge writes a loop
 

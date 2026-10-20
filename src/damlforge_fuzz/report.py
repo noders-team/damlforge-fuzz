@@ -4,7 +4,9 @@ This module imports the compiler, so it loads forge. It owns three decisions:
 
 - which crashes form one group: one CrashKey, one group, ids g01, g02, ...
   in the order of the first input that reached each key. With damlc, which
-  bad Daml forms one group: one DamlErrorKey, ids d01, d02, ... in the same order;
+  bad Daml forms one group: one DamlErrorKey, ids d01, d02, ... in the same order.
+  Which OK inputs with loop bugs form one group: the first loop check and,
+  with damlc, damlc's verdict on the Daml, ids l01, l02, ... in the same order;
 - the shape of report.json (schema 1). The dataclasses below are the shape:
   their fields are the JSON fields, one for one. to_json() is the only code
   that builds the document, and markdown() reads the same model, so report.md
@@ -20,6 +22,9 @@ This module imports the compiler, so it loads forge. It owns three decisions:
           groups/d01/iou.vy      the first input whose Daml damlc rejects with the group's key
           groups/d01/daml.yaml   a copy of the seed's daml.yaml
           groups/d01/Iou.daml    forge's Daml for that input, so `dpm build` in d01 shows the error
+          groups/l01/loop_give.vy    the first input of the loop group
+          groups/l01/daml.yaml       a copy of the seed's daml.yaml, when it has one
+          groups/l01/LoopGive.daml   forge's Daml for that input
 
 Time enters a run only here: Report.add reads the clock. fuzz() and the
 inputs never see it, so `--count N --random-seed S` gives the same inputs, the

@@ -42,10 +42,10 @@ LOOP_CHECK_TEXT: Final[dict[LoopCheck, str]] = {
     "but does not import it from `DA.Action`. damlc rejects the Daml.",
     LoopCheck.L2: "forge writes the pure fold `foldl` for a loop whose body has a ledger "
     "action, such as `fetch` or `create`. A ledger action needs `foldlA` in an `Update`.",
-    LoopCheck.L3: "a `return` in a loop of the .vy code has no early-return helper "
+    LoopCheck.L3: "A `return` in a loop of the .vy code has no early-return helper "
     "(`_damlforge_loopN`) in the Daml, so the return is lost: the loop goes on, "
     "or the function returns another value. damlc can build this Daml.",
-    LoopCheck.L4: "a ledger action, in a loop or not, is used as a value: it is not bound "
+    LoopCheck.L4: "A ledger action, in a loop or not, is used as a value: it is not bound "
     "with `<-` and is not a statement of a `do` block, so the code gets an `Update`, "
     "not its result.",
 }

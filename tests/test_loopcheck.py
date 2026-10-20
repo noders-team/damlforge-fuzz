@@ -151,8 +151,13 @@ def test_a_daml_text_that_forge_cannot_write_does_not_raise(daml):
     assert find_loop_bugs(vy, daml) == ()
 
 
-def test_every_check_has_a_text():
+def test_every_check_has_a_text_and_the_readme_shows_it():
     assert list(LOOP_CHECK_TEXT) == list(LoopCheck)
+    readme = (PROJECT / "README.md").read_text()
+    table = readme.split("### Loop check", 1)[1].split("\n\n", 3)[2]
+    assert table.splitlines()[2:] == [
+        f"| `{check}` | {text} |" for check, text in LOOP_CHECK_TEXT.items()
+    ]
 
 
 @pytest.mark.parametrize("path", SEED_FILES, ids=lambda path: path.stem)
