@@ -97,6 +97,37 @@ def test_l3_counts_only_a_loop_of_a_function_that_can_run(name):
     assert find_loop_bugs(*pair(name)) == ()
 
 
+HAS = "    def has(self, ps: list[Party]) -> bool:\n"
+CHOICE = "    @choice(controller=owner, consuming=False)\n"
+LOST_IN_HAS = (
+    LoopBug(
+        LoopCheck.L3,
+        11,
+        "the return in a loop of choice Has at Daml line 11 is lost "
+        "(1 loop with a return, 0 early-return helpers)",
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("method", "expected"),
+    [
+        (HAS, ()),
+        ("    @ledger_effect\n" + HAS, ()),
+        ("    @checked_fetch\n" + CHOICE + HAS, ()),
+        ("    @view\n" + CHOICE + HAS, ()),
+        ("    @view\n" + CHOICE + HAS.replace("bool", "list[bool]"), LOST_IN_HAS),
+        (CHOICE + HAS, LOST_IN_HAS),
+    ],
+    ids=["undecorated", "ledger_effect", "checked_fetch", "view", "view-list-return", "choice"],
+)
+def test_l3_reads_a_method_only_when_forge_writes_it_as_a_choice(method, expected):
+    # The Daml's choice Has comes from the def `Has`, which has no loop. The method
+    # `has` has the same Daml name, so it is choice Has only when forge writes it as a choice.
+    vy, daml = pair("method_named_like_choice")
+    assert find_loop_bugs(vy.replace(HAS, method), daml) == expected
+
+
 def test_each_loop_with_a_return_needs_its_own_helper():
     # has_party has _damlforge_loop1. Choice GiveUntil calls no helper.
     assert find_loop_bugs(*pair("two_fns")) == (

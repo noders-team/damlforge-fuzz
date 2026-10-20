@@ -72,3 +72,4 @@ return_after_nested_for_in_outer		fable edge program
 value_create		fuzz input: `owner = create,` passes create as a value, not a call
 class_level_for		fuzz input: a `for` with a `return` in the class body, not in a function
 gettime_value	L4	fuzz input 8302 of random seed 2 on contracts/: `((getTime).terms).deadline` uses getTime as a value
+method_named_like_choice		review probe: forge drops the undecorated method `has` and writes choice Has for the def `Has`, which has no loop

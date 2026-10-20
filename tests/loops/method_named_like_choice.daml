@@ -1,0 +1,17 @@
+module MethodNamedLikeChoice where
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+
+    nonconsuming choice Has : Bool
+      with
+        ps : [Party]
+      controller owner
+      do
+        let self = this
+        pure (self.has ps)

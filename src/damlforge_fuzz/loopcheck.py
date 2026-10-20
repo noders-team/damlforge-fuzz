@@ -25,6 +25,7 @@ import re
 import tokenize
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
+from keyword import iskeyword
 from typing import ClassVar, Final
 
 
@@ -532,7 +533,7 @@ class _Statement:
 @dataclass(frozen=True, slots=True)
 class _VyFunction:
     owner: str | None
-    """The class whose body holds the `def`, or None for a function outside a class."""
+    """The class of a choice, or None for a function outside a class."""
     name: str
     returning_loops: int
     """`for` statements of this function with a `return` in their body, nested
@@ -540,7 +541,8 @@ class _VyFunction:
 
 
 def _vy_functions(vy: str) -> list[_VyFunction]:
-    """Every `def` of the .vy text, in text order. Empty when the text cannot be tokenized."""
+    """Every function and every choice of the .vy text, in text order. Empty when the text
+    cannot be tokenized."""
     if "\x00" in vy:
         # forge refuses a NUL byte before it tokenizes, and Python 3.12's
         # tokenize raises SystemError on one.
@@ -575,14 +577,16 @@ def _block(tokens: list[tokenize.TokenInfo], i: int) -> tuple[list[_Statement], 
 def _visit(
     statements: list[_Statement], owner: str | None, in_function: bool, found: list[_VyFunction]
 ) -> int:
-    """Walk one block: add each `def` in it to `found`, in text order, and return how
-    many `for` statements of the enclosing function in this block hold a `return`.
+    """Walk one block: add each function and each choice in it to `found`, in text
+    order, and return how many `for` statements of the enclosing function in this
+    block hold a `return`.
 
     In a function, the statements after a `return` in the same block never run,
     and forge writes no Daml for them. Outside a function forge ignores a
     `return` and writes what follows, so the walk goes on there.
     """
     loops = 0
+    decorators: list[_Statement] = []
     for statement in statements:
         keyword = statement.keyword
         if keyword == "return" and in_function:
@@ -590,14 +594,39 @@ def _visit(
         if keyword == "def" and statement.name is not None:
             position = len(found)
             returning = _visit(statement.body, None, True, found)
-            found.insert(position, _VyFunction(owner, statement.name, returning))
+            if owner is None or _is_choice(decorators, statement):
+                found.insert(position, _VyFunction(owner, statement.name, returning))
         elif keyword == "class" and statement.name is not None:
             _visit(statement.body, statement.name, False, found)
         else:
             if keyword == "for" and in_function and _returns(statement):
                 loops += 1
             loops += _visit(statement.body, owner, in_function, found)
+        decorators = [*decorators, statement] if statement.tokens[0].string == "@" else []
     return loops
+
+
+def _is_choice(decorators: list[_Statement], definition: _Statement) -> bool:
+    """True when forge writes the `def` in a class, under these decorator lines, as a choice.
+
+    forge's lower_template reads a def in a class as the first that fits of:
+    `__init__`, `@checked_fetch`, `@view` with a one-name return type, and
+    `@choice(...)`. It drops any other def, such as an undecorated or a
+    `@ledger_effect` method.
+    """
+    names = [d.tokens[1].string for d in decorators if len(d.tokens) > 1]
+    texts = [t.string for t in definition.tokens]
+    returns = texts.index("->") + 1 if "->" in texts else len(texts)
+    one_name_return = (
+        texts[returns + 1 : returns + 2] == [":"]
+        and texts[returns].isidentifier()
+        and not iskeyword(texts[returns])
+    )
+    if definition.name == "__init__" or "checked_fetch" in names:
+        return False
+    if "view" in names and one_name_return:
+        return False
+    return any([t.string for t in d.tokens[1:3]] == ["choice", "("] for d in decorators)
 
 
 def _returns(statement: _Statement) -> bool:
