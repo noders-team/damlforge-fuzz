@@ -201,6 +201,9 @@ BUG_PROGRAMS = {
 }
 """Each bug program in bugs/loops/: every check it fails, and its first bug."""
 
+B23 = "OK       emit   bugs/loops/b23_pass_in_loop.vy"
+"""b23 loses an assert in a loop, but no loop check finds it. Only --compare shows it."""
+
 
 @pytest.mark.parametrize("name", BUG_PROGRAMS)
 def test_each_bug_program_is_ok_with_its_loop_bugs(name, fixture_forge):
@@ -504,7 +507,7 @@ def test_check_prints_bad_loop_for_each_bug_program_and_returns_1(
     assert main(["check", "bugs/loops"]) == 1
     assert capsys.readouterr().out.splitlines() == [
         f"BAD_LOOP emit   bugs/loops/{name}.vy  {bugs}" for name, bugs in BUG_PROGRAMS.items()
-    ]
+    ] + [B23]
 
 
 def test_check_damlc_ends_each_bad_loop_line_with_damlcs_verdict(
@@ -522,7 +525,7 @@ def test_check_damlc_ends_each_bad_loop_line_with_damlcs_verdict(
     assert capsys.readouterr().out.splitlines() == [
         f"BAD_LOOP emit   bugs/loops/{name}.vy  {bugs}; {verdict}"
         for (name, bugs), verdict in zip(BUG_PROGRAMS.items(), verdicts, strict=True)
-    ]
+    ] + [B23]
 
 
 def test_a_seed_with_a_loop_bug_stops_the_run_before_input_1(tmp_path, monkeypatch, capsys):

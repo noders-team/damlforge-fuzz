@@ -1,8 +1,8 @@
 """The compare step: calls files, the Python side, `check --compare`, and `run --compare`.
 
 Tests that run Daml need the `dpm` fixture. The tests that name a difference
-that DamlForge 0.0.11 makes, such as the lost creates of a `pass` (b23), also
-need `fixture_forge`, as the bug programs in test_loopcheck.py do. The run
+that DamlForge 0.0.11 makes, such as the lost assert of b23 in bugs/loops/,
+also need `fixture_forge`, as the bug programs in test_loopcheck.py do. The run
 tests check relations, so they hold on any forge version.
 """
 
@@ -321,23 +321,26 @@ def test_each_run_group_folder_is_a_daml_project_whose_test_fails_on_the_call(co
         assert f"c{number}_{script[group['difference']]}" in failed, group["id"]
 
 
-def test_check_compare_prints_bad_run_for_a_lost_create_and_for_each_saved_run_group(
+def test_check_compare_prints_bad_run_for_the_bug_programs_and_each_saved_run_group(
     compare_run, fixture_forge, tmp_path, monkeypatch, capsys
 ):
     _, _, folder, doc = compare_run
     groups = run_groups(doc)
-    loop = "        for o in owners:\n"
-    lost = copy_seed(tmp_path / "pass", "loop_give", loop, loop + "            pass\n")
     same = copy_seed(tmp_path / "is", "loop_give", "if o != stop:", "if o is not stop:")
     saved = [folder / group["input_file"] for group in groups]
+    bugs = ["b21_return_in_create_loop", "b22_return_in_inner_loop", "b23_pass_in_loop"]
     monkeypatch.chdir(PROJECT)
 
-    assert (
-        main(["check", "--compare", str(lost), str(same), "contracts/iou", *map(str, saved)]) == 1
-    )
+    paths = [*(f"bugs/loops/{name}.vy" for name in bugs), str(same), "contracts/iou", *saved]
+    assert main(["check", "--compare", *map(str, paths)]) == 1
     assert capsys.readouterr().out.splitlines() == [
-        f"BAD_RUN  emit   {lost}  contracts in Iou.GiveAll #1: returns None, makes 2 contracts: "
-        "Iou(issuer=alice, owner=alice, amount=1.0), Iou(issuer=alice, owner=bob, amount=1.0)",
+        "BAD_RUN  emit   bugs/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: "
+        "returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); "
+        "loop check L3",
+        "BAD_RUN  emit   bugs/loops/b22_return_in_inner_loop.vy  result in first_positive #1: "
+        "returns 3; loop check L3",
+        "BAD_RUN  emit   bugs/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: "
+        "fails: positive",
         f"OK       emit   {same}",
         "OK       emit   contracts/iou/iou.vy",
     ] + [

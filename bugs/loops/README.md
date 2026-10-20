@@ -1,6 +1,6 @@
-# Loop bugs b17 to b22
+# Loop bugs b17 to b23
 
-This folder has six small programs that show loop bugs in DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11), checked with Daml SDK 3.5.2.
+This folder has seven small programs that show loop bugs in DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11), checked with Daml SDK 3.5.2.
 
 The numbers continue b01 to b16 in [the analysis of the 20000-input report](../../reports/2026-10-19T18-45-34Z/analysis.md).
 That analysis defines the categories. This folder uses three of them:
@@ -15,7 +15,7 @@ Each program was written by hand. It is not fuzzer output.
 Each program has one template, `Iou` with the fields `issuer`, `owner`, and `amount`, and one choice.
 b20 and b22 also have one top-level function.
 
-## The six bugs
+## The seven bugs
 
 | Bug | Category | Code | What happens |
 | --- | --- | --- | --- |
@@ -25,8 +25,9 @@ b20 and b22 also have one top-level function.
 | [b20](#b20-a-top-level-function-gets-no-df1205-check) | E | `fetch(c)` in a top-level function without `@ledger_effect` | No DF1205 error. damlc: a type error |
 | [b21](#b21-return-in-the-loop-works-as-continue) | A | `return` in a loop that creates a contract | `return` works as `continue`. damlc builds the Daml, and the choice creates contracts after the `return` |
 | [b22](#b22-return-in-an-inner-loop-removes-both-loops) | A | `return` in a loop inside another loop, in a function | forge writes no code for the loops. damlc builds the Daml, and the function always returns the value after the loops |
+| [b23](#b23-pass-drops-the-rest-of-its-block) | A | `pass` before an `assert` in a loop in a choice | forge drops the statements after `pass`. damlc builds the Daml, and the choice accepts a number that the `assert` rejects |
 
-Run all six programs with one command from the repository root.
+Run all seven programs with one command from the repository root.
 This is the real output:
 
 ```
@@ -37,13 +38,36 @@ BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22
 BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
 BAD_LOOP emit   bugs/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
 BAD_LOOP emit   bugs/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
+OK       emit   bugs/loops/b23_pass_in_loop.vy
 ```
 
 The command exits with 1.
-Each line names the checks of the [loop check](../../README.md#loop-check) that the program fails, and ends with the verdict of `damlc`.
-b21 and b22 are the only programs whose Daml `damlc` builds, because their bugs show only when the code runs.
-The loop check finds them without a run: a `return` in a loop has no early-return helper in the Daml (`L3`).
-[The proof for b21](#the-proof-for-b21) and [the proof for b22](#the-proof-for-b22) run the code.
+Each `BAD_LOOP` line names the checks of the [loop check](../../README.md#loop-check) that the program fails, and ends with the verdict of `damlc`.
+b21, b22, and b23 are the only programs whose Daml `damlc` builds, because their bugs show only when the code runs.
+The loop check finds b21 and b22 without a run: a `return` in a loop has no early-return helper in the Daml (`L3`).
+No loop check finds b23, so `check` prints `OK` for it.
+
+`--compare` runs the code.
+b21, b22, and b23 each have a calls file next to them, such as `b23_pass_in_loop.calls.yaml`.
+`check --compare` calls each function or choice of that file in Python, on the `.vy` code, and with Daml Script, on the Daml that forge writes.
+It needs dpm and the Daml SDK 3.5.2:
+
+```
+$ damlforge-fuzz check --compare bugs/loops
+BAD_LOOP emit   bugs/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
+BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
+BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
+BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
+BAD_RUN  emit   bugs/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); loop check L3
+BAD_RUN  emit   bugs/loops/b22_return_in_inner_loop.vy  result in first_positive #1: returns 3; loop check L3
+BAD_RUN  emit   bugs/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: fails: positive
+```
+
+A `BAD_RUN` line gives the kind of the difference, the call, and what the `.vy` code does in Python.
+For b23, the second call of `Check` fails in Python on the `assert`, but the Daml runs it (`daml_passes`).
+b17 to b20 have no calls file, and `damlc` rejects their Daml, so they cannot run.
+[Run and compare](../../README.md#run-and-compare) in the main README tells more.
+[The proof for b21](#the-proof-for-b21), [the proof for b22](#the-proof-for-b22), and [the proof for b23](#the-proof-for-b23) run the code with Daml Script by hand.
 
 ## How forge writes a loop
 
@@ -136,8 +160,8 @@ With the runtime patch for b21 alone, forge wrote a helper for the inner loop, b
 
 ### The proof for b21
 
-[`runtime/`](runtime/) is a Daml project with forge's Daml for b21 and b22 and a Daml Script test, [`runtime/daml/Test.daml`](runtime/daml/Test.daml).
-The test has two scripts for b21 and two scripts for [b22](#the-proof-for-b22).
+[`runtime/`](runtime/) is a Daml project with forge's Daml for b21, b22, and b23 and a Daml Script test, [`runtime/daml/Test.daml`](runtime/daml/Test.daml).
+The test has two scripts for b21, two scripts for [b22](#the-proof-for-b22), and two scripts for [b23](#the-proof-for-b23).
 The scripts for b21 are:
 
 - `control_every_owner_gets_an_iou` exercises `GiveUntil` with `owners = [alice, bob]` and a `stop` that is not in the list. Every owner must get an `Iou`.
@@ -150,17 +174,19 @@ cd bugs/loops/runtime
 dpm test
 ```
 
-`dpm test` exits with 1. Its test summary has these four lines:
+`dpm test` exits with 1. Its test summary has these six lines:
 
 ```
 daml/Test.daml:return_in_inner_loop_gives_the_first_positive: failed
 daml/Test.daml:control_no_positive_gives_0: ok, 0 active contracts, 0 transactions.
+daml/Test.daml:control_positive_numbers_pass: ok, 1 active contracts, 2 transactions.
+daml/Test.daml:pass_keeps_the_assert: failed
 daml/Test.daml:control_every_owner_gets_an_iou: ok, 3 active contracts, 2 transactions.
 daml/Test.daml:return_stops_the_loop: failed
 ```
 
-Two of these lines are for b21, and two are for b22.
-The failure message of `return_stops_the_loop` is `expected ['alice-c812a76d','bob-9cefe94d'] == ['alice-c812a76d']`.
+Two of these lines are for b21, two are for b22, and two are for b23.
+The failure message of `return_stops_the_loop` is `expected ['alice-9cefe94d','bob-05e8b107'] == ['alice-9cefe94d']`.
 The left list has the owners that got an `Iou`. The right list has the owners that the `.vy` code gives an `Iou` to.
 The 3 active contracts of the control are the issuer's own `Iou` and the `Iou`s of `alice` and `bob`.
 The control passes, so the party allocation, the query, and the filter that leaves out the issuer's own `Iou` are correct.
@@ -242,9 +268,90 @@ The failure message is `expected 0 == 3`.
 The left value is what forge's `first_positive` returns. The right value is what the `.vy` code returns.
 The control passes, because 0 is also the correct result when no number is positive.
 
+### b23: `pass` drops the rest of its block
+
+```python
+    @choice(controller=owner, consuming=False)
+    def Check(self, xs: list[Decimal]) -> None:
+        for x in xs:
+            pass
+            assert x > Decimal(0), "positive"
+```
+
+The choice must fail when a number in `xs` is not positive.
+forge writes this Daml for the choice:
+
+```haskell
+        _ <-
+          foldlA
+            (\() x -> do
+              pure ())
+            () xs
+        pure ()
+```
+
+The `assert` is gone, so `Check` accepts `[1.0, -1.0]`.
+The Daml has no type error, so damlc builds it.
+No loop check finds the bug: the loop is a `foldlA` with its import, it has no `return`, and it uses no ledger action as a value.
+The fuzzer found b23 with `--compare` (input 2936 of `damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1 --compare`, a `pass` above the `if` in `GiveAll`).
+There the `create` after the `pass` is lost, so `GiveAll` creates no contract.
+
+The cause is the branch for `pass` in `BodyTranslator._translate` (`forge/codegen/emit.py:448` to `449`):
+
+```python
+        if isinstance(first, IRPass):
+            return [f"{pad}pure ()"]
+```
+
+`_translate` writes a block one statement at a time: it writes `first`, then the statements after it, `rest`.
+The branch for `pass` writes `pure ()` and stops, as the branch for a `return` with no value above it does (`emit.py:438` to `440`).
+So forge drops every statement after a `pass` in the same block.
+In a choice, an `assert` in a loop counts as a ledger action (`LoopAnalysis.body_has_ledger_effect`, `forge/codegen/loops.py:186`), so `_translate_for` writes `foldlA` (`emit.py:604`), and the body of the `foldlA` goes through `_translate`.
+
+A `pass` that is not first also drops statements: all the statements after it in its block.
+These are the results of small programs on DamlForge 0.0.11:
+
+- A `pass` in the `if` branch of a loop in a choice, above a `create`: the `create` is lost, and damlc builds the Daml. The fuzzer found this one too (input 75 of `damlforge-fuzz run contracts/loop_* --count 136 --random-seed 251 --compare`).
+- A `pass` between two assignments in a loop of a plain function: the second assignment is lost, and the fold step becomes `pure ()`. damlc rejects the Daml.
+- A `pass` as the first statement of a choice that returns a `Decimal`: the whole body is lost, and the result is `pure ()`. damlc rejects the Daml.
+- A `pass` as the first statement of a plain function that returns a `Decimal`: the function body becomes `pure ()`. damlc rejects the Daml.
+
+So damlc builds the Daml only when `pure ()` has the type that the block needs, as in the step of a `foldlA` with no accumulator, or in a choice that returns `None`.
+
+A runtime patch made the branch for `pass` translate the statements after it: `return self._translate(rest, indent, in_update_block, make_tail, known, renames)`.
+With that patch, forge wrote `assertMsg "positive" (x > (0.0 : Decimal))` in the `foldlA`, and both scripts for b23 in the proof below passed.
+The patch also gave the correct Daml for the four programs in the list above.
+The patch tests the cause. It is not a fix.
+DamlForge `v0.0.7` writes the same Daml for b23. Its branch for `pass` is at `forge/codegen/emit.py:392`.
+
+In a plain function, the same loop loses its `assert` for a second reason.
+`_translate_for` writes no code for a loop that has no accumulator, no ledger action, and no `return` (`emit.py:612`), unless its body is exactly one `assert` (`LoopAnalyzer._is_assertion_only_loop`, `loops.py:389`).
+With `pass` first, the body has two statements, so forge writes no code for the loop.
+A loop body of two `assert` statements, with no `pass`, loses both of them in the same way. For a plain function `two_asserts` with such a loop and `return True`, forge writes `two_asserts xs = True`.
+The patch above does not change this. In a choice, two `assert` statements in a loop give a correct `foldlA`.
+`--compare` cannot show this case: in a plain function, a failed `assert` is a Daml `error`, which Daml Script cannot catch, so `--compare` does not compare a call of a plain function that fails in Python.
+
+### The proof for b23
+
+[`runtime/daml/Test.daml`](runtime/daml/Test.daml) has two scripts for b23. Each one creates an `Iou` and exercises `Check`:
+
+- `control_positive_numbers_pass` exercises `Check` with `xs = [1.0, 2.0]`. Both numbers are positive, so the choice must run.
+- `pass_keeps_the_assert` exercises `Check` with `xs = [1.0, -1.0]` in `submitMustFail`. The `assert` must reject `-1.0`, so the choice must fail.
+
+The `dpm test` run in [the proof for b21](#the-proof-for-b21) also runs these scripts.
+Its test summary has these two lines for b23:
+
+```
+daml/Test.daml:control_positive_numbers_pass: ok, 1 active contracts, 2 transactions.
+daml/Test.daml:pass_keeps_the_assert: failed
+```
+
+The failure message is `Expected submit to fail but it succeeded`.
+The control passes, because the Daml of `Check` accepts every list.
+
 ### Where the Daml comes from
 
-[`runtime/daml/B21ReturnInCreateLoop.daml`](runtime/daml/B21ReturnInCreateLoop.daml) and [`runtime/daml/B22ReturnInInnerLoop.daml`](runtime/daml/B22ReturnInInnerLoop.daml) are copies of what forge wrote, with no change.
+[`runtime/daml/B21ReturnInCreateLoop.daml`](runtime/daml/B21ReturnInCreateLoop.daml), [`runtime/daml/B22ReturnInInnerLoop.daml`](runtime/daml/B22ReturnInInnerLoop.daml), and [`runtime/daml/B23PassInLoop.daml`](runtime/daml/B23PassInLoop.daml) are copies of what forge wrote, with no change.
 To make them again, run these commands from the repository root:
 
 ```sh
@@ -252,6 +359,8 @@ forge daml --no-i bugs/loops/b21_return_in_create_loop.vy -o /tmp/b21
 cp /tmp/b21/B21ReturnInCreateLoop.daml bugs/loops/runtime/daml/
 forge daml --no-i bugs/loops/b22_return_in_inner_loop.vy -o /tmp/b22
 cp /tmp/b22/B22ReturnInInnerLoop.daml bugs/loops/runtime/daml/
+forge daml --no-i bugs/loops/b23_pass_in_loop.vy -o /tmp/b23
+cp /tmp/b23/B23PassInLoop.daml bugs/loops/runtime/daml/
 ```
 
 forge also writes a source map for each file, such as `B21ReturnInCreateLoop.map.json`. The test does not need them.
@@ -260,11 +369,12 @@ To check that the copies are still what forge writes, run the `forge daml` lines
 ```sh
 diff /tmp/b21/B21ReturnInCreateLoop.daml bugs/loops/runtime/daml/B21ReturnInCreateLoop.daml
 diff /tmp/b22/B22ReturnInInnerLoop.daml bugs/loops/runtime/daml/B22ReturnInInnerLoop.daml
+diff /tmp/b23/B23PassInLoop.daml bugs/loops/runtime/daml/B23PassInLoop.daml
 ```
 
 forge names the module after the file, so `b21_return_in_create_loop.vy` becomes the module `B21ReturnInCreateLoop`.
-`Test.daml` imports both modules. If you rename a `.vy` file, change its import in `Test.daml`.
-Both modules have a template `Iou`, so `Test.daml` imports only `first_positive` from `B22ReturnInInnerLoop`.
+`Test.daml` imports the three modules. If you rename a `.vy` file, change its import in `Test.daml`.
+All three modules have a template `Iou`, so `Test.daml` imports only `first_positive` from `B22ReturnInInnerLoop`, and it imports `B23PassInLoop` as `B23`.
 
 ## Category B: valid code, Daml that damlc rejects
 
@@ -475,9 +585,9 @@ With `@ledger_effect` above `total_of`, forge writes `foldlA` and the import, an
 
 ## Limits of this write-up
 
-- All output is from DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11) and Daml SDK 3.5.2. No other version was tried, except that DamlForge `v0.0.7` writes the same Daml for b22.
+- All output is from DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11) and Daml SDK 3.5.2. No other version was tried, except that DamlForge `v0.0.7` writes the same Daml for b22 and b23.
 - b19 and b20 also happen with no loop. They are in this folder because the loop work found them.
-- The runtime patches for b19, b21, and b22 ran in a scratch session. They test a cause. They are not fixes.
+- The runtime patches for b19, b21, b22, and b23 ran in a scratch session. They test a cause. They are not fixes.
 - Category E for b20 assumes that forge must give DF1205 for a top-level function, as its language reference says.
 
 ## Repeat these checks
@@ -486,7 +596,8 @@ Run these commands from the repository root:
 
 ```sh
 damlforge-fuzz check --damlc bugs/loops
+damlforge-fuzz check --compare bugs/loops
 cd bugs/loops/runtime && dpm test
 ```
 
-The first command needs DamlForge and dpm. The second command needs dpm and the Daml SDK 3.5.2.
+The first two commands need DamlForge and dpm. The last command needs dpm and the Daml SDK 3.5.2.

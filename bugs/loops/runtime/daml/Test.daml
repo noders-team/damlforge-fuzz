@@ -5,6 +5,7 @@ import DA.Assert
 import DA.List (sort)
 import B21ReturnInCreateLoop
 import B22ReturnInInnerLoop (first_positive)
+import qualified B23PassInLoop as B23
 
 giveUntil : [Party] -> Party -> Script [Party]
 giveUntil owners stop = do
@@ -37,3 +38,15 @@ control_no_positive_gives_0 = do
 return_in_inner_loop_gives_the_first_positive : Script ()
 return_in_inner_loop_gives_the_first_positive = do
   first_positive [[0, -1], [3, 4]] === 3
+
+control_positive_numbers_pass : Script ()
+control_positive_numbers_pass = do
+  owner <- allocateParty "owner"
+  cid <- submit owner do createCmd B23.Iou with issuer = owner, owner, amount = 1.0
+  submit owner do exerciseCmd cid B23.Check with xs = [1.0, 2.0]
+
+pass_keeps_the_assert : Script ()
+pass_keeps_the_assert = do
+  owner <- allocateParty "owner"
+  cid <- submit owner do createCmd B23.Iou with issuer = owner, owner, amount = 1.0
+  submitMustFail owner do exerciseCmd cid B23.Check with xs = [1.0, -1.0]

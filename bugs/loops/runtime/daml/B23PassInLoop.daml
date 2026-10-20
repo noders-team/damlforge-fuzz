@@ -1,0 +1,25 @@
+module B23PassInLoop where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Check : ()
+      with
+        xs : [Decimal]
+      controller owner
+      do
+        let self = this
+        _ <-
+          foldlA
+            (\() x -> do
+              pure ())
+            () xs
+        pure ()

@@ -1,0 +1,5 @@
+# The calls that `check --compare` makes on b21_return_in_create_loop.vy.
+# Only alice must get an Iou: the loop stops at `stop`.
+- choice: Iou.GiveUntil
+  contract: {issuer: issuer, owner: issuer, amount: "1.0"}
+  args: {owners: [alice, stop, bob], stop: stop}

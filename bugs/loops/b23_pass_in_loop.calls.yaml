@@ -1,0 +1,8 @@
+# The calls that `check --compare` makes on b23_pass_in_loop.vy.
+# The second call must fail on the assert.
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args: {xs: ["1.0", "2.0"]}
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args: {xs: ["1.0", "-1.0"]}
