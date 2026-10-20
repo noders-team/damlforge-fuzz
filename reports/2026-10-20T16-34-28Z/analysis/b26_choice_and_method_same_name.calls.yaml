@@ -1,0 +1,3 @@
+- choice: Iou.Fee
+  contract: {issuer: alice, owner: bob, amount: "100.0"}
+  args: {}

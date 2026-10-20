@@ -1,0 +1,23 @@
+module LoopMany where
+
+template Iou
+  with
+    owner : Party
+  where
+    signatory [issuer]
+
+    nonconsuming choice Many : [ContractId Iou]
+      with
+        owners : [Party]
+      controller owner
+      do
+        let self = this
+        let (cids : [ContractId Iou]) = []
+        _damlforge_cids3 <-
+          foldlA
+            (\cids o -> do
+              _damlforge_cids_item1 <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+              let _damlforge_cids2 = cids <> [_damlforge_cids_item1]
+              pure _damlforge_cids2)
+            cids owners
+        pure ()

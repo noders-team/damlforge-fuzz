@@ -1,0 +1,10 @@
+# The second call has a negative number, and the third call a number above 1000.
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args: {xs: ["1.0", "2.0"]}
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args: {xs: ["1.0", "-1.0"]}
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args: {xs: ["1.0", "5000.0"]}

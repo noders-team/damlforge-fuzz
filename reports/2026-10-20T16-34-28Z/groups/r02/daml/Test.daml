@@ -1,0 +1,70 @@
+module Test where
+
+import Daml.Script
+import DA.Assert
+import DA.List (sortOn)
+import LoopGive
+
+c1_runs : Script ()
+c1_runs = do
+  p_alice <- allocateParty "alice"
+  p_stop <- allocateParty "stop"
+  p_bob <- allocateParty "bob"
+  let parties = [p_alice, p_stop, p_bob]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_alice, amount = 1.0
+  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_alice, p_stop, p_bob], stop = p_stop
+  pure ()
+
+c1_result : Script ()
+c1_result = do
+  p_alice <- allocateParty "alice"
+  p_stop <- allocateParty "stop"
+  p_bob <- allocateParty "bob"
+  let parties = [p_alice, p_stop, p_bob]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_alice, amount = 1.0
+  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_alice, p_stop, p_bob], stop = p_stop
+  result === ()
+
+c1_contracts : Script ()
+c1_contracts = do
+  p_alice <- allocateParty "alice"
+  p_stop <- allocateParty "stop"
+  p_bob <- allocateParty "bob"
+  let parties = [p_alice, p_stop, p_bob]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_alice, amount = 1.0
+  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_alice, p_stop, p_bob], stop = p_stop
+  found <- query @Iou parties
+  let made = [c | (cid, c) <- found, cid `notElem` [cid0]]
+  sortOn show made === sortOn show [(Iou with issuer = p_alice, owner = p_alice, amount = 1.0), (Iou with issuer = p_alice, owner = p_bob, amount = 1.0)]
+
+c2_runs : Script ()
+c2_runs = do
+  p_alice <- allocateParty "alice"
+  p_stop <- allocateParty "stop"
+  p_bob <- allocateParty "bob"
+  let parties = [p_alice, p_stop, p_bob]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 2.5
+  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_bob, p_alice], stop = p_stop
+  pure ()
+
+c2_result : Script ()
+c2_result = do
+  p_alice <- allocateParty "alice"
+  p_stop <- allocateParty "stop"
+  p_bob <- allocateParty "bob"
+  let parties = [p_alice, p_stop, p_bob]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 2.5
+  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_bob, p_alice], stop = p_stop
+  result === ()
+
+c2_contracts : Script ()
+c2_contracts = do
+  p_alice <- allocateParty "alice"
+  p_stop <- allocateParty "stop"
+  p_bob <- allocateParty "bob"
+  let parties = [p_alice, p_stop, p_bob]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 2.5
+  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_bob, p_alice], stop = p_stop
+  found <- query @Iou parties
+  let made = [c | (cid, c) <- found, cid `notElem` [cid0]]
+  sortOn show made === sortOn show [(Iou with issuer = p_alice, owner = p_bob, amount = 2.5), (Iou with issuer = p_alice, owner = p_alice, amount = 2.5)]

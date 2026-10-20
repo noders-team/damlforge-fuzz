@@ -1,0 +1,7 @@
+# In the second call, 50.0 is above the limit of 10.0.
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "10.0"}
+  args: {xs: ["1.0", "2.0"]}
+- choice: Iou.Check
+  contract: {issuer: alice, owner: bob, amount: "10.0"}
+  args: {xs: ["1.0", "50.0"]}

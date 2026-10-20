@@ -1,0 +1,5 @@
+module LoopPure where
+
+has_party : [Party] -> Party -> Bool
+has_party ps p =
+  False

@@ -1,0 +1,1137 @@
+{
+  "schema": 1,
+  "run": {
+    "started": "2026-10-20T16:34:28Z",
+    "random_seed": 1,
+    "seconds": null,
+    "count": 20000,
+    "seeds": [
+      "contracts/loop_count/loop_count.vy",
+      "contracts/loop_give/loop_give.vy",
+      "contracts/loop_many/loop_many.vy",
+      "contracts/loop_pure/loop_pure.vy",
+      "contracts/loop_verify/loop_verify.vy"
+    ],
+    "forge_version": "0.0.11",
+    "interrupted": false
+  },
+  "totals": {
+    "inputs": 20000,
+    "ok": 4092,
+    "rejected": 10205,
+    "crash": 1643,
+    "skipped": 4060
+  },
+  "timeline": [
+    {
+      "second": 1,
+      "inputs": 1778,
+      "ok": 353,
+      "rejected": 895,
+      "crash": 145,
+      "skipped": 385
+    },
+    {
+      "second": 2,
+      "inputs": 3642,
+      "ok": 719,
+      "rejected": 1863,
+      "crash": 299,
+      "skipped": 761
+    },
+    {
+      "second": 3,
+      "inputs": 5513,
+      "ok": 1089,
+      "rejected": 2841,
+      "crash": 460,
+      "skipped": 1123
+    },
+    {
+      "second": 4,
+      "inputs": 7391,
+      "ok": 1461,
+      "rejected": 3791,
+      "crash": 619,
+      "skipped": 1520
+    },
+    {
+      "second": 5,
+      "inputs": 9217,
+      "ok": 1857,
+      "rejected": 4697,
+      "crash": 783,
+      "skipped": 1880
+    },
+    {
+      "second": 6,
+      "inputs": 11173,
+      "ok": 2249,
+      "rejected": 5677,
+      "crash": 935,
+      "skipped": 2312
+    },
+    {
+      "second": 7,
+      "inputs": 12960,
+      "ok": 2626,
+      "rejected": 6563,
+      "crash": 1082,
+      "skipped": 2689
+    },
+    {
+      "second": 8,
+      "inputs": 14855,
+      "ok": 3005,
+      "rejected": 7537,
+      "crash": 1230,
+      "skipped": 3083
+    },
+    {
+      "second": 9,
+      "inputs": 16644,
+      "ok": 3377,
+      "rejected": 8459,
+      "crash": 1383,
+      "skipped": 3425
+    },
+    {
+      "second": 10,
+      "inputs": 18476,
+      "ok": 3763,
+      "rejected": 9432,
+      "crash": 1518,
+      "skipped": 3763
+    },
+    {
+      "second": 11,
+      "inputs": 20000,
+      "ok": 4092,
+      "rejected": 10205,
+      "crash": 1643,
+      "skipped": 4060
+    }
+  ],
+  "damlc": {
+    "checked_texts": 1303,
+    "bad_texts": 1124,
+    "bad_inputs": 2017,
+    "seconds": 9.99,
+    "interrupted": false
+  },
+  "compare": {
+    "compared": 1462,
+    "skipped": 1868,
+    "dropped": 762,
+    "differ": 13,
+    "skipped_calls": 60,
+    "seconds": 100.39,
+    "interrupted": false
+  },
+  "groups": [
+    {
+      "id": "g01",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/ir/lower.py:115",
+      "stage": "check",
+      "message": "lower_type: unsupported type expression Int",
+      "count": 481,
+      "first_seen": {
+        "second": 0.03,
+        "input": 19
+      },
+      "seed": "contracts/loop_give/loop_give.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: 9223372036854775807[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n        for o in owners:\n            if o != stop:\n                create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n        return",
+      "input_file": "groups/g01/loop_give.vy",
+      "shrunk": "@template\nclass Iou:\n    signatory: 9223372036854775807[Party] = [issuer]\n",
+      "shrunk_file": "groups/g01/shrunk/loop_give.vy"
+    },
+    {
+      "id": "g02",
+      "kind": "crash",
+      "exception": "IndentationError",
+      "where": "forge/ast/pre_parser.py:304",
+      "stage": "parse",
+      "message": "unindent does not match any outer indentation level (<string>, line 17)",
+      "count": 601,
+      "first_seen": {
+        "second": 0.05,
+        "input": 43
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@ledger_effect\ndef verify(cids: [ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n    return total\n\n\n@template\nclass Iou:\n            total = total + x\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/g02/loop_verify.vy",
+      "shrunk": "            total = total + x\n    issuer: Party\n",
+      "shrunk_file": "groups/g02/shrunk/loop_verify.vy"
+    },
+    {
+      "id": "g03",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/codegen/emit.py:596",
+      "stage": "emit",
+      "message": "_translate_for: a `for` loop with both loop-carried accumulator mutation and an early `return` inside its body is not supported",
+      "count": 169,
+      "first_seen": {
+        "second": 0.07,
+        "input": 63
+      },
+      "seed": "contracts/loop_count/loop_count.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n\n    @choice(controller=owner, consuming=False)\n    def Count(self, cids: list[ContractId[Iou]]) -> int:\n        n = 0\n        for c in cids:\n            i = fetch(c)\n            if i.amount > Decimal(1):\n                if c == c:\n                    return n\n                n = n + 1\n        return n\n",
+      "input_file": "groups/g03/loop_count.vy",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, template\n@template\nclass Iou:\n    owner: Party\n    signatory: list[Party] = [issuer]\n    @choice(controller=owner, consuming=False)\n    def Count(self, cids: list[ContractId[Iou]]) -> int:\n        n = 0\n        for c in cids:\n                if c == c:\n                    return n\n                n = n + 1\n",
+      "shrunk_file": "groups/g03/shrunk/loop_count.vy"
+    },
+    {
+      "id": "g04",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/ir/lower.py:314",
+      "stage": "lower",
+      "message": "lower_stmt: unsupported statement node Import",
+      "count": 158,
+      "first_seen": {
+        "second": 0.15,
+        "input": 210
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        import os\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/g04/loop_many.vy",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, template\n@template\nclass Iou:\n    owner: Party\n    signatory: list[Party] = [issuer]\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        import os\n",
+      "shrunk_file": "groups/g04/shrunk/loop_many.vy"
+    },
+    {
+      "id": "g05",
+      "kind": "crash",
+      "exception": "AttributeError",
+      "where": "forge/semantics/analysis/types.py:644",
+      "stage": "check",
+      "message": "'Subscript' object has no attribute 'id'",
+      "count": 99,
+      "first_seen": {
+        "second": 0.16,
+        "input": 226
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    tuple[int, str]: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/g05/loop_pure.vy",
+      "shrunk": "@template\nclass Iou:\n    tuple[int, str]: Party\n",
+      "shrunk_file": "groups/g05/shrunk/loop_pure.vy"
+    },
+    {
+      "id": "g06",
+      "kind": "crash",
+      "exception": "ModuleNotFoundError",
+      "where": "forge/semantics/analysis/imports.py:108",
+      "stage": "check",
+      "message": "No module named 'forge.Iou'",
+      "count": 9,
+      "first_seen": {
+        "second": 0.2,
+        "input": 300
+      },
+      "seed": "contracts/loop_give/loop_give.vy",
+      "input": "from forge.Iou import Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n        for o in owners:\n            if o != stop:\n                create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n        return\n",
+      "input_file": "groups/g06/loop_give.vy",
+      "shrunk": "from forge.Iou import Decimal, Party, choice, template\n@template\nclass Iou:\n    issuer: Party\n",
+      "shrunk_file": "groups/g06/shrunk/loop_give.vy"
+    },
+    {
+      "id": "g07",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/codegen/emit.py:271",
+      "stage": "emit",
+      "message": "render_expr: unsupported IR expression NoneType",
+      "count": 19,
+      "first_seen": {
+        "second": 0.48,
+        "input": 825
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@ledger_effect\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    owner: Party\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n    return total\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/g07/loop_verify.vy",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    owner: Party\n@template\nclass Iou:\n    signatory: list[Party] = [issuer]\n",
+      "shrunk_file": "groups/g07/shrunk/loop_verify.vy"
+    },
+    {
+      "id": "g08",
+      "kind": "crash",
+      "exception": "IndexError",
+      "where": "forge/ast/pre_parser.py:389",
+      "stage": "parse",
+      "message": "pop from empty list",
+      "count": 14,
+      "first_seen": {
+        "second": 0.64,
+        "input": 1091
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row for rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/g08/loop_pure.vy",
+      "shrunk": "    for row for rows:\n        for x in row:\n",
+      "shrunk_file": "groups/g08/shrunk/loop_pure.vy"
+    },
+    {
+      "id": "g09",
+      "kind": "crash",
+      "exception": "KeyError",
+      "where": "forge/ir/lower.py:289",
+      "stage": "lower",
+      "message": "'BitAnd'",
+      "count": 8,
+      "first_seen": {
+        "second": 0.67,
+        "input": 1139
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total & x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/g09/loop_pure.vy",
+      "shrunk": "def total_of(xs: list[Decimal]) -> Decimal:\n            total = total & x\n",
+      "shrunk_file": "groups/g09/shrunk/loop_pure.vy"
+    },
+    {
+      "id": "g10",
+      "kind": "crash",
+      "exception": "AssertionError",
+      "where": "forge/ast/parse.py:106",
+      "stage": "parse",
+      "message": "",
+      "count": 72,
+      "first_seen": {
+        "second": 0.69,
+        "input": 1165
+      },
+      "seed": "contracts/loop_count/loop_count.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Count(self, cids: list[ContractId[Iou]]) -> int:\n        n = 0\n        for c in cids:\n            i = fetch(c)\n            x += 1\n            if i.amount > [x for x in xs](1):\n                n = n + 1\n        return n\n",
+      "input_file": "groups/g10/loop_count.vy",
+      "shrunk": "@template\nclass Iou:\n            if i.amount > [x for x in xs](1):\n                n = n + 1\n",
+      "shrunk_file": "groups/g10/shrunk/loop_count.vy"
+    },
+    {
+      "id": "g11",
+      "kind": "crash",
+      "exception": "KeyError",
+      "where": "forge/ir/lower.py:298",
+      "stage": "lower",
+      "message": "'Invert'",
+      "count": 10,
+      "first_seen": {
+        "second": 3.42,
+        "input": 6342
+      },
+      "seed": "contracts/loop_give/loop_give.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n        for o in owners:\n            if o == o:\n                ~x\n            if o != stop:\n                create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n        return\n",
+      "input_file": "groups/g11/loop_give.vy",
+      "shrunk": "from forge.models import Decimal, Party, choice, template\n@template\nclass Iou:\n    issuer: Party\n    signatory: list[Party] = [issuer]\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n                ~x\n",
+      "shrunk_file": "groups/g11/shrunk/loop_give.vy"
+    },
+    {
+      "id": "g12",
+      "kind": "crash",
+      "exception": "CompilerPanic",
+      "where": "forge/codegen/loops.py:354",
+      "stage": "emit",
+      "message": "apply_renames: unsupported IR expression NoneType",
+      "count": 3,
+      "first_seen": {
+        "second": 5.02,
+        "input": 9263
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@ledger_effect\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n    issuer: Party\n    return total\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/g12/loop_verify.vy",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        total = total + i.amount\n    issuer: Party\n@template\nclass Iou:\n    signatory: list[Party] = [issuer]\n",
+      "shrunk_file": "groups/g12/shrunk/loop_verify.vy"
+    },
+    {
+      "id": "d01",
+      "kind": "bad_daml",
+      "key": "duplicate field name ‘…’ in record construction",
+      "message": "duplicate field name ‘issuer’ in record construction",
+      "damlc_stage": "typecheck",
+      "daml_line": 26,
+      "count": 1,
+      "first_seen": {
+        "second": 0.01,
+        "input": 4
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[amount] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, issuer=o, amount=self.amount))\n                cids.append(cid)\n        return ([])\n",
+      "input_file": "groups/d01/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, issuer = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure ([])\n",
+      "daml_file": "groups/d01/LoopMany.daml"
+    },
+    {
+      "id": "d02",
+      "kind": "bad_daml",
+      "key": "Couldn't match type ‘…’ with ‘…’",
+      "message": "Couldn't match type ‘()’ with ‘Numeric 10’",
+      "damlc_stage": "typecheck",
+      "daml_line": 16,
+      "count": 280,
+      "first_seen": {
+        "second": 0.02,
+        "input": 8
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@ledger_effect\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/d02/loop_verify.vy",
+      "daml": "module LoopVerify where\n\nimport DA.Action (foldlA)\n\nverify : [ContractId Iou] -> Party -> Update Decimal\nverify cids p = do\n  let total = (0.0 : Decimal)\n  _damlforge_total2 <-\n    foldlA\n      (\\total c -> do\n        i <- fetch c\n        assertMsg \"issuer\" (i.issuer == p)\n        let _damlforge_total1 = total + i.amount\n        pure _damlforge_total1)\n      total cids\n  pure ()\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d02/LoopVerify.daml"
+    },
+    {
+      "id": "d03",
+      "kind": "bad_daml",
+      "key": "You cannot bind scoped type variable ‘…’",
+      "message": "You cannot bind scoped type variable ‘o’",
+      "damlc_stage": "typecheck",
+      "daml_line": 20,
+      "count": 9,
+      "first_seen": {
+        "second": 0.03,
+        "input": 21
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[o[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                for i in range(3):\n                    pass\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d03/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [o Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d03/LoopMany.daml"
+    },
+    {
+      "id": "d04",
+      "kind": "bad_daml",
+      "key": "Couldn't match expected type ‘…’",
+      "message": "Couldn't match expected type ‘Iou -> Party’",
+      "damlc_stage": "typecheck",
+      "daml_line": 33,
+      "count": 86,
+      "first_seen": {
+        "second": 0.04,
+        "input": 29
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = owner + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/d04/loop_pure.vy",
+      "daml": "module LoopPure where\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = owner + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  let _damlforge_maybe6 = _damlforge_loop1 p ps in\n  case _damlforge_maybe6 of\n    Some _damlforge_early7 -> _damlforge_early7\n    None ->\n      False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        assertMsg \"positive\" (all (\\x -> x > (0.0 : Decimal)) xs)\n        pure (total_of xs)\n\n_damlforge_loop1 p [] = None\n_damlforge_loop1 p (q :: _damlforge_rest) =\n  if q == p\n    then\n      Some True\n    else\n      _damlforge_loop1 p _damlforge_rest\n",
+      "daml_file": "groups/d04/LoopPure.daml"
+    },
+    {
+      "id": "d05",
+      "kind": "bad_daml",
+      "key": "Tried to get field ‘…’ with type ‘…’",
+      "message": "Tried to get field ‘amount’ with type ‘Iou",
+      "damlc_stage": "typecheck",
+      "daml_line": 13,
+      "count": 2,
+      "first_seen": {
+        "second": 0.05,
+        "input": 54
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@ledger_effect\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = amount + i.amount\n    return total\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/d05/loop_verify.vy",
+      "daml": "module LoopVerify where\n\nimport DA.Action (foldlA)\n\nverify : [ContractId Iou] -> Party -> Update Decimal\nverify cids p = do\n  let total = (0.0 : Decimal)\n  _damlforge_total2 <-\n    foldlA\n      (\\total c -> do\n        i <- fetch c\n        assertMsg \"issuer\" (i.issuer == p)\n        let _damlforge_total1 = amount + i.amount\n        pure _damlforge_total1)\n      total cids\n  pure (_damlforge_total2)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Sum : Decimal\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        verify cids self.issuer\n",
+      "daml_file": "groups/d05/LoopVerify.daml"
+    },
+    {
+      "id": "d06",
+      "kind": "bad_daml",
+      "key": "Tried to access nonexistent field ‘…’ with type ‘…’ on value of type ‘…’",
+      "message": "Tried to access nonexistent field ‘owner’ with type ‘Party’ on value of type ‘t0",
+      "damlc_stage": "typecheck",
+      "daml_line": 24,
+      "count": 187,
+      "first_seen": {
+        "second": 0.06,
+        "input": 55
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != observer.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d06/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= observer.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d06/LoopMany.daml"
+    },
+    {
+      "id": "d07",
+      "kind": "bad_daml",
+      "key": "Couldn't match expected type ‘…’ with actual type ‘…’",
+      "message": "Couldn't match expected type ‘Int’ with actual type ‘[a0]’",
+      "damlc_stage": "typecheck",
+      "daml_line": 28,
+      "count": 82,
+      "first_seen": {
+        "second": 0.07,
+        "input": 76
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = len(x) + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/d07/loop_pure.vy",
+      "daml": "module LoopPure where\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = length x + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  let _damlforge_maybe6 = _damlforge_loop1 p ps in\n  case _damlforge_maybe6 of\n    Some _damlforge_early7 -> _damlforge_early7\n    None ->\n      False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        assertMsg \"positive\" (all (\\x -> x > (0.0 : Decimal)) xs)\n        pure (total_of xs)\n\n_damlforge_loop1 p [] = None\n_damlforge_loop1 p (q :: _damlforge_rest) =\n  if q == p\n    then\n      Some True\n    else\n      _damlforge_loop1 p _damlforge_rest\n",
+      "daml_file": "groups/d07/LoopPure.daml"
+    },
+    {
+      "id": "d08",
+      "kind": "bad_daml",
+      "key": "Variable not in scope: …",
+      "message": "Variable not in scope: x : Bool",
+      "damlc_stage": "typecheck",
+      "daml_line": 24,
+      "count": 570,
+      "first_seen": {
+        "second": 0.08,
+        "input": 97
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if x:\n                pass\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d08/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if x\n                then do\n                  pure ()\n                else do\n                  pure ()\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d08/LoopMany.daml"
+    },
+    {
+      "id": "d09",
+      "kind": "bad_daml",
+      "key": "parse error on input ‘…’",
+      "message": "parse error on input ‘Int’",
+      "damlc_stage": "parser",
+      "daml_line": 47,
+      "count": 97,
+      "first_seen": {
+        "second": 0.1,
+        "input": 126
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\nif x:\n    pass\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    Int: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/d09/loop_pure.vy",
+      "daml": "module LoopPure where\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = total + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  let _damlforge_maybe6 = _damlforge_loop1 p ps in\n  case _damlforge_maybe6 of\n    Some _damlforge_early7 -> _damlforge_early7\n    None ->\n      False\n\ntemplate Iou\n  with\n    Int : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        assertMsg \"positive\" (all (\\x -> x > (0.0 : Decimal)) xs)\n        pure (total_of xs)\n\n_damlforge_loop1 p [] = None\n_damlforge_loop1 p (q :: _damlforge_rest) =\n  if q == p\n    then\n      Some True\n    else\n      _damlforge_loop1 p _damlforge_rest\n",
+      "daml_file": "groups/d09/LoopPure.daml"
+    },
+    {
+      "id": "d10",
+      "kind": "bad_daml",
+      "key": "Not in scope: ‘…’",
+      "message": "Not in scope: ‘issuer’",
+      "damlc_stage": "typecheck",
+      "daml_line": 25,
+      "count": 136,
+      "first_seen": {
+        "second": 0.12,
+        "input": 181
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d10/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d10/LoopMany.daml"
+    },
+    {
+      "id": "d11",
+      "kind": "bad_daml",
+      "key": "Duplicate field name …. Original definition at ….",
+      "message": "Duplicate field name owner. Original definition at LoopGive.daml:8:5-9.",
+      "damlc_stage": "parser",
+      "daml_line": 9,
+      "count": 270,
+      "first_seen": {
+        "second": 0.13,
+        "input": 185
+      },
+      "seed": "contracts/loop_give/loop_give.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n        for o in owners:\n            if o != stop:\n                create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n        return\n",
+      "input_file": "groups/d11/loop_give.vy",
+      "daml": "module LoopGive where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice GiveAll : ()\n      with\n        owners : [Party]\n        stop : Party\n      controller issuer\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() o -> do\n              if o /= stop\n                then do\n                  create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  pure ()\n                else do\n                  pure ())\n            () owners\n        pure ()\n",
+      "daml_file": "groups/d11/LoopGive.daml"
+    },
+    {
+      "id": "d12",
+      "kind": "bad_daml",
+      "key": "Data constructor not in scope: …",
+      "message": "Data constructor not in scope: Decimal : Decimal",
+      "damlc_stage": "typecheck",
+      "daml_line": 16,
+      "count": 110,
+      "first_seen": {
+        "second": 0.19,
+        "input": 284
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n\n@ledger_effect\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n    return Decimal\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/d12/loop_verify.vy",
+      "daml": "module LoopVerify where\n\nimport DA.Action (foldlA)\n\nverify : [ContractId Iou] -> Party -> Update Decimal\nverify cids p = do\n  let total = (0.0 : Decimal)\n  _damlforge_total2 <-\n    foldlA\n      (\\total c -> do\n        i <- fetch c\n        assertMsg \"issuer\" (i.issuer == p)\n        let _damlforge_total1 = total + i.amount\n        pure _damlforge_total1)\n      total cids\n  pure (Decimal)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Sum : Decimal\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        verify cids self.issuer\n",
+      "daml_file": "groups/d12/LoopVerify.daml"
+    },
+    {
+      "id": "d13",
+      "kind": "bad_daml",
+      "key": "Tried to access nonexistent field ‘…’ with type ‘…’",
+      "message": "Tried to access nonexistent field ‘append’ with type ‘Update",
+      "damlc_stage": "typecheck",
+      "daml_line": 27,
+      "count": 23,
+      "first_seen": {
+        "second": 0.26,
+        "input": 417
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append()\n        return cids\n",
+      "input_file": "groups/d13/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _ <-\n          foldlA\n            (\\() o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  cids.append\n                  pure ()\n                else do\n                  pure ())\n            () owners\n        pure (cids)\n",
+      "daml_file": "groups/d13/LoopMany.daml"
+    },
+    {
+      "id": "d14",
+      "kind": "bad_daml",
+      "key": "Ambiguous type variable ‘…’ arising from a use of ‘…’",
+      "message": "Ambiguous type variable ‘a0’ arising from a use of ‘toParties’",
+      "damlc_stage": "typecheck",
+      "daml_line": 25,
+      "count": 38,
+      "first_seen": {
+        "second": 0.28,
+        "input": 464
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@ledger_effect\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n    return total\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = []\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/d14/loop_verify.vy",
+      "daml": "module LoopVerify where\n\nimport DA.Action (foldlA)\n\nverify : [ContractId Iou] -> Party -> Update Decimal\nverify cids p = do\n  let total = (0.0 : Decimal)\n  _damlforge_total2 <-\n    foldlA\n      (\\total c -> do\n        i <- fetch c\n        assertMsg \"issuer\" (i.issuer == p)\n        let _damlforge_total1 = total + i.amount\n        pure _damlforge_total1)\n      total cids\n  pure (_damlforge_total2)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer []\n\n    nonconsuming choice Sum : Decimal\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        verify cids self.issuer\n",
+      "daml_file": "groups/d14/LoopVerify.daml"
+    },
+    {
+      "id": "d15",
+      "kind": "bad_daml",
+      "key": "No instance for (IsParties …)",
+      "message": "No instance for (IsParties Int) arising from a use of ‘toParties’",
+      "damlc_stage": "typecheck",
+      "daml_line": 17,
+      "count": 16,
+      "first_seen": {
+        "second": 0.3,
+        "input": 492
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=-9223372036854775808, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d15/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller -9223372036854775808\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d15/LoopMany.daml"
+    },
+    {
+      "id": "d16",
+      "kind": "bad_daml",
+      "key": "Failure to process Daml program, this feature is not currently supported.",
+      "message": "Failure to process Daml program, this feature is not currently supported.",
+      "damlc_stage": "Core to Daml-LF",
+      "daml_line": 38,
+      "count": 30,
+      "first_seen": {
+        "second": 0.31,
+        "input": 521
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    x += 1\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/d16/loop_pure.vy",
+      "daml": "module LoopPure where\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = total + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  let _damlforge_maybe6 = _damlforge_loop1 p ps in\n  case _damlforge_maybe6 of\n    Some _damlforge_early7 -> _damlforge_early7\n    None ->\n      let x = x + 1 in\n      False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        assertMsg \"positive\" (all (\\x -> x > (0.0 : Decimal)) xs)\n        pure (total_of xs)\n\n_damlforge_loop1 p [] = None\n_damlforge_loop1 p (q :: _damlforge_rest) =\n  if q == p\n    then\n      Some True\n    else\n      _damlforge_loop1 p _damlforge_rest\n",
+      "daml_file": "groups/d16/LoopPure.daml"
+    },
+    {
+      "id": "d17",
+      "kind": "bad_daml",
+      "key": "Ambiguous occurrence ‘…’",
+      "message": "Ambiguous occurrence ‘Party’",
+      "damlc_stage": "typecheck",
+      "daml_line": 1,
+      "count": 6,
+      "first_seen": {
+        "second": 0.43,
+        "input": 725
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Party(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d17/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Party : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d17/LoopMany.daml"
+    },
+    {
+      "id": "d18",
+      "kind": "bad_daml",
+      "key": "Not in scope: data constructor ‘…’",
+      "message": "Not in scope: data constructor ‘ContractId’",
+      "damlc_stage": "typecheck",
+      "daml_line": 9,
+      "count": 47,
+      "first_seen": {
+        "second": 0.47,
+        "input": 809
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@ledger_effect\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    ContractId[int] = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n    return total\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/d18/loop_verify.vy",
+      "daml": "module LoopVerify where\n\nimport DA.List ((!!))\n\nimport DA.Action (foldlA)\n\nverify : [ContractId Iou] -> Party -> Update Decimal\nverify cids p = do\n  let (ContractId) !! (int) = (0.0 : Decimal)\n  _ <-\n    foldlA\n      (\\() c -> do\n        i <- fetch c\n        assertMsg \"issuer\" (i.issuer == p)\n        let total = total + i.amount\n        pure ())\n      () cids\n  pure (total)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Sum : Decimal\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        verify cids self.issuer\n",
+      "daml_file": "groups/d18/LoopVerify.daml"
+    },
+    {
+      "id": "d19",
+      "kind": "bad_daml",
+      "key": "Couldn't match kind ‘…’ with ‘…’",
+      "message": "Couldn't match kind ‘GHC.Types.Nat’ with ‘*’",
+      "damlc_stage": "typecheck",
+      "daml_line": 21,
+      "count": 3,
+      "first_seen": {
+        "second": 0.53,
+        "input": 914
+      },
+      "seed": "contracts/loop_count/loop_count.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Count(self, cids: list[ContractId[Iou]]) -> int:\n        n = 0\n        amount\n        for c in cids:\n            i = fetch(c)\n            if i.amount > Decimal(1):\n                n = n + 1\n        return n\n",
+      "input_file": "groups/d19/loop_count.vy",
+      "daml": "module LoopCount where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Count : Int\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        let n = 0\n        amount\n        _damlforge_n2 <-\n          foldlA\n            (\\n c -> do\n              i <- fetch c\n              if i.amount > (1.0 : Decimal)\n                then do\n                  let _damlforge_n1 = n + 1\n                  pure _damlforge_n1\n                else do\n                  pure n)\n            n cids\n        pure (_damlforge_n2)\n",
+      "daml_file": "groups/d19/LoopCount.daml"
+    },
+    {
+      "id": "d20",
+      "kind": "bad_daml",
+      "key": "Couldn't match type ‘…’",
+      "message": "Couldn't match type ‘[ContractId Iou]’",
+      "damlc_stage": "typecheck",
+      "daml_line": 1,
+      "count": 4,
+      "first_seen": {
+        "second": 1.8,
+        "input": 3258
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> set[int][ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d20/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Set as Set\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : Set.Set (ContractId Iou)\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d20/LoopMany.daml"
+    },
+    {
+      "id": "d21",
+      "kind": "bad_daml",
+      "key": "The constructor ‘…’ should have 3 arguments, but has been given none",
+      "message": "The constructor ‘Iou’ should have 3 arguments, but has been given none",
+      "damlc_stage": "typecheck",
+      "daml_line": 22,
+      "count": 1,
+      "first_seen": {
+        "second": 2.44,
+        "input": 4500
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        for _k in range(0, 2):\n            cids: list[ContractId[Iou]] = []\n        for Iou in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d21/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() Iou -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let cids = cids <> [cid]\n                  pure ()\n                else do\n                  pure ())\n            () owners\n        pure (cids)\n",
+      "daml_file": "groups/d21/LoopMany.daml"
+    },
+    {
+      "id": "d22",
+      "kind": "bad_daml",
+      "key": "Ambiguous type variable ‘…’ arising from the literal ‘…’",
+      "message": "Ambiguous type variable ‘n0’ arising from the literal ‘1.5’",
+      "damlc_stage": "typecheck",
+      "daml_line": 27,
+      "count": 3,
+      "first_seen": {
+        "second": 2.65,
+        "input": 4893
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                1.5.append(cid)\n        return cids\n",
+      "input_file": "groups/d22/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _ <-\n          foldlA\n            (\\() o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  (1.5).append cid\n                  pure ()\n                else do\n                  pure ())\n            () owners\n        pure (cids)\n",
+      "daml_file": "groups/d22/LoopMany.daml"
+    },
+    {
+      "id": "d23",
+      "kind": "bad_daml",
+      "key": "Tried to get field ‘…’ with type ‘…’ on value of type ‘…’, but that field has type ‘…’",
+      "message": "Tried to get field ‘amount’ with type ‘Int’ on value of type ‘Iou’, but that field has type ‘Decimal’",
+      "damlc_stage": "typecheck",
+      "daml_line": 27,
+      "count": 4,
+      "first_seen": {
+        "second": 2.97,
+        "input": 5459
+      },
+      "seed": "contracts/loop_count/loop_count.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Count(self, cids: list[ContractId[Iou]]) -> int:\n        n = 0\n        for c in cids:\n            i = fetch(c)\n            if i.amount > (1):\n                list[int] = n + 1\n        return n\n",
+      "input_file": "groups/d23/loop_count.vy",
+      "daml": "module LoopCount where\n\nimport DA.List ((!!))\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Count : Int\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        let n = 0\n        _ <-\n          foldlA\n            (\\() c -> do\n              i <- fetch c\n              if i.amount > 1\n                then do\n                  let (list) !! (int) = n + 1\n                  pure ()\n                else do\n                  pure ())\n            () cids\n        pure (n)\n",
+      "daml_file": "groups/d23/LoopCount.daml"
+    },
+    {
+      "id": "d24",
+      "kind": "bad_daml",
+      "key": "Constructor ‘…’ does not have field ‘…’",
+      "message": "Constructor ‘Iou’ does not have field ‘create’",
+      "damlc_stage": "typecheck",
+      "daml_line": 26,
+      "count": 2,
+      "first_seen": {
+        "second": 3.64,
+        "input": 6749
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, create=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d24/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, create = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d24/LoopMany.daml"
+    },
+    {
+      "id": "d25",
+      "kind": "bad_daml",
+      "key": "No instance for (HasCreate …)",
+      "message": "No instance for (HasCreate Party) arising from a use of ‘create’",
+      "damlc_stage": "typecheck",
+      "daml_line": 26,
+      "count": 1,
+      "first_seen": {
+        "second": 3.71,
+        "input": 6890
+      },
+      "seed": "contracts/loop_give/loop_give.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n        for o in owners:\n            if o != stop:\n                create(o(issuer=self.issuer, owner=o, amount=self.amount))\n        return\nassert False\n",
+      "input_file": "groups/d25/loop_give.vy",
+      "daml": "module LoopGive where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice GiveAll : ()\n      with\n        owners : [Party]\n        stop : Party\n      controller issuer\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() o -> do\n              if o /= stop\n                then do\n                  create (o with issuer = self.issuer, owner = o, amount = self.amount)\n                  pure ()\n                else do\n                  pure ())\n            () owners\n        pure ()\n",
+      "daml_file": "groups/d25/LoopGive.daml"
+    },
+    {
+      "id": "d26",
+      "kind": "bad_daml",
+      "key": "Duplicate type signatures for ‘…’",
+      "message": "Duplicate type signatures for ‘verify’",
+      "damlc_stage": "typecheck",
+      "daml_line": 8,
+      "count": 2,
+      "first_seen": {
+        "second": 3.89,
+        "input": 7197
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@ledger_effect\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n    return total\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/d26/loop_verify.vy",
+      "daml": "module LoopVerify where\n\nverify : [ContractId Iou] -> Party -> Update Decimal\nverify cids p = do\n  let total = (0.0 : Decimal)\n  pure ()\n\nverify : [ContractId Iou] -> Party -> Decimal\nverify cids p =\n  total\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Sum : Decimal\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        verify cids self.issuer\n",
+      "daml_file": "groups/d26/LoopVerify.daml"
+    },
+    {
+      "id": "d27",
+      "kind": "bad_daml",
+      "key": "Parse error in pattern: …",
+      "message": "Parse error in pattern: (tuple)",
+      "damlc_stage": "parser",
+      "daml_line": 28,
+      "count": 1,
+      "first_seen": {
+        "second": 4.24,
+        "input": 7832
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                tuple[int, str] = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d27/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.List ((!!))\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  (tuple) !! ((int, str)) <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d27/LoopMany.daml"
+    },
+    {
+      "id": "d28",
+      "kind": "bad_daml",
+      "key": "`self' is a prohibited field name, please use something else.",
+      "message": "`self' is a prohibited field name, please use something else.",
+      "damlc_stage": "parser",
+      "daml_line": 9,
+      "count": 1,
+      "first_seen": {
+        "second": 4.32,
+        "input": 7970
+      },
+      "seed": "contracts/loop_give/loop_give.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    self: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n        for o in owners:\n            if o != stop:\n                create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n        return\n",
+      "input_file": "groups/d28/loop_give.vy",
+      "daml": "module LoopGive where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    self : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice GiveAll : ()\n      with\n        owners : [Party]\n        stop : Party\n      controller issuer\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() o -> do\n              if o /= stop\n                then do\n                  create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  pure ()\n                else do\n                  pure ())\n            () owners\n        pure ()\n",
+      "daml_file": "groups/d28/LoopGive.daml"
+    },
+    {
+      "id": "d29",
+      "kind": "bad_daml",
+      "key": "Constructor ‘…’ does not have the required strict field(s): …",
+      "message": "Constructor ‘Iou’ does not have the required strict field(s): stop",
+      "damlc_stage": "typecheck",
+      "daml_line": 26,
+      "count": 1,
+      "first_seen": {
+        "second": 7.31,
+        "input": 13531
+      },
+      "seed": "contracts/loop_give/loop_give.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    stop: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n        for o in owners:\n            if o != stop:\n                create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n        return\n",
+      "input_file": "groups/d29/loop_give.vy",
+      "daml": "module LoopGive where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n    stop : [Party]\n  where\n    signatory [issuer]\n\n    nonconsuming choice GiveAll : ()\n      with\n        owners : [Party]\n        stop : Party\n      controller issuer\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() o -> do\n              if o /= stop\n                then do\n                  create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  pure ()\n                else do\n                  pure ())\n            () owners\n        pure ()\n",
+      "daml_file": "groups/d29/LoopGive.daml"
+    },
+    {
+      "id": "d30",
+      "kind": "bad_daml",
+      "key": "The type signature for ‘…’ lacks an accompanying binding",
+      "message": "The type signature for ‘total_of’ lacks an accompanying binding",
+      "damlc_stage": "typecheck",
+      "daml_line": 3,
+      "count": 1,
+      "first_seen": {
+        "second": 7.34,
+        "input": 13589
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    total_of: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/d30/loop_pure.vy",
+      "daml": "module LoopPure where\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = total + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  let _damlforge_maybe6 = _damlforge_loop1 p ps in\n  case _damlforge_maybe6 of\n    Some _damlforge_early7 -> _damlforge_early7\n    None ->\n      False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    total_of : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        assertMsg \"positive\" (all (\\x -> x > (0.0 : Decimal)) xs)\n        pure (total_of xs)\n\n_damlforge_loop1 p [] = None\n_damlforge_loop1 p (q :: _damlforge_rest) =\n  if q == p\n    then\n      Some True\n    else\n      _damlforge_loop1 p _damlforge_rest\n",
+      "daml_file": "groups/d30/LoopPure.daml"
+    },
+    {
+      "id": "d31",
+      "kind": "bad_daml",
+      "key": "No instance for (HasFetch …)",
+      "message": "No instance for (HasFetch Decimal) arising from a use of ‘fetch’",
+      "damlc_stage": "typecheck",
+      "daml_line": 24,
+      "count": 1,
+      "first_seen": {
+        "second": 7.35,
+        "input": 13609
+      },
+      "seed": "contracts/loop_count/loop_count.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Count(self, cids: list[ContractId[float]]) -> int:\n        n = 0\n        for c in cids:\n            i = fetch(c)\n            if i.amount > Decimal(1):\n                n = n + 1\n        return n\n",
+      "input_file": "groups/d31/loop_count.vy",
+      "daml": "module LoopCount where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Count : Int\n      with\n        cids : [ContractId Decimal]\n      controller owner\n      do\n        let self = this\n        let n = 0\n        _damlforge_n2 <-\n          foldlA\n            (\\n c -> do\n              i <- fetch c\n              if i.amount > (1.0 : Decimal)\n                then do\n                  let _damlforge_n1 = n + 1\n                  pure _damlforge_n1\n                else do\n                  pure n)\n            n cids\n        pure (_damlforge_n2)\n",
+      "daml_file": "groups/d31/LoopCount.daml"
+    },
+    {
+      "id": "d32",
+      "kind": "bad_daml",
+      "key": "name collision between choice … and field …",
+      "message": "name collision between choice LoopMany:Iou.Owner and field LoopMany:Iou.owner",
+      "damlc_stage": "Daml-LF typechecker",
+      "daml_line": 1,
+      "count": 1,
+      "first_seen": {
+        "second": 8.64,
+        "input": 15968
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def owner(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cid = create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n                cids.append(cid)\n        return cids\n",
+      "input_file": "groups/d32/loop_many.vy",
+      "daml": "module LoopMany where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Owner : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids2 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  cid <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids1 = cids <> [cid]\n                  pure _damlforge_cids1\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids2)\n",
+      "daml_file": "groups/d32/LoopMany.daml"
+    },
+    {
+      "id": "d33",
+      "kind": "bad_daml",
+      "key": "Conflicting definitions for ‘…’",
+      "message": "Conflicting definitions for ‘total’",
+      "damlc_stage": "typecheck",
+      "daml_line": 27,
+      "count": 1,
+      "first_seen": {
+        "second": 10.22,
+        "input": 18880
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for total in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Int\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/d33/loop_pure.vy",
+      "daml": "module LoopPure where\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total total ->\n                      let _damlforge_total3 = total + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  let _damlforge_maybe6 = _damlforge_loop1 p ps in\n  case _damlforge_maybe6 of\n    Some _damlforge_early7 -> _damlforge_early7\n    None ->\n      False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Int\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        assertMsg \"positive\" (all (\\x -> x > (0.0 : Decimal)) xs)\n        pure (total_of xs)\n\n_damlforge_loop1 p [] = None\n_damlforge_loop1 p (q :: _damlforge_rest) =\n  if q == p\n    then\n      Some True\n    else\n      _damlforge_loop1 p _damlforge_rest\n",
+      "daml_file": "groups/d33/LoopPure.daml"
+    },
+    {
+      "id": "l01",
+      "kind": "bad_loop",
+      "check": "L3",
+      "checks": [
+        "L3"
+      ],
+      "message": "the return in a loop of function has_party at Daml line 37 is lost (2 loops with a return, 0 early-return helpers)",
+      "daml_line": 37,
+      "damlc": "builds",
+      "damlc_error": null,
+      "count": 28,
+      "first_seen": {
+        "second": 0.02,
+        "input": 13
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n            for _k in range(0, 2):\n                return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/l01/loop_pure.vy",
+      "daml": "module LoopPure where\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = total + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        assertMsg \"positive\" (all (\\x -> x > (0.0 : Decimal)) xs)\n        pure (total_of xs)\n",
+      "daml_file": "groups/l01/LoopPure.daml",
+      "shrunk": "def has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n            for _k in range(0, 2):\n                return True\n    return False\n",
+      "shrunk_file": "groups/l01/shrunk/loop_pure.vy",
+      "shrunk_daml": "module LoopPure where\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  False\n",
+      "shrunk_daml_file": "groups/l01/shrunk/LoopPure.daml"
+    },
+    {
+      "id": "l02",
+      "kind": "bad_loop",
+      "check": "L4",
+      "checks": [
+        "L4"
+      ],
+      "message": "fetch at Daml line 30 is used as a value, not bound with <-",
+      "daml_line": 30,
+      "damlc": "rejects",
+      "damlc_error": "Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update",
+      "count": 37,
+      "first_seen": {
+        "second": 0.07,
+        "input": 68
+      },
+      "seed": "contracts/loop_count/loop_count.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Count(self, cids: list[ContractId[Iou]]) -> int:\n        n = 0\n        for c in cids:\n            for _k in range(0, 2):\n                i = fetch(c)\n            if fetch(c).amount > Decimal(1):\n                n = n + 1\n        return n\n",
+      "input_file": "groups/l02/loop_count.vy",
+      "daml": "module LoopCount where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Count : Int\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        let n = 0\n        _damlforge_n2 <-\n          foldlA\n            (\\n c -> do\n              _ <-\n                foldlA\n                  (\\() _k -> do\n                    i <- fetch c\n                    pure ())\n                  () [0 .. (2) - 1]\n              if (fetch c).amount > (1.0 : Decimal)\n                then do\n                  let _damlforge_n1 = n + 1\n                  pure _damlforge_n1\n                else do\n                  pure n)\n            n cids\n        pure (_damlforge_n2)\n",
+      "daml_file": "groups/l02/LoopCount.daml",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, template\n@template\nclass Iou:\n    owner: Party\n    signatory: list[Party] = [issuer]\n    @choice(controller=owner, consuming=False)\n    def Count(self, cids: list[ContractId[Iou]]) -> int:\n            if fetch(c).amount > Decimal(1):\n                n = n + 1\n",
+      "shrunk_file": "groups/l02/shrunk/loop_count.vy",
+      "shrunk_daml": "module LoopCount where\n\ntemplate Iou\n  with\n    owner : Party\n  where\n    signatory [issuer]\n\n    nonconsuming choice Count : Int\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        if (fetch c).amount > (1.0 : Decimal)\n          then do\n            let n = n + 1\n            pure ()\n          else do\n            pure ()\n",
+      "shrunk_daml_file": "groups/l02/shrunk/LoopCount.daml"
+    },
+    {
+      "id": "l03",
+      "kind": "bad_loop",
+      "check": "L2",
+      "checks": [
+        "L2",
+        "L4"
+      ],
+      "message": "fetch at Daml line 9 in the pure foldl of line 7",
+      "daml_line": 9,
+      "damlc": "rejects",
+      "damlc_error": "Tried to access nonexistent field ‘issuer’ with type ‘Party’ on value of type ‘Update",
+      "count": 77,
+      "first_seen": {
+        "second": 0.1,
+        "input": 127
+      },
+      "seed": "contracts/loop_verify/loop_verify.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\n\n\n@list\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        assert i.issuer == p, \"issuer\"\n        total = total + i.amount\n    return total\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Sum(self, cids: list[ContractId[Iou]]) -> Decimal:\n        return verify(cids, self.issuer)\n",
+      "input_file": "groups/l03/loop_verify.vy",
+      "daml": "module LoopVerify where\n\nverify : [ContractId Iou] -> Party -> Decimal\nverify cids p =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total c ->\n            let i = fetch c in\n            if i.issuer == p\n              then\n                let _damlforge_total1 = total + i.amount in\n                _damlforge_total1\n              else error \"issuer\")\n          total cids\n  in\n  _damlforge_total2\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Sum : Decimal\n      with\n        cids : [ContractId Iou]\n      controller owner\n      do\n        let self = this\n        pure (verify cids self.issuer)\n",
+      "daml_file": "groups/l03/LoopVerify.daml",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template\ndef verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:\n    total = Decimal(0)\n    for c in cids:\n        i = fetch(c)\n        total = total + i.amount\n@template\nclass Iou:\n    signatory: list[Party] = [issuer]\n",
+      "shrunk_file": "groups/l03/shrunk/loop_verify.vy",
+      "shrunk_daml": "module LoopVerify where\n\nverify : [ContractId Iou] -> Party -> Decimal\nverify cids p =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total c ->\n            let i = fetch c in\n            let _damlforge_total1 = total + i.amount in\n            _damlforge_total1)\n          total cids\n  in\n  ()\n\ntemplate Iou\n  where\n    signatory [issuer]\n",
+      "shrunk_daml_file": "groups/l03/shrunk/LoopVerify.daml"
+    },
+    {
+      "id": "l04",
+      "kind": "bad_loop",
+      "check": "L1",
+      "checks": [
+        "L1"
+      ],
+      "message": "foldlA at Daml line 20 with no import DA.Action",
+      "daml_line": 20,
+      "damlc": "rejects",
+      "damlc_error": "Variable not in scope: foldlA",
+      "count": 17,
+      "first_seen": {
+        "second": 0.28,
+        "input": 456
+      },
+      "seed": "contracts/loop_many/loop_many.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n            if o != self.owner:\n                cids.append(create(Iou(issuer=self.issuer, owner=o, amount=self.amount)))\n        return cids\n",
+      "input_file": "groups/l04/loop_many.vy",
+      "daml": "module LoopMany where\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids3 <-\n          foldlA\n            (\\cids o -> do\n              if o /= self.owner\n                then do\n                  _damlforge_cids_item1 <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n                  let _damlforge_cids2 = cids <> [_damlforge_cids_item1]\n                  pure _damlforge_cids2\n                else do\n                  pure cids)\n            cids owners\n        pure (_damlforge_cids3)\n",
+      "daml_file": "groups/l04/LoopMany.daml",
+      "shrunk": "from forge.models import ContractId, Decimal, Party, choice, template\n@template\nclass Iou:\n    owner: Party\n    signatory: list[Party] = [issuer]\n    @choice(controller=owner, consuming=False)\n    def Many(self, owners: list[Party]) -> list[ContractId[Iou]]:\n        cids: list[ContractId[Iou]] = []\n        for o in owners:\n                cids.append(create(Iou(issuer=self.issuer, owner=o, amount=self.amount)))\n",
+      "shrunk_file": "groups/l04/shrunk/loop_many.vy",
+      "shrunk_daml": "module LoopMany where\n\ntemplate Iou\n  with\n    owner : Party\n  where\n    signatory [issuer]\n\n    nonconsuming choice Many : [ContractId Iou]\n      with\n        owners : [Party]\n      controller owner\n      do\n        let self = this\n        let (cids : [ContractId Iou]) = []\n        _damlforge_cids3 <-\n          foldlA\n            (\\cids o -> do\n              _damlforge_cids_item1 <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)\n              let _damlforge_cids2 = cids <> [_damlforge_cids_item1]\n              pure _damlforge_cids2)\n            cids owners\n        pure ()\n",
+      "shrunk_daml_file": "groups/l04/shrunk/LoopMany.daml"
+    },
+    {
+      "id": "l05",
+      "kind": "bad_loop",
+      "check": "L3",
+      "checks": [
+        "L3"
+      ],
+      "message": "the return in a loop of choice Check at Daml line 56 is lost (1 loop with a return, 0 early-return helpers)",
+      "daml_line": 56,
+      "damlc": "rejects",
+      "damlc_error": "Couldn't match type ‘Numeric 10’ with ‘()’",
+      "count": 29,
+      "first_seen": {
+        "second": 0.42,
+        "input": 710
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            if x == x:\n                return total_of(xs)\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/l05/loop_pure.vy",
+      "daml": "module LoopPure where\n\nimport DA.Action (foldlA)\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = total + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  let _damlforge_maybe6 = _damlforge_loop1 p ps in\n  case _damlforge_maybe6 of\n    Some _damlforge_early7 -> _damlforge_early7\n    None ->\n      False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() x -> do\n              let _damlforge_cont1 = do\n                    assertMsg \"positive\" (x > (0.0 : Decimal))\n                    pure ()\n              if x == x\n                then do\n                  pure (total_of xs)\n                else do\n                  _damlforge_cont1)\n            () xs\n        pure (total_of xs)\n\n_damlforge_loop1 p [] = None\n_damlforge_loop1 p (q :: _damlforge_rest) =\n  if q == p\n    then\n      Some True\n    else\n      _damlforge_loop1 p _damlforge_rest\n",
+      "daml_file": "groups/l05/LoopPure.daml",
+      "shrunk": "from forge.models import Decimal, Party, choice, template\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n@template\nclass Iou:\n    owner: Party\n    signatory: list[Party] = [issuer]\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            if x == x:\n                return total_of(xs)\n            assert x > Decimal(0), \"positive\"\n",
+      "shrunk_file": "groups/l05/shrunk/loop_pure.vy",
+      "shrunk_daml": "module LoopPure where\n\nimport DA.Action (foldlA)\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  ()\n\ntemplate Iou\n  with\n    owner : Party\n  where\n    signatory [issuer]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() x -> do\n              let _damlforge_cont1 = do\n                    assertMsg \"positive\" (x > (0.0 : Decimal))\n                    pure ()\n              if x == x\n                then do\n                  pure (total_of xs)\n                else do\n                  _damlforge_cont1)\n            () xs\n        pure ()\n",
+      "shrunk_daml_file": "groups/l05/shrunk/LoopPure.daml"
+    },
+    {
+      "id": "r01",
+      "kind": "bad_run",
+      "difference": "result",
+      "call": "has_party #3",
+      "loop_check": "L3",
+      "python": "returns True",
+      "count": 10,
+      "first_seen": {
+        "second": 0.02,
+        "input": 13
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n            for _k in range(0, 2):\n                return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/r01/loop_pure.vy",
+      "calls_file": "groups/r01/loop_pure.calls.yaml",
+      "daml": "module LoopPure where\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = total + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        assertMsg \"positive\" (all (\\x -> x > (0.0 : Decimal)) xs)\n        pure (total_of xs)\n",
+      "daml_file": "groups/r01/daml/LoopPure.daml",
+      "test": "module Test where\n\nimport Daml.Script\nimport DA.Assert\nimport DA.List (sortOn)\nimport LoopPure\n\nc1_runs : Script ()\nc1_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = total_of ([1.0, (-2.0), 3.0])\n  pure ()\n\nc1_result : Script ()\nc1_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = total_of ([1.0, (-2.0), 3.0])\n  result === 4.0\n\nc2_runs : Script ()\nc2_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = grid_sum ([[1, 2], [3], []])\n  pure ()\n\nc2_result : Script ()\nc2_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = grid_sum ([[1, 2], [3], []])\n  result === 6\n\nc3_runs : Script ()\nc3_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = has_party ([p_alice, p_bob]) p_bob\n  pure ()\n\nc3_result : Script ()\nc3_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = has_party ([p_alice, p_bob]) p_bob\n  result === True\n\nc4_runs : Script ()\nc4_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = has_party ([p_alice, p_bob]) p_stop\n  pure ()\n\nc4_result : Script ()\nc4_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = has_party ([p_alice, p_bob]) p_stop\n  result === True\n\nc5_runs : Script ()\nc5_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]\n  pure ()\n\nc5_result : Script ()\nc5_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]\n  result === 3.0\n\nc5_contracts : Script ()\nc5_contracts = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]\n  found <- query @Iou parties\n  let made = [c | (cid, c) <- found, cid `notElem` [cid0]]\n  sortOn show made === sortOn show []\n\nc6_fails : Script ()\nc6_fails = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0\n  submitMustFail (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, (-1.0)]\n",
+      "test_file": "groups/r01/daml/Test.daml"
+    },
+    {
+      "id": "r02",
+      "kind": "bad_run",
+      "difference": "contracts",
+      "call": "Iou.GiveAll #1",
+      "loop_check": null,
+      "python": "returns None, makes 2 contracts: Iou(issuer=alice, owner=alice, amount=1.0), Iou(issuer=alice, owner=bob, amount=1.0)",
+      "count": 2,
+      "first_seen": {
+        "second": 1.64,
+        "input": 2936
+      },
+      "seed": "contracts/loop_give/loop_give.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def GiveAll(self, owners: list[Party], stop: Party) -> None:\n        for o in owners:\n            pass\n            if o != stop:\n                create(Iou(issuer=self.issuer, owner=o, amount=self.amount))\n        return\n",
+      "input_file": "groups/r02/loop_give.vy",
+      "calls_file": "groups/r02/loop_give.calls.yaml",
+      "daml": "module LoopGive where\n\nimport DA.Action (foldlA)\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice GiveAll : ()\n      with\n        owners : [Party]\n        stop : Party\n      controller issuer\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() o -> do\n              pure ())\n            () owners\n        pure ()\n",
+      "daml_file": "groups/r02/daml/LoopGive.daml",
+      "test": "module Test where\n\nimport Daml.Script\nimport DA.Assert\nimport DA.List (sortOn)\nimport LoopGive\n\nc1_runs : Script ()\nc1_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_stop <- allocateParty \"stop\"\n  p_bob <- allocateParty \"bob\"\n  let parties = [p_alice, p_stop, p_bob]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_alice, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_alice, p_stop, p_bob], stop = p_stop\n  pure ()\n\nc1_result : Script ()\nc1_result = do\n  p_alice <- allocateParty \"alice\"\n  p_stop <- allocateParty \"stop\"\n  p_bob <- allocateParty \"bob\"\n  let parties = [p_alice, p_stop, p_bob]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_alice, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_alice, p_stop, p_bob], stop = p_stop\n  result === ()\n\nc1_contracts : Script ()\nc1_contracts = do\n  p_alice <- allocateParty \"alice\"\n  p_stop <- allocateParty \"stop\"\n  p_bob <- allocateParty \"bob\"\n  let parties = [p_alice, p_stop, p_bob]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_alice, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_alice, p_stop, p_bob], stop = p_stop\n  found <- query @Iou parties\n  let made = [c | (cid, c) <- found, cid `notElem` [cid0]]\n  sortOn show made === sortOn show [(Iou with issuer = p_alice, owner = p_alice, amount = 1.0), (Iou with issuer = p_alice, owner = p_bob, amount = 1.0)]\n\nc2_runs : Script ()\nc2_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_stop <- allocateParty \"stop\"\n  p_bob <- allocateParty \"bob\"\n  let parties = [p_alice, p_stop, p_bob]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 2.5\n  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_bob, p_alice], stop = p_stop\n  pure ()\n\nc2_result : Script ()\nc2_result = do\n  p_alice <- allocateParty \"alice\"\n  p_stop <- allocateParty \"stop\"\n  p_bob <- allocateParty \"bob\"\n  let parties = [p_alice, p_stop, p_bob]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 2.5\n  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_bob, p_alice], stop = p_stop\n  result === ()\n\nc2_contracts : Script ()\nc2_contracts = do\n  p_alice <- allocateParty \"alice\"\n  p_stop <- allocateParty \"stop\"\n  p_bob <- allocateParty \"bob\"\n  let parties = [p_alice, p_stop, p_bob]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 2.5\n  result <- submit (actAs parties) do exerciseCmd cid0 GiveAll with owners = [p_bob, p_alice], stop = p_stop\n  found <- query @Iou parties\n  let made = [c | (cid, c) <- found, cid `notElem` [cid0]]\n  sortOn show made === sortOn show [(Iou with issuer = p_alice, owner = p_bob, amount = 2.5), (Iou with issuer = p_alice, owner = p_alice, amount = 2.5)]\n",
+      "test_file": "groups/r02/daml/Test.daml"
+    },
+    {
+      "id": "r03",
+      "kind": "bad_run",
+      "difference": "daml_passes",
+      "call": "Iou.Check #6",
+      "loop_check": null,
+      "python": "fails: positive",
+      "count": 1,
+      "first_seen": {
+        "second": 10.76,
+        "input": 19839
+      },
+      "seed": "contracts/loop_pure/loop_pure.vy",
+      "input": "from forge.models import Decimal, Party, choice, template\n\n\ndef total_of(xs: list[Decimal]) -> Decimal:\n    total = Decimal(0)\n    for x in xs:\n        if x > Decimal(0):\n            total = total + x\n    return total\n\n\ndef grid_sum(rows: list[list[int]]) -> int:\n    total = 0\n    for row in rows:\n        for x in row:\n            total = total + x\n    return total\n\n\ndef has_party(ps: list[Party], p: Party) -> bool:\n    for q in ps:\n        if q == p:\n            return True\n    return False\n\n\n@template\nclass Iou:\n    issuer: Party\n    owner: Party\n    amount: Decimal\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=owner, consuming=False)\n    def Check(self, xs: list[Decimal]) -> Decimal:\n        for x in xs:\n            pass\n            assert x > Decimal(0), \"positive\"\n        return total_of(xs)\n",
+      "input_file": "groups/r03/loop_pure.vy",
+      "calls_file": "groups/r03/loop_pure.calls.yaml",
+      "daml": "module LoopPure where\n\nimport DA.Action (foldlA)\n\ntotal_of : [Decimal] -> Decimal\ntotal_of xs =\n  let total = (0.0 : Decimal) in\n  let _damlforge_total2 =\n        foldl\n          (\\total x ->\n            if x > (0.0 : Decimal)\n              then\n                let _damlforge_total1 = total + x in\n                _damlforge_total1\n              else\n                total)\n          total xs\n  in\n  _damlforge_total2\n\ngrid_sum : [[Int]] -> Int\ngrid_sum rows =\n  let total = 0 in\n  let _damlforge_total5 =\n        foldl\n          (\\total row ->\n            let _damlforge_total4 =\n                  foldl\n                    (\\total x ->\n                      let _damlforge_total3 = total + x in\n                      _damlforge_total3)\n                    total row\n            in\n            _damlforge_total4)\n          total rows\n  in\n  _damlforge_total5\n\nhas_party : [Party] -> Party -> Bool\nhas_party ps p =\n  let _damlforge_maybe6 = _damlforge_loop1 p ps in\n  case _damlforge_maybe6 of\n    Some _damlforge_early7 -> _damlforge_early7\n    None ->\n      False\n\ntemplate Iou\n  with\n    issuer : Party\n    owner : Party\n    amount : Decimal\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Check : Decimal\n      with\n        xs : [Decimal]\n      controller owner\n      do\n        let self = this\n        _ <-\n          foldlA\n            (\\() x -> do\n              pure ())\n            () xs\n        pure (total_of xs)\n\n_damlforge_loop1 p [] = None\n_damlforge_loop1 p (q :: _damlforge_rest) =\n  if q == p\n    then\n      Some True\n    else\n      _damlforge_loop1 p _damlforge_rest\n",
+      "daml_file": "groups/r03/daml/LoopPure.daml",
+      "test": "module Test where\n\nimport Daml.Script\nimport DA.Assert\nimport DA.List (sortOn)\nimport LoopPure\n\nc1_runs : Script ()\nc1_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = total_of ([1.0, (-2.0), 3.0])\n  pure ()\n\nc1_result : Script ()\nc1_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = total_of ([1.0, (-2.0), 3.0])\n  result === 4.0\n\nc2_runs : Script ()\nc2_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = grid_sum ([[1, 2], [3], []])\n  pure ()\n\nc2_result : Script ()\nc2_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = grid_sum ([[1, 2], [3], []])\n  result === 6\n\nc3_runs : Script ()\nc3_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = has_party ([p_alice, p_bob]) p_bob\n  pure ()\n\nc3_result : Script ()\nc3_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = has_party ([p_alice, p_bob]) p_bob\n  result === True\n\nc4_runs : Script ()\nc4_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = has_party ([p_alice, p_bob]) p_stop\n  pure ()\n\nc4_result : Script ()\nc4_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  let result = has_party ([p_alice, p_bob]) p_stop\n  result === False\n\nc5_runs : Script ()\nc5_runs = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]\n  pure ()\n\nc5_result : Script ()\nc5_result = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]\n  result === 3.0\n\nc5_contracts : Script ()\nc5_contracts = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0\n  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]\n  found <- query @Iou parties\n  let made = [c | (cid, c) <- found, cid `notElem` [cid0]]\n  sortOn show made === sortOn show []\n\nc6_fails : Script ()\nc6_fails = do\n  p_alice <- allocateParty \"alice\"\n  p_bob <- allocateParty \"bob\"\n  p_stop <- allocateParty \"stop\"\n  let parties = [p_alice, p_bob, p_stop]\n  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0\n  submitMustFail (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, (-1.0)]\n",
+      "test_file": "groups/r03/daml/Test.daml"
+    }
+  ]
+}

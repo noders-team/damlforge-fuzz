@@ -1,0 +1,34 @@
+module LoopCount where
+
+import DA.List ((!!))
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Count : Int
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        let n = 0
+        _ <-
+          foldlA
+            (\() c -> do
+              i <- fetch c
+              if i.amount > 1
+                then do
+                  let (list) !! (int) = n + 1
+                  pure ()
+                else do
+                  pure ())
+            () cids
+        pure (n)

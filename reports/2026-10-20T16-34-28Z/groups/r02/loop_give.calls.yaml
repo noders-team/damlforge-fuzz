@@ -1,0 +1,7 @@
+# With `stop` in the list, a lost return or a lost create changes the contracts.
+- choice: Iou.GiveAll
+  contract: {issuer: alice, owner: alice, amount: "1.0"}
+  args: {owners: [alice, stop, bob], stop: stop}
+- choice: Iou.GiveAll
+  contract: {issuer: alice, owner: bob, amount: "2.5"}
+  args: {owners: [bob, alice], stop: stop}

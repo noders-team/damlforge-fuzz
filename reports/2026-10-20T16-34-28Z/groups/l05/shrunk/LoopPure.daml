@@ -1,0 +1,34 @@
+module LoopPure where
+
+import DA.Action (foldlA)
+
+total_of : [Decimal] -> Decimal
+total_of xs =
+  let total = (0.0 : Decimal) in
+  ()
+
+template Iou
+  with
+    owner : Party
+  where
+    signatory [issuer]
+
+    nonconsuming choice Check : Decimal
+      with
+        xs : [Decimal]
+      controller owner
+      do
+        let self = this
+        _ <-
+          foldlA
+            (\() x -> do
+              let _damlforge_cont1 = do
+                    assertMsg "positive" (x > (0.0 : Decimal))
+                    pure ()
+              if x == x
+                then do
+                  pure (total_of xs)
+                else do
+                  _damlforge_cont1)
+            () xs
+        pure ()

@@ -1,0 +1,4 @@
+# With the last signatory line, carol must sign her new Iou, and she does not.
+- choice: Iou.Give
+  contract: {issuer: alice, owner: bob, amount: "1.0"}
+  args: {new_owner: carol}

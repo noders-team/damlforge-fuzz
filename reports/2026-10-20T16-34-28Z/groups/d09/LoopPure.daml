@@ -1,0 +1,69 @@
+module LoopPure where
+
+total_of : [Decimal] -> Decimal
+total_of xs =
+  let total = (0.0 : Decimal) in
+  let _damlforge_total2 =
+        foldl
+          (\total x ->
+            if x > (0.0 : Decimal)
+              then
+                let _damlforge_total1 = total + x in
+                _damlforge_total1
+              else
+                total)
+          total xs
+  in
+  _damlforge_total2
+
+grid_sum : [[Int]] -> Int
+grid_sum rows =
+  let total = 0 in
+  let _damlforge_total5 =
+        foldl
+          (\total row ->
+            let _damlforge_total4 =
+                  foldl
+                    (\total x ->
+                      let _damlforge_total3 = total + x in
+                      _damlforge_total3)
+                    total row
+            in
+            _damlforge_total4)
+          total rows
+  in
+  _damlforge_total5
+
+has_party : [Party] -> Party -> Bool
+has_party ps p =
+  let _damlforge_maybe6 = _damlforge_loop1 p ps in
+  case _damlforge_maybe6 of
+    Some _damlforge_early7 -> _damlforge_early7
+    None ->
+      False
+
+template Iou
+  with
+    Int : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Check : Decimal
+      with
+        xs : [Decimal]
+      controller owner
+      do
+        let self = this
+        assertMsg "positive" (all (\x -> x > (0.0 : Decimal)) xs)
+        pure (total_of xs)
+
+_damlforge_loop1 p [] = None
+_damlforge_loop1 p (q :: _damlforge_rest) =
+  if q == p
+    then
+      Some True
+    else
+      _damlforge_loop1 p _damlforge_rest

@@ -1,0 +1,35 @@
+module LoopVerify where
+
+import DA.List ((!!))
+
+import DA.Action (foldlA)
+
+verify : [ContractId Iou] -> Party -> Update Decimal
+verify cids p = do
+  let (ContractId) !! (int) = (0.0 : Decimal)
+  _ <-
+    foldlA
+      (\() c -> do
+        i <- fetch c
+        assertMsg "issuer" (i.issuer == p)
+        let total = total + i.amount
+        pure ())
+      () cids
+  pure (total)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Sum : Decimal
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        verify cids self.issuer

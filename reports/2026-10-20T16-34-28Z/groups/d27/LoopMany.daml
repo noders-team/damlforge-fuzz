@@ -1,0 +1,34 @@
+module LoopMany where
+
+import DA.List ((!!))
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Many : [ContractId Iou]
+      with
+        owners : [Party]
+      controller owner
+      do
+        let self = this
+        let (cids : [ContractId Iou]) = []
+        _damlforge_cids2 <-
+          foldlA
+            (\cids o -> do
+              if o /= self.owner
+                then do
+                  (tuple) !! ((int, str)) <- create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+                  let _damlforge_cids1 = cids <> [cid]
+                  pure _damlforge_cids1
+                else do
+                  pure cids)
+            cids owners
+        pure (_damlforge_cids2)

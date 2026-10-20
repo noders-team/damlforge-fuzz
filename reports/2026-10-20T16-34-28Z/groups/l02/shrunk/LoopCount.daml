@@ -1,0 +1,20 @@
+module LoopCount where
+
+template Iou
+  with
+    owner : Party
+  where
+    signatory [issuer]
+
+    nonconsuming choice Count : Int
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        if (fetch c).amount > (1.0 : Decimal)
+          then do
+            let n = n + 1
+            pure ()
+          else do
+            pure ()

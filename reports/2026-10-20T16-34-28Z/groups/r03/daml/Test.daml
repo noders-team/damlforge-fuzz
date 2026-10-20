@@ -1,0 +1,119 @@
+module Test where
+
+import Daml.Script
+import DA.Assert
+import DA.List (sortOn)
+import LoopPure
+
+c1_runs : Script ()
+c1_runs = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  let result = total_of ([1.0, (-2.0), 3.0])
+  pure ()
+
+c1_result : Script ()
+c1_result = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  let result = total_of ([1.0, (-2.0), 3.0])
+  result === 4.0
+
+c2_runs : Script ()
+c2_runs = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  let result = grid_sum ([[1, 2], [3], []])
+  pure ()
+
+c2_result : Script ()
+c2_result = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  let result = grid_sum ([[1, 2], [3], []])
+  result === 6
+
+c3_runs : Script ()
+c3_runs = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  let result = has_party ([p_alice, p_bob]) p_bob
+  pure ()
+
+c3_result : Script ()
+c3_result = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  let result = has_party ([p_alice, p_bob]) p_bob
+  result === True
+
+c4_runs : Script ()
+c4_runs = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  let result = has_party ([p_alice, p_bob]) p_stop
+  pure ()
+
+c4_result : Script ()
+c4_result = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  let result = has_party ([p_alice, p_bob]) p_stop
+  result === False
+
+c5_runs : Script ()
+c5_runs = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0
+  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]
+  pure ()
+
+c5_result : Script ()
+c5_result = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0
+  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]
+  result === 3.0
+
+c5_contracts : Script ()
+c5_contracts = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0
+  result <- submit (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, 2.0]
+  found <- query @Iou parties
+  let made = [c | (cid, c) <- found, cid `notElem` [cid0]]
+  sortOn show made === sortOn show []
+
+c6_fails : Script ()
+c6_fails = do
+  p_alice <- allocateParty "alice"
+  p_bob <- allocateParty "bob"
+  p_stop <- allocateParty "stop"
+  let parties = [p_alice, p_bob, p_stop]
+  cid0 <- submit (actAs parties) do createCmd Iou with issuer = p_alice, owner = p_bob, amount = 1.0
+  submitMustFail (actAs parties) do exerciseCmd cid0 Check with xs = [1.0, (-1.0)]

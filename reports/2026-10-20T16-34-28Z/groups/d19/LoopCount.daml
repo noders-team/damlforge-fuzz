@@ -1,0 +1,33 @@
+module LoopCount where
+
+import DA.Action (foldlA)
+
+template Iou
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Count : Int
+      with
+        cids : [ContractId Iou]
+      controller owner
+      do
+        let self = this
+        let n = 0
+        amount
+        _damlforge_n2 <-
+          foldlA
+            (\n c -> do
+              i <- fetch c
+              if i.amount > (1.0 : Decimal)
+                then do
+                  let _damlforge_n1 = n + 1
+                  pure _damlforge_n1
+                else do
+                  pure n)
+            n cids
+        pure (_damlforge_n2)

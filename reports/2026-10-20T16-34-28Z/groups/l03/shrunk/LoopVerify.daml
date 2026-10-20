@@ -1,0 +1,18 @@
+module LoopVerify where
+
+verify : [ContractId Iou] -> Party -> Decimal
+verify cids p =
+  let total = (0.0 : Decimal) in
+  let _damlforge_total2 =
+        foldl
+          (\total c ->
+            let i = fetch c in
+            let _damlforge_total1 = total + i.amount in
+            _damlforge_total1)
+          total cids
+  in
+  ()
+
+template Iou
+  where
+    signatory [issuer]
