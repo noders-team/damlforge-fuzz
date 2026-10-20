@@ -1,6 +1,6 @@
-# Loop bugs b17 to b21
+# Loop bugs b17 to b22
 
-This folder has five small programs that show loop bugs in DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11), checked with Daml SDK 3.5.2.
+This folder has six small programs that show loop bugs in DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11), checked with Daml SDK 3.5.2.
 
 The numbers continue b01 to b16 in [the analysis of the 20000-input report](../../reports/2026-10-19T18-45-34Z/analysis.md).
 That analysis defines the categories. This folder uses three of them:
@@ -13,9 +13,9 @@ That analysis defines the categories. This folder uses three of them:
 
 Each program was written by hand. It is not fuzzer output.
 Each program has one template, `Iou` with the fields `issuer`, `owner`, and `amount`, and one choice.
-b20 also has one top-level function.
+b20 and b22 also have one top-level function.
 
-## The five bugs
+## The six bugs
 
 | Bug | Category | Code | What happens |
 | --- | --- | --- | --- |
@@ -24,8 +24,9 @@ b20 also has one top-level function.
 | [b19](#b19-fetch-in-an-if-test-stays-in-a-pure-foldl) | B | `if fetch(c).amount > self.amount:` in a loop in a choice | forge writes `foldl`, and `fetch` stays in the test. damlc: a type error |
 | [b20](#b20-a-top-level-function-gets-no-df1205-check) | E | `fetch(c)` in a top-level function without `@ledger_effect` | No DF1205 error. damlc: a type error |
 | [b21](#b21-return-in-the-loop-works-as-continue) | A | `return` in a loop that creates a contract | `return` works as `continue`. damlc builds the Daml, and the choice creates contracts after the `return` |
+| [b22](#b22-return-in-an-inner-loop-removes-both-loops) | A | `return` in a loop inside another loop, in a function | forge writes no code for the loops. damlc builds the Daml, and the function always returns the value after the loops |
 
-Run all five programs with one command from the repository root.
+Run all six programs with one command from the repository root.
 This is the real output:
 
 ```
@@ -35,12 +36,14 @@ BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with 
 BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
 BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
 BAD_LOOP emit   bugs/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
+BAD_LOOP emit   bugs/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
 ```
 
 The command exits with 1.
 Each line names the checks of the [loop check](../../README.md#loop-check) that the program fails, and ends with the verdict of `damlc`.
-b21 is the only program whose Daml `damlc` builds, because its bug shows only when the contract runs.
-The loop check finds it without a run: the `return` has no early-return helper in the Daml (`L3`). [The proof for b21](#the-proof-for-b21) runs the contract.
+b21 and b22 are the only programs whose Daml `damlc` builds, because their bugs show only when the code runs.
+The loop check finds them without a run: a `return` in a loop has no early-return helper in the Daml (`L3`).
+[The proof for b21](#the-proof-for-b21) and [the proof for b22](#the-proof-for-b22) run the code.
 
 ## How forge writes a loop
 
@@ -109,14 +112,33 @@ In the fold body, a `return` with no value becomes `pure ()` (`emit.py:439` to `
 
 forge already has a correct form for this loop.
 `_translate_early_return_loop` (`emit.py:688`) writes a recursive helper that stops at the first `return`, and the helper works in an `Update` (`emit.py:707` and `715`).
-A runtime patch made forge test `has_return` first when a loop has no accumulator. With that patch, forge wrote the helper, and both scripts of the proof below passed.
+A runtime patch made forge test `has_return` first when a loop has no accumulator. With that patch, forge wrote the helper, and both scripts for b21 in the proof below passed.
 
 b11 in the 20000-input analysis is a loop with an early `return` and an accumulator. For that loop, forge raises `CompilerPanic` at `emit.py:596`.
 
+The same lost `return` happens when the `return` is in an inner loop of a choice that creates contracts:
+
+```python
+    @choice(controller=owner, consuming=False)
+    def Give(self, groups: list[list[Party]], stop: Party) -> None:
+        for g in groups:
+            for o in g:
+                if o == stop:
+                    return
+                create(Iou(issuer=self.issuer, owner=o, amount=self.amount))
+```
+
+forge writes `foldlA` for both loops, and in the inner `foldlA` the `return` becomes `pure ()`, as in b21.
+damlc builds this Daml, and `check --damlc` gives `L3` with `2 loops with a return, 0 early-return helpers` and `damlc builds`.
+This program has no number of its own, because its inner loop has the cause of b21.
+But a fix for b21 alone is not enough, because the outer loop also has the cause of [b22](#b22-return-in-an-inner-loop-removes-both-loops).
+With the runtime patch for b21 alone, forge wrote a helper for the inner loop, but the outer loop stayed a `foldlA` that goes on with the next group.
+
 ### The proof for b21
 
-[`runtime/`](runtime/) is a Daml project with forge's Daml for b21 and a Daml Script test, [`runtime/daml/Test.daml`](runtime/daml/Test.daml).
-The test has two scripts:
+[`runtime/`](runtime/) is a Daml project with forge's Daml for b21 and b22 and a Daml Script test, [`runtime/daml/Test.daml`](runtime/daml/Test.daml).
+The test has two scripts for b21 and two scripts for [b22](#the-proof-for-b22).
+The scripts for b21 are:
 
 - `control_every_owner_gets_an_iou` exercises `GiveUntil` with `owners = [alice, bob]` and a `stop` that is not in the list. Every owner must get an `Iou`.
 - `return_stops_the_loop` exercises `GiveUntil` with `owners = [alice, stop, bob]`. Only `alice` must get an `Iou`.
@@ -128,37 +150,121 @@ cd bugs/loops/runtime
 dpm test
 ```
 
-`dpm test` exits with 1. Its test summary has these two lines:
+`dpm test` exits with 1. Its test summary has these four lines:
 
 ```
+daml/Test.daml:return_in_inner_loop_gives_the_first_positive: failed
+daml/Test.daml:control_no_positive_gives_0: ok, 0 active contracts, 0 transactions.
 daml/Test.daml:control_every_owner_gets_an_iou: ok, 3 active contracts, 2 transactions.
 daml/Test.daml:return_stops_the_loop: failed
 ```
 
-The failure message is `expected ['alice-c812a76d','bob-9cefe94d'] == ['alice-c812a76d']`.
+Two of these lines are for b21, and two are for b22.
+The failure message of `return_stops_the_loop` is `expected ['alice-c812a76d','bob-9cefe94d'] == ['alice-c812a76d']`.
 The left list has the owners that got an `Iou`. The right list has the owners that the `.vy` code gives an `Iou` to.
 The 3 active contracts of the control are the issuer's own `Iou` and the `Iou`s of `alice` and `bob`.
 The control passes, so the party allocation, the query, and the filter that leaves out the issuer's own `Iou` are correct.
 
+### b22: `return` in an inner loop removes both loops
+
+```python
+def first_positive(rows: list[list[int]]) -> int:
+    for row in rows:
+        for x in row:
+            if x > 0:
+                return x
+    return 0
+```
+
+The function must return the first positive number in `rows`, or 0 when `rows` has no positive number.
+The choice `FirstPositive` returns `first_positive(rows)`.
+forge writes this Daml for the function:
+
+```haskell
+first_positive : [[Int]] -> Int
+first_positive rows =
+  0
+```
+
+The Daml has no loop. The function always returns 0.
+So `first_positive [[0, -1], [3, 4]]` gives 0, not 3.
+The Daml has no type error, so damlc builds it.
+
+The cause is that `LoopAnalysis.body_has_return` (`forge/codegen/loops.py:290` to `298`) looks for a `return` in the branches of an `if`, but not in the body of a nested `for`.
+The body of the outer loop is only the inner `for`, so `plan` sets `has_return` to `False` for the outer loop (`loops.py:382`).
+The other two tests of a loop body do look into a nested `for`: `collect_accumulators` (`loops.py:107`) and `body_has_ledger_effect` (`loops.py:203`).
+
+`_translate_for` (`emit.py:590`) picks the form of a loop in this order (`emit.py:600` to `612`):
+
+```python
+        if plan.assertion is not None:
+            return self._translate_assertion_loop(...)
+        if plan.accumulators or plan.in_update_block:
+            return self._translate_fold(...)
+        if plan.has_return:
+            return self._translate_early_return_loop(...)
+        return make_tail(indent, frozenset(), renames)
+```
+
+The outer loop has no `assert` and no accumulator.
+`first_positive` is a pure function, so `in_update_block` is `False` (`emit.py:958`). `has_return` is also `False`.
+So `_translate_for` gets to the last line (`emit.py:612`), which writes only the code after the loop.
+The inner loop is in the body of the outer loop, so forge does not write it either.
+The last line is correct for a loop with no effect. The outer loop has an effect, its `return`, but `has_return` does not see it.
+
+The loop check counts both loops as loops with a `return`, so its line for b22 has `2 loops with a return, 0 early-return helpers`.
+DamlForge `v0.0.7` writes the same Daml for b22. Its `body_has_return` (`forge/codegen/loops.py:233`) has the same gap.
+
+A runtime patch made `body_has_return` also look into a nested `for`.
+With that patch, forge wrote a helper for each loop, but damlc rejected the Daml: `Couldn't match expected type ‘Optional a’ with actual type ‘Int’`.
+`_wrap_returns_as_some` (`emit.py:571` to `588`) has the same gap.
+It changes `return x` to `return Some x` in the branches of an `if`, but not in a nested `for`.
+So the helper of the outer loop returns the value of the inner helper with no `Some`, in the line `Some _damlforge_early2 -> _damlforge_early2`.
+A second patch made `_wrap_returns_as_some` also look into a nested `for`.
+With both patches, damlc built forge's Daml, and both scripts of the proof below passed.
+
+### The proof for b22
+
+[`runtime/daml/Test.daml`](runtime/daml/Test.daml) has two scripts for b22. They call `first_positive` directly:
+
+- `control_no_positive_gives_0` calls `first_positive [[0, -1], [-2]]`. No number is positive, so the result must be 0.
+- `return_in_inner_loop_gives_the_first_positive` calls `first_positive [[0, -1], [3, 4]]`. The result must be 3.
+
+The `dpm test` run in [the proof for b21](#the-proof-for-b21) also runs these scripts.
+Its test summary has these two lines for b22:
+
+```
+daml/Test.daml:return_in_inner_loop_gives_the_first_positive: failed
+daml/Test.daml:control_no_positive_gives_0: ok, 0 active contracts, 0 transactions.
+```
+
+The failure message is `expected 0 == 3`.
+The left value is what forge's `first_positive` returns. The right value is what the `.vy` code returns.
+The control passes, because 0 is also the correct result when no number is positive.
+
 ### Where the Daml comes from
 
-[`runtime/daml/B21ReturnInCreateLoop.daml`](runtime/daml/B21ReturnInCreateLoop.daml) is a copy of what forge wrote, with no change.
-To make it again, run these commands from the repository root:
+[`runtime/daml/B21ReturnInCreateLoop.daml`](runtime/daml/B21ReturnInCreateLoop.daml) and [`runtime/daml/B22ReturnInInnerLoop.daml`](runtime/daml/B22ReturnInInnerLoop.daml) are copies of what forge wrote, with no change.
+To make them again, run these commands from the repository root:
 
 ```sh
 forge daml --no-i bugs/loops/b21_return_in_create_loop.vy -o /tmp/b21
 cp /tmp/b21/B21ReturnInCreateLoop.daml bugs/loops/runtime/daml/
+forge daml --no-i bugs/loops/b22_return_in_inner_loop.vy -o /tmp/b22
+cp /tmp/b22/B22ReturnInInnerLoop.daml bugs/loops/runtime/daml/
 ```
 
-forge also writes the source map `B21ReturnInCreateLoop.map.json`. The test does not need it.
-To check that the copy is still what forge writes, run the `forge daml` line again and compare:
+forge also writes a source map for each file, such as `B21ReturnInCreateLoop.map.json`. The test does not need them.
+To check that the copies are still what forge writes, run the `forge daml` lines again and compare:
 
 ```sh
 diff /tmp/b21/B21ReturnInCreateLoop.daml bugs/loops/runtime/daml/B21ReturnInCreateLoop.daml
+diff /tmp/b22/B22ReturnInInnerLoop.daml bugs/loops/runtime/daml/B22ReturnInInnerLoop.daml
 ```
 
 forge names the module after the file, so `b21_return_in_create_loop.vy` becomes the module `B21ReturnInCreateLoop`.
-`Test.daml` imports that module. If you rename the `.vy` file, change the import in `Test.daml`.
+`Test.daml` imports both modules. If you rename a `.vy` file, change its import in `Test.daml`.
+Both modules have a template `Iou`, so `Test.daml` imports only `first_positive` from `B22ReturnInInnerLoop`.
 
 ## Category B: valid code, Daml that damlc rejects
 
@@ -369,9 +475,9 @@ With `@ledger_effect` above `total_of`, forge writes `foldlA` and the import, an
 
 ## Limits of this write-up
 
-- All output is from DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11) and Daml SDK 3.5.2. No other version was tried.
+- All output is from DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11) and Daml SDK 3.5.2. No other version was tried, except that DamlForge `v0.0.7` writes the same Daml for b22.
 - b19 and b20 also happen with no loop. They are in this folder because the loop work found them.
-- The runtime patches for b19 and b21 ran in a scratch session. They test a cause. They are not fixes.
+- The runtime patches for b19, b21, and b22 ran in a scratch session. They test a cause. They are not fixes.
 - Category E for b20 assumes that forge must give DF1205 for a top-level function, as its language reference says.
 
 ## Repeat these checks

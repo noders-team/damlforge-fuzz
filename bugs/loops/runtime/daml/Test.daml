@@ -4,6 +4,7 @@ import Daml.Script
 import DA.Assert
 import DA.List (sort)
 import B21ReturnInCreateLoop
+import B22ReturnInInnerLoop (first_positive)
 
 giveUntil : [Party] -> Party -> Script [Party]
 giveUntil owners stop = do
@@ -28,3 +29,11 @@ return_stops_the_loop = do
   bob <- allocateParty "bob"
   given <- giveUntil [alice, stop, bob] stop
   given === [alice]
+
+control_no_positive_gives_0 : Script ()
+control_no_positive_gives_0 = do
+  first_positive [[0, -1], [-2]] === 0
+
+return_in_inner_loop_gives_the_first_positive : Script ()
+return_in_inner_loop_gives_the_first_positive = do
+  first_positive [[0, -1], [3, 4]] === 3

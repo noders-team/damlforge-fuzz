@@ -206,6 +206,8 @@ BUG_PROGRAMS = {
     "b20_fetch_in_plain_function": "L2 L4: fetch at Daml line 9 in the pure foldl of line 7",
     "b21_return_in_create_loop": "L3: the return in a loop of choice GiveUntil at Daml line 14 "
     "is lost (1 loop with a return, 0 early-return helpers)",
+    "b22_return_in_inner_loop": "L3: the return in a loop of function first_positive "
+    "at Daml line 3 is lost (2 loops with a return, 0 early-return helpers)",
 }
 """Each bug program in bugs/loops/: every check it fails, and its first bug."""
 
@@ -447,7 +449,7 @@ def test_check_damlc_ends_each_bad_loop_line_with_damlcs_verdict(
         "damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ "
         "on value of type ‘Update"
     )
-    verdicts = [no_foldl_a, no_foldl_a, no_field, no_field, "damlc builds"]
+    verdicts = [no_foldl_a, no_foldl_a, no_field, no_field, "damlc builds", "damlc builds"]
 
     assert main(["check", "--damlc", "bugs/loops"]) == 1
     assert capsys.readouterr().out.splitlines() == [
