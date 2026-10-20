@@ -24,7 +24,7 @@ With `--damlc`, it also builds the Daml that `forge` writes, and reports the Dam
 - **Repeatable runs.** One random seed fixes every copy and its changes. The same random seed always gives the same copies in the same order.
 - **Text change rules.** Ten rules each change one line: they delete it, copy it, insert a line above it, or replace or delete one word. Six loop rules make the code shapes that break forge's loops, such as a `fetch` inside an expression or a `return` inside a loop.
 - **Crash groups.** Crashes with the same exception at the same forge file and line are one group.
-- **Shrinking.** The run cuts the first input of each group down to the lines that cause the crash.
+- **Shrinking.** The run cuts the first input of each crash group and each loop group down to the lines that cause the crash or the loop bug.
 - **Daml checks.** With `--damlc`, the run builds the Daml that `forge` writes with `damlc`, and groups the Daml that `damlc` rejects.
 - **Loop check.** For each `OK` input, the run checks the loops in the Daml that `forge` writes for four kinds of wrong translation, and groups the inputs with a loop bug. It does not need `damlc`.
 - **Reports** in JSON and Markdown, with one folder for each group. You can compile each saved input again.
@@ -141,7 +141,7 @@ Run these commands from the root of this repository.
    ```
 
 3. Open `report.md` in the report folder.
-   It has one table row for each group, and the shrunk input of each crash group.
+   It has one table row for each group, and the shrunk input of each crash group and each loop group.
 
 4. Compile a saved crash input again.
    This example uses the report that is in the repository:
@@ -156,14 +156,14 @@ Run these commands from the root of this repository.
 ```
 damlforge-fuzz check [--damlc] PATH [PATH ...]
 damlforge-fuzz run [SEED_FOLDER ...] (--seconds N | --count N) [--random-seed S] [--reports DIR] [--damlc]
-damlforge-fuzz shrink FILE
+damlforge-fuzz shrink [--damlc] FILE
 ```
 
 | Command | What it does |
 | --- | --- |
 | `check` | Compiles `.vy` files with `forge` and prints one result for each file. |
 | `run` | Makes changed copies of the seeds, compiles each copy with `forge`, and writes a report. |
-| `shrink` | Deletes lines of a crashing `.vy` file while it still crashes in the same way. |
+| `shrink` | Deletes lines of a `.vy` file while it still crashes in the same way, or still has the same loop bug. |
 
 ### `damlforge-fuzz check`
 
@@ -231,7 +231,7 @@ A run has these steps:
 1. Compile the unchanged seeds, and run the loop check on them. With `--damlc`, also build their Daml.
 2. Make the copies, and compile each copy with `forge`.
 3. With `--damlc`, build the Daml of the `OK` copies.
-4. Shrink the first input of each crash group.
+4. Shrink the first input of each crash group and each loop group.
 5. Write the report.
 
 #### Repeat a run
@@ -261,9 +261,15 @@ damlforge-fuzz run contracts/asset_proposal contracts/ballot contracts/escrow co
 
 ### `damlforge-fuzz shrink`
 
-`shrink` deletes lines of a `.vy` file that crashes forge.
-It keeps a deletion only when the file still crashes with the same exception at the same forge line.
-It writes the result to `shrunk/` next to FILE, with the same file name, and prints it:
+`shrink` deletes lines of a `.vy` file that crashes forge or that is `BAD_LOOP`.
+It writes the result to `shrunk/` next to FILE, with the same file name, and prints it.
+
+| Argument | Meaning |
+| --- | --- |
+| `FILE` | A `.vy` file that crashes forge, or that has a loop bug. |
+| `--damlc` | For a `BAD_LOOP` file, also keep the verdict of `damlc` on the Daml. |
+
+For a file that crashes forge, `shrink` keeps a deletion only when the file still crashes with the same exception at the same forge line:
 
 ```
 $ damlforge-fuzz shrink reports/2026-10-19T18-45-34Z/groups/g02/escrow.vy
@@ -273,8 +279,48 @@ class Escrow:
     tuple[int, str]: EscrowTerms
 ```
 
-`run` already shrinks the first input of each crash group.
-Use `shrink` for other crashing files.
+For a `BAD_LOOP` file, `shrink` keeps a deletion only when forge still writes Daml and the first check of the [loop check](#loop-check) is the same.
+This example uses the loop group `l01` of the run without `--damlc` in [Loop check](#loop-check):
+
+```
+$ damlforge-fuzz shrink reports/2026-10-20T12-41-34Z/groups/l01/loop_pure.vy
+shrunk reports/2026-10-20T12-41-34Z/groups/l01/loop_pure.vy from 40 to 4 lines: reports/2026-10-20T12-41-34Z/groups/l01/shrunk/loop_pure.vy
+def has_party(ps: list[Party], p: Party) -> bool:
+    for q in ps:
+            for _k in range(0, 2):
+                return True
+```
+
+forge loses the `return` in the inner loop, so the first check is `L3`.
+`damlc` builds the Daml of the full input, but not the Daml of the shrunk input.
+The shrinker deleted the `return False` after the loop, and forge then writes `()` as the result of `has_party`:
+
+```
+$ damlforge-fuzz check --damlc reports/2026-10-20T12-41-34Z/groups/l01/shrunk/loop_pure.vy
+BAD_LOOP emit   reports/2026-10-20T12-41-34Z/groups/l01/shrunk/loop_pure.vy  L3: the return in a loop of function has_party at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc rejects: Couldn't match expected type ‘Bool’ with actual type ‘()’
+```
+
+With `--damlc`, `shrink` first builds the Daml of FILE with `damlc`.
+Then it keeps a deletion only when `damlc` also gives the same verdict, `builds` or `rejects`.
+So the shrunk input keeps `return False`, and its Daml builds.
+This example uses the same group in the report of the `--damlc` run:
+
+```
+$ damlforge-fuzz shrink --damlc reports/2026-10-20T12-41-38Z/groups/l01/loop_pure.vy
+shrunk reports/2026-10-20T12-41-38Z/groups/l01/loop_pure.vy from 40 to 5 lines: reports/2026-10-20T12-41-38Z/groups/l01/shrunk/loop_pure.vy
+def has_party(ps: list[Party], p: Party) -> bool:
+    for q in ps:
+            for _k in range(0, 2):
+                return True
+    return False
+```
+
+With `--damlc`, `shrink` needs dpm, the Daml SDK, and a `daml.yaml` for FILE.
+Each try that keeps the first check needs a `dpm build` of its Daml, about 0.7 seconds, so this command took about 11 seconds.
+For a file that crashes forge, `--damlc` changes nothing.
+
+`run` already shrinks the first input of each crash group and each loop group.
+Use `shrink` for other files.
 [Shrunk inputs](#shrunk-inputs) tells how the shrinker works.
 
 ### Check the Daml with damlc
@@ -322,6 +368,8 @@ How a run uses `damlc`:
   A build of 500 texts takes about 5 seconds, so a 60-second run takes about 40 seconds more.
   The temporary projects are in your system's temporary folder, and the run deletes them.
 - The run does not shrink the bad Daml inputs, because each try needs its own `dpm build`, which takes about 0.7 seconds.
+- The run shrinks the loop groups so that each shrunk input keeps the verdict of `damlc`.
+  This needs a `dpm build` for each new Daml text of a try, so each loop group takes about 3 to 10 seconds. [Shrunk inputs](#shrunk-inputs) tells more.
 
 ### Loop check
 
@@ -386,7 +434,7 @@ How a run uses the loop check:
   random seed 1, 5 seeds, 5000 inputs
   random seed 1: 5000 inputs, 972 OK, 2582 rejected, 413 crash, 1033 skipped
   loops: 49 inputs with loop findings, 4 loop groups
-  10 crash groups, report in reports/2026-10-20T11-45-52Z
+  10 crash groups, report in reports/2026-10-20T12-41-34Z
   ```
 
 - With `--damlc`, the run also splits the loop groups by the verdict of `damlc`.
@@ -399,12 +447,13 @@ How a run uses the loop check:
   random seed 1: 5000 inputs, 972 OK, 2582 rejected, 413 crash, 1033 skipped
   damlc: 405 Daml texts, 315 bad, 22 bad Daml groups
   loops: 49 inputs with loop findings, 5 loop groups, 1 builds with damlc
-  10 crash groups, report in reports/2026-10-20T11-44-20Z
+  10 crash groups, report in reports/2026-10-20T12-41-38Z
   ```
 
   Here the `L3` inputs make two groups: `l01`, whose Daml `damlc` builds, and `l05`, whose Daml `damlc` rejects.
 
-- The run does not shrink the loop groups.
+- After the crash groups, the run shrinks the first input of each loop group.
+  [Shrunk inputs](#shrunk-inputs) tells how.
 
 The loop check has these limits:
 
@@ -445,7 +494,7 @@ So a crash can have stage `check` and a line in `forge/ir/lower.py`.
 | Code | `check` | `run` | `shrink` |
 | --- | --- | --- | --- |
 | `0` | Every file is `OK`. | No copy crashed, no Daml text is bad, and the report has no loop group. | The command wrote the shrunk file. |
-| `1` | A file is `REJECTED`, `CRASH`, `BAD_DAML`, or `BAD_LOOP`. | A copy crashed, a Daml text is bad, or the report has a loop group. | FILE does not crash forge. The command writes nothing. |
+| `1` | A file is `REJECTED`, `CRASH`, `BAD_DAML`, or `BAD_LOOP`. | A copy crashed, a Daml text is bad, or the report has a loop group. | FILE does not crash forge and has no loop bug. The command writes nothing. |
 | `2` | Usage error. | Usage error. | Usage error. |
 | `130` | — | You pressed Ctrl-C. See [Stop a run with Ctrl-C](#stop-a-run-with-ctrl-c). | You pressed Ctrl-C. The command writes nothing. |
 
@@ -498,24 +547,29 @@ reports/2026-10-19T18-45-34Z/
   The `damlc` entry has the counts and the time that `damlc` took. Without `--damlc`, `damlc` is `null`.
   A loop group entry has the first check of the group (`check`), every check of its first input (`checks`), the first bug (`message` and `daml_line`), the number of inputs, the first input, and the Daml that forge wrote for it.
   With `--damlc`, `damlc` is `builds` or `rejects`, and `damlc_error` is the first `damlc` error when `damlc` rejects the Daml. Without `--damlc`, both are `null`.
+  A loop group entry also has the shrunk text in `"shrunk"` and its file in `"shrunk_file"`, and the Daml that forge wrote for the shrunk text in `"shrunk_daml"` and `"shrunk_daml_file"`.
 - `report.md` is a short summary of `report.json`.
   It has one table row for each group, with a `Shrunk` column, such as `3 of 42 lines`, and a code block with each shrunk input.
   It also tells what the stages of the groups mean.
   With `--damlc`, it has a `Bad Daml` section with a table of the groups and the first error line of each group.
-  It has a `Loop check` section, with the checks of the loop groups, a table of the groups, and the first bug of each group.
+  It has a `Loop check` section, with the checks of the loop groups, a table of the groups with a `Shrunk` column, the first bug of each group, and a code block with each shrunk input and its Daml.
 - `groups/g01/`, `groups/g02/`, and so on are the crash groups, in the order that the run found them.
 - `groups/d01/`, `groups/d02/`, and so on are the bad Daml groups, in the order that the run found them.
 - `groups/l01/`, `groups/l02/`, and so on are the loop groups, in the order that the run found them.
 
 The report in the repository is from before the loop check, so it has no loop group.
 A loop group folder has the first input, a copy of the seed's `daml.yaml` when the seed has one, and the Daml that forge wrote for the input.
+Its `shrunk/` folder has the shrunk input and the Daml that forge wrote for it.
 For example, `damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1` writes this folder:
 
 ```
 groups/l01/
 ├── loop_pure.vy       the first input whose first check is L3
 ├── daml.yaml          a copy of the seed's daml.yaml
-└── LoopPure.daml      the Daml that forge wrote for the input
+├── LoopPure.daml      the Daml that forge wrote for the input
+└── shrunk/
+    ├── loop_pure.vy   the shrunk input
+    └── LoopPure.daml  the Daml that forge wrote for the shrunk input
 ```
 
 ### See a group again
@@ -533,11 +587,13 @@ To see a `damlc` error again without the fuzzer, run `dpm build` in the bad Daml
 
 To see a loop bug again, run `check` on the input in the loop group folder.
 With `--damlc`, the line also gives the verdict of `damlc`.
+A folder argument also checks the shrunk input.
 This example uses the report of the `--damlc` run in [Loop check](#loop-check):
 
 ```
-$ damlforge-fuzz check --damlc reports/2026-10-20T11-44-20Z/groups/l01/loop_pure.vy
-BAD_LOOP emit   reports/2026-10-20T11-44-20Z/groups/l01/loop_pure.vy  L3: the return in a loop of function has_party at Daml line 37 is lost (2 loops with a return, 0 early-return helpers); damlc builds
+$ damlforge-fuzz check --damlc reports/2026-10-20T12-41-38Z/groups/l01
+BAD_LOOP emit   reports/2026-10-20T12-41-38Z/groups/l01/loop_pure.vy  L3: the return in a loop of function has_party at Daml line 37 is lost (2 loops with a return, 0 early-return helpers); damlc builds
+BAD_LOOP emit   reports/2026-10-20T12-41-38Z/groups/l01/shrunk/loop_pure.vy  L3: the return in a loop of function has_party at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
 ```
 
 ### Shrunk inputs
@@ -554,9 +610,32 @@ The shrunk input has only lines of the full input, in the same order, and no lin
 For the 9 crash groups of the 2000-copy run in [Check the Daml with damlc](#check-the-daml-with-damlc), shrinking took about 0.06 seconds.
 The inputs of these groups have 19 to 42 lines, and the shrunk inputs have 1 to 8 lines.
 
+Then the run shrinks the first input of each loop group in the same way.
+It keeps a deletion only when forge still writes Daml and the first check of the [loop check](#loop-check) is the same.
+With `--damlc`, it also keeps a deletion only when `damlc` gives the same verdict on the Daml, `builds` or `rejects`.
+Without that, a group whose Daml builds can get a shrunk input whose Daml `damlc` rejects.
+[`damlforge-fuzz shrink`](#damlforge-fuzz-shrink) shows an example.
+
+For `damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1`, with and without `--damlc`:
+
+| Run | Loop groups | Lines of the inputs | Lines of the shrunk inputs | Time to shrink the loop groups |
+| --- | --- | --- | --- | --- |
+| Without `--damlc` | 4 | 19 to 40 | 4 to 10 | 0.13 seconds |
+| With `--damlc` | 5 | 19 to 43 | 5 to 13 | 30 seconds |
+
+With `--damlc`, each try that keeps the first check needs a `dpm build` of its Daml, about 0.7 seconds, unless an earlier try had the same Daml.
+The 5 loop groups needed 43 builds, 5 to 13 for each group.
+So this run took 37 seconds, and 30 of them were for the loop groups.
+
+For a group whose Daml `damlc` rejects, the shrunk input keeps the verdict, but not the error.
+`damlc` can reject the shrunk Daml for another reason.
+For example, in the `L4` group `l02` of that run, `damlc` rejects the Daml of the full input with `Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update`.
+It rejects the Daml of the shrunk input with `Variable not in scope: issuer`, because the shrinker deleted the field `issuer`.
+
 The shrunk input is in `shrunk/` in the group folder, with the same file name as the full input.
 The same file name keeps the Daml module name.
 The shrunk file uses the `daml.yaml` of the group folder.
+The `shrunk/` folder of a loop group also has the Daml that forge wrote for the shrunk input.
 
 ### Stop a run with Ctrl-C
 
@@ -567,7 +646,7 @@ In each of these cases, the run writes the report and exits with 130:
 | --- | --- |
 | While it makes copies | Stops the copies. With `--damlc`, it still builds the Daml. It still shrinks. `report.json` has `"interrupted": true`. |
 | While `damlc` builds | Keeps the texts that it built, and stops the `damlc` step. It still shrinks. The `damlc` entry in `report.json` has `"interrupted": true`. A loop group whose Daml `damlc` did not build has `"damlc": null`, and `report.md` shows `not built`. |
-| While it shrinks | Stops the shrinking. The groups that are not shrunk yet have `"shrunk": null`, and `report.md` shows `not shrunk`. |
+| While it shrinks | Stops the shrinking. The groups that are not shrunk yet have `"shrunk": null`, and `report.md` shows `not shrunk`. A loop group that is not shrunk yet also has `"shrunk_daml": null`. |
 
 ## Change rules
 
