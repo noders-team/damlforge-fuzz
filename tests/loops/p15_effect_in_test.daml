@@ -1,5 +1,7 @@
 module P15EffectInTest where
 
+import DA.Action (foldlA)
+
 template Iou
   with
     issuer : Party
@@ -16,14 +18,15 @@ template Iou
       do
         let self = this
         let n = 0
-        let _damlforge_n2 =
-              foldl
-                (\n c ->
-                  if (fetch c).amount > (1.0 : Decimal)
-                    then
-                      let _damlforge_n1 = n + 1 in
-                      _damlforge_n1
-                    else
-                      n)
-                n cids
-        pure (_damlforge_n2)
+        _damlforge_n3 <-
+          foldlA
+            (\n c -> do
+              _damlforge_effect1 <- fetch c
+              if _damlforge_effect1.amount > (1.0 : Decimal)
+                then do
+                  let _damlforge_n2 = n + 1
+                  pure _damlforge_n2
+                else do
+                  pure n)
+            n cids
+        pure (_damlforge_n3)

@@ -14,5 +14,6 @@ template Iou
       controller owner
       do
         let self = this
-        assertMsg "pos" ((fetch c).amount > (0.0 : Decimal))
+        _damlforge_effect1 <- fetch c
+        assertMsg "pos" (_damlforge_effect1.amount > (0.0 : Decimal))
         pure (True)

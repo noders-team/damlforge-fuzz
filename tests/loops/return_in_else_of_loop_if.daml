@@ -20,6 +20,6 @@ _damlforge_loop1 p [] = None
 _damlforge_loop1 p (q :: _damlforge_rest) =
   if q == p
     then
-      pure ()
+      _damlforge_loop1 p _damlforge_rest
     else
       Some False

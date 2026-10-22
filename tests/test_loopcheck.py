@@ -243,9 +243,13 @@ def loop_groups(doc):
 
 @pytest.fixture(scope="module")
 def loop_run(tmp_path_factory):
-    """`run contracts/loop_* --count 1100 --random-seed 1`, with the current change rules."""
+    """`run contracts/loop_* --count 20000 --random-seed 1`, with the current change rules.
+
+    DamlForge 0.0.12 triggers the loop check far less often than earlier versions, so
+    this needs many more inputs than before to still catch one loop group.
+    """
     return run(
-        tmp_path_factory.mktemp("reports"), *LOOP_SEEDS, "--count", "1100", "--random-seed", "1"
+        tmp_path_factory.mktemp("reports"), *LOOP_SEEDS, "--count", "20000", "--random-seed", "1"
     )
 
 
@@ -253,14 +257,14 @@ def loop_run(tmp_path_factory):
 def loop_run_damlc(dpm, tmp_path_factory):
     """The same run with --damlc."""
     reports = tmp_path_factory.mktemp("reports")
-    return run(reports, *LOOP_SEEDS, "--count", "1100", "--random-seed", "1", "--damlc")
+    return run(reports, *LOOP_SEEDS, "--count", "20000", "--random-seed", "1", "--damlc")
 
 
 def test_a_run_on_the_loop_seeds_makes_one_loop_group_per_first_check(loop_run):
     _, _, folder, doc = loop_run
     loops = loop_groups(doc)
 
-    assert loops, "1100 inputs on the loop seeds should give a loop bug at least once"
+    assert loops, "20000 inputs on the loop seeds should give a loop bug at least once"
     assert [g["id"] for g in loops] == [f"l{n:02d}" for n in range(1, len(loops) + 1)]
     firsts = [g["first_seen"]["input"] for g in loops]
     assert firsts == sorted(firsts)

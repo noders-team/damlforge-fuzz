@@ -15,16 +15,16 @@ template Iou
       controller owner
       do
         let self = this
-        let _damlforge_maybe1 = _damlforge_loop1 self ps
+        _damlforge_maybe1 <- _damlforge_loop1 self ps
         case _damlforge_maybe1 of
           Some _damlforge_early2 -> pure _damlforge_early2
           None -> do
             pure (False)
 
-_damlforge_loop1 (self : Iou) [] = None
-_damlforge_loop1 self (q :: _damlforge_rest) =
+_damlforge_loop1 (self : Iou) [] = pure None
+_damlforge_loop1 self (q :: _damlforge_rest) = do
   if q == self.owner
-    then
-      Some True
-    else
+    then do
+      pure (Some True)
+    else do
       _damlforge_loop1 self _damlforge_rest

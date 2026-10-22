@@ -1,5 +1,5 @@
 # Each fixture is <name>.vy and forge's Daml for it in <name>.daml, written by
-# DamlForge v0.0.11 with the file in this folder. test_loopcheck.py checks
+# DamlForge v0.0.12 with the file in this folder. test_loopcheck.py checks
 # that forge still writes this Daml, and that the loop check gives these checks.
 # fixture	expected loop checks (empty = none)	where it comes from
 p01_create_no_acc		foldlA, import present

@@ -78,14 +78,18 @@ def crash(doc):
 
 @pytest.fixture(scope="module")
 def counted(tmp_path_factory):
-    """One `run --count 400 --random-seed 1` over contracts/, shared by the read-only tests."""
+    """One `run --count 3000 --random-seed 1` over contracts/, shared by the read-only tests.
+
+    DamlForge 0.0.12 crashes far less often than earlier versions, so this needs more
+    inputs than before to still catch one: the first crash with this seed is at input 1641.
+    """
     reports = tmp_path_factory.mktemp("reports")
     out = io.StringIO()
     with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
         patch.chdir(PROJECT)
-        status = main(["run", "--count", "400", "--random-seed", "1", "--reports", str(reports)])
+        status = main(["run", "--count", "3000", "--random-seed", "1", "--reports", str(reports)])
     result = _result(status, out.getvalue())
-    assert result[3]["groups"], "400 inputs should crash forge at least once"
+    assert result[3]["groups"], "3000 inputs should crash forge at least once"
     return result
 
 
@@ -101,7 +105,7 @@ def test_report_json_has_every_field_with_its_type(counted):
         "started", "random_seed", "seconds", "count", "seeds", "forge_version", "interrupted"
     }  # fmt: skip
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", run["started"])
-    assert (run["random_seed"], run["seconds"], run["count"]) == (1, None, 400)
+    assert (run["random_seed"], run["seconds"], run["count"]) == (1, None, 3000)
     assert run["seeds"] == SEEDS
     assert run["forge_version"] == forge.__version__
     assert run["interrupted"] is False
@@ -324,29 +328,31 @@ def test_a_reports_path_that_is_a_file_returns_2_and_prints_nothing(
 
 
 def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, capsys):
+    # DamlForge 0.0.12 crashes far less often: the first crash with this seed is at
+    # call 1302, so the interrupt must fire after that, not at call 100.
     calls = itertools.count(1)
 
-    def interrupted_at_call_100(text, seed):
-        if next(calls) == 100:
+    def interrupted_at_call_1310(text, seed):
+        if next(calls) == 1310:
             raise KeyboardInterrupt
         return compile_and_sort(text, seed)
 
-    monkeypatch.setattr("damlforge_fuzz.runner.compile_and_sort", interrupted_at_call_100)
+    monkeypatch.setattr("damlforge_fuzz.runner.compile_and_sort", interrupted_at_call_1310)
     monkeypatch.chdir(PROJECT)
 
     status, (_, final, _, _), folder, doc = run(
-        capsys, tmp_path, "--count", "400", "--random-seed", "1"
+        capsys, tmp_path, "--count", "2000", "--random-seed", "1"
     )
     assert status == 130
     assert doc["run"]["interrupted"] is True
     printed = dict(zip(COUNTS, map(int, FINAL_LINE.fullmatch(final).groups()[1:])))
     assert printed == doc["totals"]
-    assert printed["inputs"] - printed["skipped"] == 99
+    assert printed["inputs"] - printed["skipped"] == 1309
     assert sum(group["count"] for group in crash(doc)) == printed["crash"]
     assert "- Stopped early by Ctrl-C. The report covers the inputs so far." in (
         (folder / "report.md").read_text().splitlines()
     )
-    assert crash(doc), "99 inputs should crash forge at least once"
+    assert crash(doc), "1309 inputs should crash forge at least once"
     for group in crash(doc):
         assert (folder / group["shrunk_file"]).read_text() == group["shrunk"]
 
@@ -380,9 +386,11 @@ def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeyp
 def test_ctrl_c_in_a_loop_group_leaves_it_not_shrunk_and_a_second_shrink_finishes_it(
     tmp_path, monkeypatch
 ):
+    # 300 inputs on the loop seeds no longer gives two loop groups under DamlForge
+    # 0.0.12; 60000 does (one at input ~1600, a second by input ~56000).
     seeds = [Seed.load(path) for path in SEED_FILES if "loop_" in path.name]
-    report = Report.open(seeds, 1, Count(300), tmp_path)
-    for tried in fuzz(seeds, 1, Count(300)):
+    report = Report.open(seeds, 1, Count(60000), tmp_path)
+    for tried in fuzz(seeds, 1, Count(60000)):
         report.add(tried)
     calls = itertools.count(1)
 
@@ -437,9 +445,10 @@ def test_the_timeline_has_one_tick_per_second(tmp_path, monkeypatch, capsys):
 
 
 def test_writing_again_leaves_no_stale_group_folder(tmp_path):
+    # 300 inputs on iou alone no longer crashes DamlForge 0.0.12; 8000 does.
     seed = Seed.load(CONTRACTS / "iou" / "iou.vy")
-    report = Report.open([seed], 1, Count(300), tmp_path)
-    for tried in fuzz([seed], 1, Count(300)):
+    report = Report.open([seed], 1, Count(8000), tmp_path)
+    for tried in fuzz([seed], 1, Count(8000)):
         report.add(tried)
     report.write()
     (report.folder / "groups" / "g99").mkdir(parents=True)

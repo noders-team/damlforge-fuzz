@@ -18,16 +18,19 @@ template Iou
       controller issuer
       do
         let self = this
-        _ <-
-          foldlA
-            (\() o -> do
-              let _damlforge_cont1 = do
-                    create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
-                    pure ()
-              if o == stop
-                then do
-                  pure ()
-                else do
-                  _damlforge_cont1)
-            () owners
-        pure ()
+        _damlforge_maybe1 <- _damlforge_loop1 self stop owners
+        case _damlforge_maybe1 of
+          Some _damlforge_early2 -> pure _damlforge_early2
+          None -> do
+            pure ()
+
+_damlforge_loop1 (self : Iou) stop [] = pure None
+_damlforge_loop1 self stop (o :: _damlforge_rest) = do
+  let _damlforge_cont1 = do
+        create (Iou with issuer = self.issuer, owner = o, amount = self.amount)
+        _damlforge_loop1 self stop _damlforge_rest
+  if o == stop
+    then do
+      pure (Some ())
+    else do
+      _damlforge_cont1

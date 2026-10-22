@@ -1,5 +1,7 @@
 module B17CreateAppend where
 
+import DA.Action (foldlA)
+
 template Iou
   with
     issuer : Party
