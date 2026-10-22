@@ -278,7 +278,7 @@ def run_and_compare(
     if not planned:
         return
     sources = {
-        key: DamlSource(item.ok.daml, item.ok.module_name, item.seed.daml_yaml)
+        key: item.seed.daml_source(item.ok.daml, item.ok.module_name)
         for key, item, _ in planned
     }
     known = dict(verdicts or {})

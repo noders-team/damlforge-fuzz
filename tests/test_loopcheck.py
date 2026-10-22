@@ -241,6 +241,10 @@ def loop_groups(doc):
     return [group for group in doc["groups"] if group["kind"] == "bad_loop"]
 
 
+def label(group):
+    return "BAD_IMP" if group["check"].startswith("I") else "BAD_LOOP"
+
+
 @pytest.fixture(scope="module")
 def loop_run(tmp_path_factory):
     """`run contracts/loop_* --count 20000 --random-seed 1`, with the current change rules.
@@ -264,10 +268,12 @@ def test_a_run_on_the_loop_seeds_makes_one_loop_group_per_first_check(loop_run):
     _, _, folder, doc = loop_run
     loops = loop_groups(doc)
 
-    assert loops, "20000 inputs on the loop seeds should give a loop bug at least once"
-    assert [g["id"] for g in loops] == [f"l{n:02d}" for n in range(1, len(loops) + 1)]
-    firsts = [g["first_seen"]["input"] for g in loops]
-    assert firsts == sorted(firsts)
+    assert any(g["check"].startswith("L") for g in loops), "20000 inputs should give a loop bug"
+    for family, series in [("L", "l"), ("I", "i")]:
+        own = [g for g in loops if g["check"].startswith(family)]
+        assert [g["id"] for g in own] == [f"{series}{n:02d}" for n in range(1, len(own) + 1)]
+        firsts = [g["first_seen"]["input"] for g in own]
+        assert firsts == sorted(firsts)
     assert len({g["check"] for g in loops}) == len(loops)
     for group in loops:
         assert set(group) == {
@@ -319,7 +325,7 @@ def test_check_shows_each_shrunk_loop_input_in_its_group(loop_run, capsys):
         assert bugs[0].check == group["check"], group["id"]
         assert main(["check", str(path)]) == 1
         assert capsys.readouterr().out == (
-            f"BAD_LOOP emit   {path}  {' '.join(bug.check for bug in bugs)}: {bugs[0].detail}\n"
+            f"{bugs[0].label:<9}emit   {path}  {' '.join(bug.check for bug in bugs)}: {bugs[0].detail}\n"
         )
 
 
@@ -406,7 +412,7 @@ def test_check_damlc_shows_each_shrunk_loop_input_with_its_groups_verdict(loop_r
         path = folder / group["shrunk_file"]
         assert main(["check", "--damlc", str(path)]) == 1
         out = capsys.readouterr().out
-        assert out.startswith(f"BAD_LOOP emit   {path}  {group['check']}"), out
+        assert out.startswith(f"{label(group):<9}emit   {path}  {group['check']}"), out
         if group["damlc"] == "builds":
             assert out.endswith("; damlc builds\n"), out
         else:
@@ -555,7 +561,7 @@ def test_check_shows_each_saved_loop_group_again(loop_run, capsys):
         path = folder / group["input_file"]
         assert main(["check", str(path)]) == 1
         assert capsys.readouterr().out == (
-            f"BAD_LOOP emit   {path}  {' '.join(group['checks'])}: {group['message']}\n"
+            f"{label(group):<9}emit   {path}  {' '.join(group['checks'])}: {group['message']}\n"
         )
 
 
@@ -571,5 +577,5 @@ def test_check_damlc_shows_each_saved_loop_group_again_with_its_verdict(loop_run
         )
         assert main(["check", "--damlc", str(path)]) == 1
         assert capsys.readouterr().out == (
-            f"BAD_LOOP emit   {path}  {' '.join(group['checks'])}: {group['message']}; {verdict}\n"
+            f"{label(group):<9}emit   {path}  {' '.join(group['checks'])}: {group['message']}; {verdict}\n"
         )

@@ -264,7 +264,6 @@ def _check(paths: Sequence[Path], damlc: bool, compare: bool) -> int:
             Compared,
             CompareInput,
             DamlcUnavailable,
-            DamlSource,
             Ok,
             Seed,
             build_daml,
@@ -284,7 +283,7 @@ def _check(paths: Sequence[Path], damlc: bool, compare: bool) -> int:
         return 2
     outcomes = [compile_and_sort(seed.text, seed) for seed in seeds]
     sources = {
-        seed.path: DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)
+        seed.path: seed.daml_source(outcome.daml, outcome.module_name)
         for seed, outcome in zip(seeds, outcomes, strict=True)
         if damlc and isinstance(outcome, Ok)
     }
@@ -505,7 +504,7 @@ def _check_seeds(seeds: Sequence[Seed], damlc: bool) -> None:
     Daml group comes from a seed itself. Raises DamlcUnavailable when dpm
     cannot build.
     """
-    from damlforge_fuzz import DamlSource, Ok, build_daml, compile_and_sort
+    from damlforge_fuzz import Ok, build_daml, compile_and_sort
 
     sources = {}
     for seed in seeds:
@@ -520,7 +519,7 @@ def _check_seeds(seeds: Sequence[Seed], damlc: bool) -> None:
             raise ValueError(
                 f"--damlc needs seeds that forge compiles: {_line(seed.path, outcome)}"
             )
-        sources[DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)] = seed
+        sources[seed.daml_source(outcome.daml, outcome.module_name)] = seed
     if not damlc:
         return
     for source, error in build_daml(sources):
@@ -535,7 +534,6 @@ def _shrink(path: Path, damlc: bool) -> int:
         from damlforge_fuzz import (
             Crash,
             DamlcUnavailable,
-            DamlSource,
             Ok,
             Seed,
             build_daml,
@@ -569,7 +567,7 @@ def _shrink(path: Path, damlc: bool) -> int:
             case Ok(loop_key=check) if check is not None:
                 verdict = None
                 if damlc:
-                    source = DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)
+                    source = seed.daml_source(outcome.daml, outcome.module_name)
                     [(_, error)] = build_daml([source])
                     verdict = "builds" if error is None else "rejects"
                 keep = same_loop(check, verdict, seed)
@@ -588,6 +586,7 @@ def _shrink(path: Path, damlc: bool) -> int:
     try:
         out.parent.mkdir(exist_ok=True)
         out.write_text(text, encoding="utf-8", newline="")
+        seed.copy_siblings(out.parent)
     except OSError as error:
         print(f"damlforge-fuzz shrink: cannot write {out}: {error}", file=sys.stderr)
         return 2

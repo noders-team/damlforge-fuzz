@@ -45,11 +45,17 @@ class DamlSource:
 
     Hashable, so a caller can drop texts it has seen. The first line of `daml`
     is `module <module_name> where`, as forge writes it.
+
+    `siblings` holds (module name, Daml) of the modules that forge writes for the
+    other .vy files of the seed's folder. The ones that `daml` imports build next
+    to it, so a text that imports `Models` finds it. Make a source with
+    Seed.daml_source.
     """
 
     daml: str
     module_name: str
     daml_yaml: Path
+    siblings: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,9 +155,11 @@ def build_daml(sources: Iterable[DamlSource]) -> Iterator[tuple[DamlSource, Daml
 def _build_batch(dpm: str, settings: str, batch: list[DamlSource]) -> list[DamlError | None]:
     """One temporary project, one `dpm build`, one verdict per source.
 
-    Source k is written to daml/I<k>/<Module>.daml, and only its first line
-    changes, to `module I<k>.<Module> where`. Template names stay, so
-    damlc's messages are the ones it gives for the text alone.
+    Source k is written to daml/I<k>/<Module>.daml, and its first line
+    changes to `module I<k>.<Module> where`. Its siblings go to the same folder
+    the same way (only the ones its imports reach), and each import of a
+    module in the folder becomes an import of I<k>.<Module>. Template names
+    stay, so damlc's messages are the ones it gives for the text alone.
     """
     with tempfile.TemporaryDirectory(prefix="damlforge-fuzz-") as temp:
         project = Path(temp)
@@ -160,8 +168,11 @@ def _build_batch(dpm: str, settings: str, batch: list[DamlSource]) -> list[DamlE
         for k, source in enumerate(batch):
             folder = project / "daml" / _folder(k)
             folder.mkdir(parents=True)
-            text = _in_folder(k, source.daml, source.module_name)
-            (folder / f"{source.module_name}.daml").write_text(text, encoding="utf-8")
+            modules = _imported(source)
+            names = [name for name, _ in modules]
+            for name, daml in modules:
+                text = _with_folder_imports(k, _in_folder(k, daml, name), names)
+                (folder / f"{name}.daml").write_text(text, encoding="utf-8")
         returncode, output = _run_dpm(dpm, "build", project)
     verdicts: list[DamlError | None] = [None] * len(batch)
     for k, error in _folder_errors(output).items():
@@ -204,6 +215,48 @@ def _unavailable(command: str, returncode: int, output: str) -> DamlcUnavailable
 
 def _folder(k: int) -> str:
     return f"I{k:05d}"
+
+
+_IMPORT_LINE: Final = re.compile(r"^import( qualified)? ([\w.]+)(?: as (\S+))?", re.MULTILINE)
+
+
+def _imported(source: DamlSource) -> list[tuple[str, str]]:
+    """(module name, Daml) of the source, and of each sibling that its imports reach."""
+    return [(source.module_name, source.daml), *imported_siblings(source.daml, source.siblings)]
+
+
+def imported_siblings(
+    daml: str, siblings: tuple[tuple[str, str], ...]
+) -> list[tuple[str, str]]:
+    """(module name, Daml) of each sibling that the imports of `daml` reach, directly or not.
+
+    Only these build with `daml`: a sibling that the text does not import cannot
+    make its build fail.
+    """
+    available = dict(siblings)
+    modules: dict[str, str] = {}
+    queue = [daml]
+    while queue:
+        for line in _IMPORT_LINE.finditer(queue.pop()):
+            name = line[2]
+            if name in available and name not in modules:
+                modules[name] = available[name]
+                queue.append(available[name])
+    return list(modules.items())
+
+
+def _with_folder_imports(k: int, daml: str, names: list[str]) -> str:
+    """Each `import <name>` of a module in folder k as `import I<k>.<name> as <name or alias>`.
+
+    The alias keeps every qualified use, such as `Models.Note`, as forge wrote it.
+    """
+
+    def rewrite(line: re.Match[str]) -> str:
+        if line[2] not in names:
+            return line[0]
+        return f"import{line[1] or ''} {_folder(k)}.{line[2]} as {line[3] or line[2]}"
+
+    return _IMPORT_LINE.sub(rewrite, daml)
 
 
 def _in_folder(k: int, daml: str, module_name: str) -> str:

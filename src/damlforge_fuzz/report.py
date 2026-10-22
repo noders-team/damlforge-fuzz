@@ -504,7 +504,7 @@ class Report:
             self.timeline.append(Tick(len(self.timeline) + 1, **asdict(self.totals)))
         self.totals.add(tried)
         if isinstance(ok := tried.outcome, Ok) and self._damlc is not None:
-            source = DamlSource(ok.daml, ok.module_name, tried.seed.daml_yaml)
+            source = tried.seed.daml_source(ok.daml, ok.module_name)
             text = self._damlc.texts.get(source)
             if text is None:
                 seed = str(tried.seed.path)
@@ -721,7 +721,9 @@ class Report:
             verdict, error = self._damlc_verdict(key.seed, key.daml, kept.module_name)
             group = groups.get((key.check, verdict))
             if group is None:
-                group_id = f"l{len(groups) + 1:02d}"
+                prefix = "i" if key.check.startswith("I") else "l"
+                number = sum(1 for check, _ in groups if check.startswith(prefix.upper())) + 1
+                group_id = f"{prefix}{number:02d}"
                 folder = f"groups/{group_id}"
                 first = kept.bugs[0]
                 group = groups[(key.check, verdict)] = LoopGroup(
@@ -799,7 +801,7 @@ class Report:
         """
         if self._damlc is None:
             return None, None
-        source = DamlSource(daml, module_name, self._seeds[seed].daml_yaml)
+        source = self._seeds[seed].daml_source(daml, module_name)
         if source not in self._damlc.verdicts:
             return None, None
         error = self._damlc.verdicts[source]
@@ -1067,16 +1069,19 @@ class Report:
             daml_yaml = self._seeds[group.seed].daml_yaml
             if daml_yaml is not None:
                 shutil.copyfile(daml_yaml, saved.parent / "daml.yaml")
+            self._seeds[group.seed].copy_siblings(saved.parent)
             if group.shrunk_file is not None:
                 shrunk = self.folder / group.shrunk_file
                 shrunk.parent.mkdir()
                 shrunk.write_text(group.shrunk, encoding="utf-8", newline="")
+                self._seeds[group.seed].copy_siblings(shrunk.parent)
         for bad in self.bad_daml_groups():
             saved = self.folder / bad.input_file
             saved.parent.mkdir(parents=True)
             saved.write_text(bad.input, encoding="utf-8", newline="")
             shutil.copyfile(self._seeds[bad.seed].daml_yaml, saved.parent / "daml.yaml")
             (self.folder / bad.daml_file).write_text(bad.daml, encoding="utf-8", newline="")
+            self._seeds[bad.seed].copy_siblings(saved.parent, bad.daml)
         for loop in self.loop_groups():
             saved = self.folder / loop.input_file
             saved.parent.mkdir(parents=True)
@@ -1085,10 +1090,12 @@ class Report:
             if daml_yaml is not None:
                 shutil.copyfile(daml_yaml, saved.parent / "daml.yaml")
             (self.folder / loop.daml_file).write_text(loop.daml, encoding="utf-8", newline="")
+            self._seeds[loop.seed].copy_siblings(saved.parent, loop.daml)
             if loop.shrunk_file is not None:
                 shrunk = self.folder / loop.shrunk_file
                 shrunk.parent.mkdir()
                 shrunk.write_text(loop.shrunk, encoding="utf-8", newline="")
+                self._seeds[loop.seed].copy_siblings(shrunk.parent, loop.shrunk_daml)
                 (self.folder / loop.shrunk_daml_file).write_text(
                     loop.shrunk_daml, encoding="utf-8", newline=""
                 )

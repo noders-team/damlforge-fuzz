@@ -17,13 +17,16 @@ from __future__ import annotations
 import enum
 import functools
 import os
+import shutil
 import re
 import traceback
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import ClassVar, Final, TypeAlias
 
+from damlforge_fuzz.damlc import DamlSource, imported_siblings
+from damlforge_fuzz.importcheck import find_import_bugs
 from damlforge_fuzz.loopcheck import LoopBug, LoopCheck, find_loop_bugs
 
 try:
@@ -109,6 +112,15 @@ class CrashKey:
         return self.exception if self.where is None else f"{self.exception} at {self.where}"
 
 
+@dataclass(frozen=True, slots=True)
+class Sibling:
+    """Another .vy file in a seed's folder, which the seed can import, and forge's Daml for it."""
+
+    path: Path
+    module_name: str
+    daml: str
+
+
 @dataclass(frozen=True)
 class Seed:
     """A .vy file and the context forge compiles it in.
@@ -136,15 +148,49 @@ class Seed:
     """
     _resolved: Path = field(repr=False)
     _settings: DamlCodegenSettings = field(repr=False, compare=False)
+    siblings: tuple[Sibling, ...] = field(default=(), repr=False, compare=False)
+    """The other .vy files of the seed's folder that forge compiles, in name order.
+    forge reads them from the disk when the seed imports them, so they never change
+    in a run. A report copies them next to a saved input, and damlc builds their
+    Daml next to the input's Daml."""
 
     @classmethod
     def load(cls, path: Path) -> Seed:
-        """Read a .vy file and its project settings.
+        """Read a .vy file, its project settings, and the other .vy files of its folder.
 
         Raises OSError when the file cannot be read, and ValueError when the
         text is not UTF-8 or daml.yaml does not hold a mapping. A daml.yaml that
         is not valid YAML raises yaml.YAMLError from forge's loader.
         """
+        seed = cls._load_alone(path)
+        siblings = []
+        for other in sorted(seed._resolved.parent.glob("*.vy")):
+            if other != seed._resolved:
+                alone = cls._load_alone(other)
+                outcome = compile_and_sort(alone.text, alone)
+                if isinstance(outcome, Ok):
+                    siblings.append(Sibling(other, outcome.module_name, outcome.daml))
+        return replace(seed, siblings=tuple(siblings))
+
+    def daml_source(self, daml: str, module_name: str) -> DamlSource:
+        """The DamlSource of forge's Daml for a text of this seed, with its siblings' Daml."""
+        siblings = tuple((sibling.module_name, sibling.daml) for sibling in self.siblings)
+        return DamlSource(daml, module_name, self.daml_yaml, siblings)
+
+    def copy_siblings(self, folder: Path, daml: str | None = None) -> None:
+        """Copy the sibling .vy files into `folder`, so a saved copy of the seed compiles there.
+
+        With `daml`, forge's Daml for the saved copy, also write the Daml of each
+        sibling that it imports, so `dpm build` there builds what damlc built.
+        """
+        for sibling in self.siblings:
+            shutil.copyfile(sibling.path, folder / sibling.path.name)
+        if daml is not None:
+            for name, text in imported_siblings(daml, self.daml_source(daml, "").siblings):
+                (folder / f"{name}.daml").write_text(text, encoding="utf-8", newline="")
+
+    @classmethod
+    def _load_alone(cls, path: Path) -> Seed:
         resolved = path.resolve()
         text = path.read_text(encoding="utf-8")
         # forge's own private loaders, so a seed compiles exactly as `forge daml`
@@ -276,7 +322,7 @@ def compile_and_sort(text: str, seed: Seed) -> Outcome:
                     raise
             return Crash(stage, type(error).__name__, _message(error), where)
         # After the try, so an exception here is never sorted as a forge crash.
-        return Ok(daml, seed.module_name, find_loop_bugs(text, daml))
+        return Ok(daml, seed.module_name, find_loop_bugs(text, daml) + find_import_bugs(text, daml))
 
 
 _NO_STABLE_LINE: Final = (RecursionError, MemoryError)

@@ -20,7 +20,7 @@ from pathlib import PurePath
 from typing import TypeAlias, TypeVar
 
 from damlforge_fuzz.compiler import Crash, CrashKey, Ok, Outcome, Seed, compile_and_sort
-from damlforge_fuzz.damlc import DamlcVerdict, DamlSource, build_daml
+from damlforge_fuzz.damlc import DamlcVerdict, build_daml
 from damlforge_fuzz.loopcheck import LoopCheck
 
 P = TypeVar("P", bound=PurePath)
@@ -98,7 +98,7 @@ def same_loop(check: LoopCheck, damlc: DamlcVerdict, seed: Seed) -> Keep:
         if damlc is None:
             return True
         if outcome.daml not in verdicts:
-            source = DamlSource(outcome.daml, outcome.module_name, seed.daml_yaml)
+            source = seed.daml_source(outcome.daml, outcome.module_name)
             [(_, error)] = build_daml([source])
             verdicts[outcome.daml] = "builds" if error is None else "rejects"
         return verdicts[outcome.daml] == damlc

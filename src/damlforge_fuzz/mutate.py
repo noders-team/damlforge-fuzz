@@ -164,7 +164,10 @@ _STATEMENTS: Final = (
     "x = 1", "x += 1", "del x", "raise", "break", "continue",
     "for i in range(3):\n{ind}    pass", "if x:\n{ind}    pass",
     "while True:\n{ind}    pass", "global x", "import os",
-    "from forge.models import *",
+    "from forge.models import *", "from . import models",
+    "from .models import x", "import math as m",
+    "from forge.models import Party as P", "from models import *",
+    "import models",
 )  # fmt: skip
 
 _NAME: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -408,6 +411,75 @@ def _inline_var(rng: random.Random, i: int, ctx: _Context) -> list[str] | None:
     return lines
 
 
+# The import rules. They change the import lines at column 0, which forge reads
+# to load a sibling .vy file and to write the Daml import lines.
+_FROM_IMPORT: Final = re.compile(r"from +(?P<module>\.*[\w.]*) +import +(?P<names>[\w ,*]+?) *")
+_PLAIN_IMPORT: Final = re.compile(r"import +(?P<module>[\w.]+)(?: +as +(?P<alias>\w+))? *")
+# None gives `import m` and uses `m.X`. "m" is a lower-case alias.
+_ALIASES: Final = ("M", "m", "Lib", None)
+_MODULE_EDITS: Final = (".{}", "..{}", "pkg.{}", "forge.{}", "{}s")
+
+
+def _import_name(rng: random.Random, line: str, ctx: _Context) -> list[str] | None:
+    """In `from m import a, b`, delete one name, or add a name from any seed."""
+    match = _FROM_IMPORT.fullmatch(line)
+    if match is None:
+        return None
+    names = [name.strip() for name in match["names"].split(",")]
+    if len(names) > 1 and rng.randrange(2):
+        del names[rng.randrange(len(names))]
+    else:
+        words = _NAME.findall("\n".join(ctx.donor_lines))
+        names.append(rng.choice([word for word in words if not keyword.iskeyword(word)]))
+    return [f"from {match['module']} import {', '.join(names)}"]
+
+
+def _import_module(rng: random.Random, line: str, ctx: _Context) -> list[str] | None:
+    """Change the module of an import line: relative, in a package, or with a typo."""
+    match = _FROM_IMPORT.fullmatch(line) or _PLAIN_IMPORT.fullmatch(line)
+    if match is None:
+        return None
+    module = rng.choice(_MODULE_EDITS).format(match["module"].lstrip("."))
+    return [line[: match.start("module")] + module + line[match.end("module") :]]
+
+
+def _import_form(rng: random.Random, i: int, ctx: _Context) -> list[str] | None:
+    """Switch `from m import a, b` and `import m as A`, and rewrite each use: `a` <-> `A.a`."""
+    code = _code(ctx.lines)
+    lines = list(ctx.lines)
+    edits: dict[int, list[tuple[int, int, str]]] = {}
+    if (match := _FROM_IMPORT.fullmatch(lines[i])) is not None:
+        names = [name.strip() for name in match["names"].split(",")]
+        if match["module"].startswith(".") or not all(name.isidentifier() for name in names):
+            return None
+        alias = rng.choice(_ALIASES)
+        prefix = alias or match["module"]
+        lines[i] = f"import {match['module']}" + (f" as {alias}" if alias else "")
+        for k, line in enumerate(code):
+            if k != i:
+                for name in names:
+                    for use in _uses(name, line):
+                        edits.setdefault(k, []).append((use.start(), use.end(), f"{prefix}.{name}"))
+    elif (match := _PLAIN_IMPORT.fullmatch(lines[i])) is not None:
+        prefix = re.escape(match["alias"] or match["module"])
+        qualified = re.compile(rf"(?<![\w.]){prefix}\.(?P<name>[A-Za-z_]\w*)")
+        names = []
+        for k, line in enumerate(code):
+            if k != i:
+                for use in qualified.finditer(line):
+                    names += [use["name"]] if use["name"] not in names else []
+                    edits.setdefault(k, []).append((use.start(), use.end(), use["name"]))
+        if not names:
+            return None
+        lines[i] = f"from {match['module']} import {', '.join(names)}"
+    else:
+        return None
+    for k, spans in edits.items():
+        for start, end, new in sorted(spans, reverse=True):
+            lines[k] = lines[k][:start] + new + lines[k][end:]
+    return lines
+
+
 # The one list of rules, each equally likely. rng.choice picks by position, so
 # any edit here changes some inputs of every random seed. Add a new rule at the
 # end: in a test, a rule added last kept 1608 of the first 2000 inputs the same,
@@ -430,6 +502,9 @@ _RULES: Final[tuple[_Rule, ...]] = (
     _Rule("wrap_in_loop", _line_rule(_wrap_in_loop)),
     _Rule("dedent_line", _line_rule(_dedent_line)),
     _Rule("inline_var", _inline_var),
+    _Rule("import_name", _line_rule(_import_name)),
+    _Rule("import_module", _line_rule(_import_module)),
+    _Rule("import_form", _import_form),
 )
 
 RULE_NAMES: Final = tuple(rule.name for rule in _RULES)

@@ -63,8 +63,8 @@ def test_input_1_of_random_seed_1_on_a_two_line_text():
     assert next(input_sequence(["a = 1\nb = 2"], 1)) == Input(
         number=1,
         seed=0,
-        text="Party = 1\na = 1\nb = 2",
-        changes=(Change("donor_line", 1), Change("type", 1), Change("name", 1)),
+        text="{} = 1\nb = 2",
+        changes=(Change("import_module", 1), Change("literal", 1), Change("inline_local", 1)),
         changed=True,
     )
 
@@ -89,9 +89,9 @@ def test_an_input_is_changed_exactly_when_its_text_differs_from_its_seed():
 
 
 def test_every_rule_changes_some_text_on_its_own():
-    # toggle_ledger_effect fits 5 of the 266 seed lines. Its first input with
-    # one change that changes the text is input 6282.
-    single = [i for i in first(6300, SEED_TEXTS) if len(i.changes) == 1]
+    # toggle_ledger_effect fits 7 of the 366 seed lines. Its first input with
+    # one change that changes the text is input 9892; import_name's is 7046.
+    single = [i for i in first(9900, SEED_TEXTS) if len(i.changes) == 1]
     changed_by = {i.changes[0].rule for i in single if i.changed}
     assert changed_by == set(RULE_NAMES)
 

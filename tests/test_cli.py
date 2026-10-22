@@ -20,6 +20,10 @@ def test_check_on_the_contracts_folder_prints_an_ok_line_for_each_seed_and_retur
         "OK       emit   contracts/asset_proposal/asset_proposal.vy",
         "OK       emit   contracts/ballot/ballot.vy",
         "OK       emit   contracts/escrow/escrow.vy",
+        "OK       emit   contracts/import_qualified/import_qualified.vy",
+        "OK       emit   contracts/import_qualified/models.vy",
+        "OK       emit   contracts/import_sibling/import_sibling.vy",
+        "OK       emit   contracts/import_sibling/models.vy",
         "OK       emit   contracts/iou/iou.vy",
         "OK       emit   contracts/loop_count/loop_count.vy",
         "OK       emit   contracts/loop_give/loop_give.vy",
@@ -66,7 +70,7 @@ def test_check_lists_a_file_once_when_two_arguments_cover_it(monkeypatch, capsys
     monkeypatch.chdir(PROJECT)
 
     assert main(["check", "contracts", "contracts/iou"]) == 0
-    assert len(capsys.readouterr().out.splitlines()) == 9
+    assert len(capsys.readouterr().out.splitlines()) == 13
 
 
 def test_check_skips_hidden_folders(tmp_path, capsys):

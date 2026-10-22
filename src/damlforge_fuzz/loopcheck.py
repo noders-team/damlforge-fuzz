@@ -26,7 +26,7 @@ import tokenize
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from keyword import iskeyword
-from typing import ClassVar, Final
+from typing import Final
 
 
 class LoopCheck(enum.StrEnum):
@@ -36,6 +36,11 @@ class LoopCheck(enum.StrEnum):
     L2 = "L2"
     L3 = "L3"
     L4 = "L4"
+    # The import checks, in importcheck.py.
+    I1 = "I1"
+    I2 = "I2"
+    I3 = "I3"
+    I4 = "I4"
 
 
 LOOP_CHECK_TEXT: Final[dict[LoopCheck, str]] = {
@@ -49,6 +54,15 @@ LOOP_CHECK_TEXT: Final[dict[LoopCheck, str]] = {
     LoopCheck.L4: "A ledger action, in a loop or not, is used as a value: it is not bound "
     "with `<-` and is not a statement of a `do` block, so the code gets an `Update`, "
     "not its result.",
+    LoopCheck.I1: "The Daml uses a qualified name, such as `Map.insert`, `M.Note`, or a type "
+    "used as a value, `Party.amount`, but no import line binds its qualifier. "
+    "damlc rejects the Daml.",
+    LoopCheck.I2: "An import line of the Daml has an alias that is not a Daml module name, "
+    "such as `import qualified Models as m`. damlc rejects the Daml.",
+    LoopCheck.I3: "The Daml selects an upper-case name, such as an enum value or a choice, "
+    "from an expression: `(M.Kind).CASH`. Daml has no such syntax, so damlc rejects the Daml.",
+    LoopCheck.I4: "The .vy code imports a name from a sibling module or a stub, but the Daml "
+    "has no import of that module, or its import does not list the name.",
 }
 """What each check finds, in plain English, for report.md and the README."""
 
@@ -57,14 +71,16 @@ LOOP_CHECK_TEXT: Final[dict[LoopCheck, str]] = {
 class LoopBug:
     """One check that failed on one Daml text: where in the Daml, and what was found."""
 
-    label: ClassVar[str] = "BAD_LOOP"
-
     check: LoopCheck
     daml_line: int
     """1-based line in forge's Daml: the use of the action or foldlA, or the
     first line of the definition that lost its return (L3)."""
     detail: str
     """One line that names the Daml line, such as "fetch at Daml line 22 in the pure foldl of line 20"."""
+
+    @property
+    def label(self) -> str:
+        return "BAD_IMP" if self.check.startswith("I") else "BAD_LOOP"
 
 
 def find_loop_bugs(vy: str, daml: str) -> tuple[LoopBug, ...]:

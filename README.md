@@ -124,6 +124,10 @@ Run these commands from the root of this repository.
    OK       emit   contracts/asset_proposal/asset_proposal.vy
    OK       emit   contracts/ballot/ballot.vy
    OK       emit   contracts/escrow/escrow.vy
+   OK       emit   contracts/import_qualified/import_qualified.vy
+   OK       emit   contracts/import_qualified/models.vy
+   OK       emit   contracts/import_sibling/import_sibling.vy
+   OK       emit   contracts/import_sibling/models.vy
    OK       emit   contracts/iou/iou.vy
    OK       emit   contracts/loop_count/loop_count.vy
    OK       emit   contracts/loop_give/loop_give.vy
@@ -136,10 +140,10 @@ Run these commands from the root of this repository.
 
    ```
    $ damlforge-fuzz run --seconds 60
-   random seed 813550, 9 seeds, 60 seconds
-   random seed 813550: 82103 inputs, 17467 OK, 42691 rejected, 5420 crash, 16525 skipped
-   loops: 658 inputs with loop findings, 4 loop groups
-   14 crash groups, report in reports/2026-10-20T11-46-49Z
+   random seed 999297, 13 seeds, 60 seconds
+   random seed 999297: 84327 inputs, 15483 OK, 45515 rejected, 153 crash, 23176 skipped
+   loops: 86 inputs with loop findings, 6 loop groups
+   4 crash groups, report in reports/2026-10-22T11-13-00Z
    ```
 
 3. Open `report.md` in the report folder.
@@ -339,11 +343,11 @@ That is a bug in forge: its check stage let through a program that it then trans
 
 ```
 $ damlforge-fuzz run --damlc --count 2000 --random-seed 1
-random seed 1, 9 seeds, 2000 inputs
-random seed 1: 2000 inputs, 432 OK, 1017 rejected, 133 crash, 418 skipped
-damlc: 231 Daml texts, 172 bad, 22 bad Daml groups
-loops: 12 inputs with loop findings, 4 loop groups, 1 builds with damlc
-9 crash groups, report in reports/2026-10-20T11-45-56Z
+random seed 1, 13 seeds, 2000 inputs
+random seed 1: 2000 inputs, 357 OK, 1077 rejected, 4 crash, 562 skipped
+damlc: 205 Daml texts, 108 bad, 20 bad Daml groups
+loops: 2 inputs with loop findings, 1 loop group, 0 build with damlc
+3 crash groups, report in reports/2026-10-22T11-34-07Z
 ```
 
 The `damlc:` line comes before the `loops:` line:
@@ -390,8 +394,13 @@ It runs on each `OK` input of `check` and `run`, and it does not need `damlc`.
 | `L2` | forge writes the pure fold `foldl` for a loop whose body has a ledger action, such as `fetch` or `create`. A ledger action needs `foldlA` in an `Update`. |
 | `L3` | A `return` in a loop of the .vy code has no early-return helper (`_damlforge_loopN`) in the Daml, so the return is lost: the loop goes on, or the function returns another value. damlc can build this Daml. |
 | `L4` | A ledger action, in a loop or not, is used as a value: it is not bound with `<-` and is not a statement of a `do` block, so the code gets an `Update`, not its result. |
+| `I1` | The Daml uses a qualified name, such as `Map.insert`, `M.Note`, or a type used as a value, `Party.amount`, but no import line binds its qualifier. damlc rejects the Daml. |
+| `I2` | An import line of the Daml has an alias that is not a Daml module name, such as `import qualified Models as m`. damlc rejects the Daml. |
+| `I3` | The Daml selects an upper-case name, such as an enum value or a choice, from an expression: `(M.Kind).CASH`. Daml has no such syntax, so damlc rejects the Daml. |
+| `I4` | The .vy code imports a name from a sibling module or a stub, but the Daml has no import of that module, or its import does not list the name. |
 
-An input that fails a check is `BAD_LOOP`.
+An input that fails a check `L1` to `L4` is `BAD_LOOP`.
+The checks `I1` to `I4` are the import check, in `src/damlforge_fuzz/importcheck.py`. They read the import lines of forge's Daml and the `.vy` text, and an input that fails one is `BAD_IMP`. Their groups are `i01`, `i02`, ..., next to the loop groups `l01`, `l02`, ..., and the `loops:` line counts both.
 `check` prints every check that the file fails, and the first bug.
 The seven programs in [`bugs/loops/`](bugs/loops/) each show a forge loop bug:
 
@@ -434,15 +443,15 @@ How a run uses the loop check:
   ```
 
 - After the last copy, the run groups the `OK` copies with a loop bug.
-  A copy goes to the group of its first check, so a run without `--damlc` has at most four loop groups.
+  A copy goes to the group of its first check, so a run without `--damlc` has at most eight groups: four loop groups and four import groups.
   The `loops:` line comes before the last line:
 
   ```
   $ damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1
   random seed 1, 5 seeds, 5000 inputs
-  random seed 1: 5000 inputs, 972 OK, 2582 rejected, 413 crash, 1033 skipped
-  loops: 49 inputs with loop findings, 4 loop groups
-  10 crash groups, report in reports/2026-10-20T12-41-34Z
+  random seed 1: 5000 inputs, 852 OK, 2828 rejected, 4 crash, 1316 skipped
+  loops: 2 inputs with loop findings, 1 loop group
+  1 crash group, report in reports/2026-10-22T11-12-56Z
   ```
 
 - With `--damlc`, the run also splits the loop groups by the verdict of `damlc`.
@@ -452,13 +461,14 @@ How a run uses the loop check:
   ```
   $ damlforge-fuzz run contracts/loop_* --damlc --count 5000 --random-seed 1
   random seed 1, 5 seeds, 5000 inputs
-  random seed 1: 5000 inputs, 972 OK, 2582 rejected, 413 crash, 1033 skipped
-  damlc: 405 Daml texts, 315 bad, 22 bad Daml groups
-  loops: 49 inputs with loop findings, 5 loop groups, 1 builds with damlc
-  10 crash groups, report in reports/2026-10-20T12-41-38Z
+  random seed 1: 5000 inputs, 852 OK, 2828 rejected, 4 crash, 1316 skipped
+  damlc: 353 Daml texts, 238 bad, 17 bad Daml groups
+  loops: 2 inputs with loop findings, 1 loop group, 0 build with damlc
+  1 crash group, report in reports/2026-10-22T11-34-07Z
   ```
 
-  Here the `L3` inputs make two groups: `l01`, whose Daml `damlc` builds, and `l05`, whose Daml `damlc` rejects.
+  Here the one group, `i01` (`I1`), is Daml that `damlc` rejects.
+  On DamlForge 0.0.11, the same command gave five loop groups, and the `L3` inputs made two of them: `l01`, whose Daml `damlc` builds, and `l05`, whose Daml `damlc` rejects.
 
 - After the crash groups, the run shrinks the first input of each loop group.
   [Shrunk inputs](#shrunk-inputs) tells how.
@@ -485,10 +495,10 @@ Only the seeds that have a [calls file](#calls-files) are compared, so you choos
 ```
 $ damlforge-fuzz run contracts/loop_* --compare --count 5000 --random-seed 1
 random seed 1, 5 seeds, 5000 inputs
-random seed 1: 5000 inputs, 972 OK, 2582 rejected, 413 crash, 1033 skipped
-loops: 49 inputs with loop findings, 4 loop groups
-compare: 367 inputs compared, 4 differ, 2 run groups
-10 crash groups, report in reports/2026-10-20T15-55-09Z
+random seed 1: 5000 inputs, 852 OK, 2828 rejected, 4 crash, 1316 skipped
+loops: 2 inputs with loop findings, 1 loop group
+compare: 389 inputs compared, 0 differ, 0 run groups
+1 crash group, report in reports/2026-10-22T11-34-13Z
 ```
 
 The `compare:` line comes after the `loops:` line:
@@ -497,15 +507,17 @@ The `compare:` line comes after the `loops:` line:
 - `differ`: the compared copies whose Daml does not do what the `.vy` code does in a call.
 - `run groups`: the number of groups of these copies. Copies with the same kind of difference and the same first loop check are one group.
 
-In this run, group `r01` is a lost `return` in `has_party`, which the loop check also finds (`L3`).
-Group `r02` is a copy with a `pass` above the `if` in the loop of `GiveAll`.
-forge drops the `create` after the `pass`, the Daml builds, and no loop check fails.
+On DamlForge 0.0.12 this run finds no difference: forge 0.0.12 writes these loops right.
+On DamlForge 0.0.11, the same command found two run groups.
+Group `r01` was a lost `return` in `has_party`, which the loop check also finds (`L3`).
+Group `r02` was a copy with a `pass` above the `if` in the loop of `GiveAll`.
+forge dropped the `create` after the `pass`, the Daml built, and no loop check failed.
 That is bug b23. [b23 in `bugs/loops/`](bugs/loops/README.md#b23-pass-drops-the-rest-of-its-block) tells its cause.
 
 #### Why `--compare` is an option
 
 - **It finds bugs that the other checks miss.** The loop check finds only the shapes of wrong loops that are known: `L1` to `L4`. `damlc` only tells whether the Daml builds. For b23, forge drops an `assert`, the Daml builds, and no loop check fails. Only a run of both programs on the same data shows that the Daml accepts a negative number that the `.vy` code rejects.
-- **It is slow, and it needs dpm.** Without `--compare`, the run above takes 3.3 seconds, and it does not need dpm. With `--compare`, it takes 61 seconds. The compare step takes 51 seconds, and the check of the seeds before the first copy takes about 6.5 seconds. A plain run must stay fast and must work without the Daml SDK.
+- **It is slow, and it needs dpm.** Without `--compare`, the run above took 3.3 seconds on DamlForge 0.0.11, and it does not need dpm. With `--compare`, it took 61 seconds. The compare step takes 51 seconds, and the check of the seeds before the first copy takes about 6.5 seconds. A plain run must stay fast and must work without the Daml SDK.
 - **It is not part of `--damlc`.** `damlc` builds the Daml, and `--compare` runs it. They cost different amounts and answer different questions, so a run can use one of them or both. With both, the compare step uses the verdicts of `damlc` and does not build the Daml of the copies again.
 
 #### Calls files
@@ -708,22 +720,27 @@ reports/2026-10-19T18-45-34Z/
 - `groups/g01/`, `groups/g02/`, and so on are the crash groups, in the order that the run found them.
 - `groups/d01/`, `groups/d02/`, and so on are the bad Daml groups, in the order that the run found them.
 - `groups/l01/`, `groups/l02/`, and so on are the loop groups, in the order that the run found them.
+- `groups/i01/`, `groups/i02/`, and so on are the import groups (checks `I1` to `I4`), in the order that the run found them. Their folders are like loop group folders.
 - `groups/r01/`, `groups/r02/`, and so on are the run groups, in the order that the run found them.
 
 The report in the repository is from before the loop check, so it has no loop group.
-A loop group folder has the first input, a copy of the seed's `daml.yaml` when the seed has one, and the Daml that forge wrote for the input.
+A loop group or import group folder has the first input, a copy of the seed's `daml.yaml` when the seed has one, and the Daml that forge wrote for the input.
 Its `shrunk/` folder has the shrunk input and the Daml that forge wrote for it.
 For example, `damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1` writes this folder:
 
 ```
-groups/l01/
-├── loop_pure.vy       the first input whose first check is L3
+groups/i01/
+├── loop_count.vy      the first input whose first check is I1
 ├── daml.yaml          a copy of the seed's daml.yaml
-├── LoopPure.daml      the Daml that forge wrote for the input
+├── LoopCount.daml     the Daml that forge wrote for the input
 └── shrunk/
-    ├── loop_pure.vy   the shrunk input
-    └── LoopPure.daml  the Daml that forge wrote for the shrunk input
+    ├── loop_count.vy  the shrunk input
+    └── LoopCount.daml the Daml that forge wrote for the shrunk input
 ```
+
+A group of an import seed also has the seed's sibling `.vy` files, such as `models.vy`, in the group folder and in `shrunk/`, so `check` on the saved input finds the modules it imports.
+A folder with Daml also has forge's Daml of each sibling module that the input's Daml imports, such as `Models.daml`, so `dpm build` there builds what `damlc` built in the run.
+With `--damlc`, `damlc` builds each Daml text together with forge's Daml of the sibling modules that the text imports, directly or through another sibling.
 
 A run group folder is a Daml project.
 For example, `damlforge-fuzz run contracts/loop_* --compare --count 5000 --random-seed 1` writes this folder:
@@ -866,10 +883,13 @@ The first ten examples are real changes to `contracts/iou/iou.vy`, and the last 
 | `wrap_in_loop` | Puts a statement that has an indent into `for _k in range(0, 2):`. | `return cids` becomes `for _k in range(0, 2):` and `    return cids` |
 | `dedent_line` | Moves a line with an indent of 8 or more 4 spaces to the left. | `cid = create(...)` moves out of the `if` |
 | `inline_var` | On `v = value`, puts the value in place of each use of `v` below it in the same block, and deletes the line. It does not fit when `v` gets a new value in that block. | `cid = create(Iou(...))` is deleted, and `cids.append(cid)` becomes `cids.append(create(Iou(...)))` |
+| `import_name` | In `from m import a, b` at column 0, deletes one name, or adds a name from any seed. | `from models import Kind, Lot, Note, double` becomes `from models import Kind, Lot, Note` |
+| `import_module` | Changes the module of an import line at column 0: `.m`, `..m`, `pkg.m`, `forge.m`, or `ms`. | `import math as m` becomes `import forge.math as m` |
+| `import_form` | Changes `from m import a, b` to `import m as A`, and each use `a` to `A.a`, or back. `A` is `M`, `m`, `Lib`, or none (`import m` and `m.a`). | `from models import Note` becomes `import models as M`, and `ContractId[Note]` becomes `ContractId[M.Note]` |
 
 The rules take their new words from five lists in `src/damlforge_fuzz/mutate.py`: `_OPERATORS`, `_LITERALS`, `_TYPES`, `_EXPRESSIONS`, and `_STATEMENTS`.
 Most rules change only their own line.
-`inline_local` and `early_return` read the whole text, and `inline_var` also changes the lines below its line.
+`inline_local` and `early_return` read the whole text, and `inline_var` and `import_form` also change other lines.
 The six loop rules never take a string or a comment for code.
 
 ### Add a word or a rule
@@ -923,7 +943,7 @@ To add a rule:
 ## Seeds
 
 The seeds are in `contracts/`.
-Each seed folder is its own Daml project, with one `.vy` file and a `daml.yaml` with `source: .`.
+Each seed folder is its own Daml project, with a `daml.yaml` with `source: .`. Most have one `.vy` file. The two import seeds also have a sibling module, `models.vy`, which is a seed too.
 The five loop seeds also have a [calls file](#calls-files) for `--compare`.
 Separate projects let the fuzzer run on the seeds that you choose.
 
@@ -932,12 +952,22 @@ Separate projects let the fuzzer run on the seeds that you choose.
 | `contracts/asset_proposal/` | `Asset`, `AssetProposal` | `Give`, `Accept`, `Reject` |
 | `contracts/ballot/` | `Ballot` | `CastVote`, `Close` |
 | `contracts/escrow/` | `Payout`, `Escrow` | `Release`, `Refund` |
+| `contracts/import_qualified/` | `Desk`; `Note` in `models.vy` | `Issue`, `Size` |
+| `contracts/import_sibling/` | `Desk`; `Note` in `models.vy` | `Issue`, `Size` |
 | `contracts/iou/` | `Iou` | `Transfer`, `Split` |
 | `contracts/loop_count/` | `Iou` | `Count` |
 | `contracts/loop_give/` | `Iou` | `GiveAll` |
 | `contracts/loop_many/` | `Iou` | `Many` |
 | `contracts/loop_pure/` | `Iou` | `Check` |
 | `contracts/loop_verify/` | `Iou` | `Sum` |
+
+### Import seeds
+
+The `contracts/import_*` seeds test forge's imports between `.vy` files.
+In each folder, the main file imports a template, a struct, an enum, and a function from `models.vy`, the file next to it:
+`import_sibling.vy` with `from models import Kind, Lot, Note, double`, and `import_qualified.vy` with `import models as M` and `M.Note`.
+forge reads the sibling file from the disk, so a change to the main file is compiled against the unchanged `models.vy`.
+The import seeds use no qualified enum value, such as `M.Kind.CASH`, because forge writes wrong Daml for it (b31 in `bugs/imports/`).
 
 ### Loop seeds
 

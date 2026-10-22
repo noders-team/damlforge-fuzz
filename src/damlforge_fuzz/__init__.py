@@ -50,7 +50,7 @@ groups the texts damlc rejects (BAD_DAML). It needs dpm and the Daml SDK::
 
     from damlforge_fuzz import DamlSource, build_daml
 
-    source = DamlSource(ok.daml, ok.module_name, seed.daml_yaml)
+    source = seed.daml_source(ok.daml, ok.module_name)  # with the seed's sibling modules
     for source, error in build_daml([source]):  # one dpm build per 500 texts
         ...  # error is None, or a DamlError with .message and .key
 
@@ -138,6 +138,7 @@ if TYPE_CHECKING:
         load_calls,
         run_and_compare,
     )
+    from damlforge_fuzz.importcheck import find_import_bugs
     from damlforge_fuzz.loopcheck import LOOP_CHECK_TEXT, LoopBug, LoopCheck, find_loop_bugs
     from damlforge_fuzz.mutate import RULE_NAMES, Change, Input, input_sequence
     from damlforge_fuzz.report import (
@@ -173,6 +174,7 @@ _HOME = {
     ),
     **dict.fromkeys(["same_crash", "same_loop", "shrink", "shrunk_path"], "shrinker"),
     **dict.fromkeys(["LOOP_CHECK_TEXT", "LoopBug", "LoopCheck", "find_loop_bugs"], "loopcheck"),
+    "find_import_bugs": "importcheck",
     **dict.fromkeys(
         ["Call", "Calls", "CompareInput", "Compared", "Difference", "DifferenceKind", "Dropped"]
         + ["InputResult", "Skipped", "calls_path", "load_calls", "run_and_compare"],
