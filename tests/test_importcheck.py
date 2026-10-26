@@ -160,7 +160,8 @@ def test_damlc_builds_a_text_with_the_siblings_it_imports_and_no_other(dpm, tmp_
     (folder / "daml.yaml").write_bytes((PROJECT / "bugs" / "imports" / "daml.yaml").read_bytes())
     (folder / "models.vy").write_bytes((PROJECT / "bugs" / "imports" / "models.vy").read_bytes())
     (folder / "broken.vy").write_text(
-        "import models as m\n\n\ndef f() -> m.Kind:\n    return m.Kind.CASH\n"
+        "from forge.models import Decimal\nimport models\n\n\n"
+        "def f(x: Decimal) -> Decimal:\n    return models.double(x)\n"
     )
     (folder / "main.vy").write_text(
         "from models import Kind\n\n\ndef f() -> Kind:\n    return Kind.CASH\n"

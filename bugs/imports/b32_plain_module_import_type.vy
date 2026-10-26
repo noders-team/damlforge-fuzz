@@ -1,5 +1,6 @@
+from forge.models import ContractId
 import models
 
 
-def cash() -> models.Kind:
-    return models.Kind.CASH
+def same(c: ContractId[models.Note]) -> ContractId[models.Note]:
+    return c

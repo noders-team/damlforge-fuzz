@@ -966,7 +966,7 @@ The `contracts/import_*` seeds test forge's imports between `.vy` files.
 In each folder, the main file imports a template, a struct, an enum, and a function from `models.vy`, the file next to it:
 `import_sibling.vy` with `from models import Kind, Lot, Note, double`, and `import_qualified.vy` with `import models as M` and `M.Note`.
 forge reads the sibling file from the disk, so a change to the main file is compiled against the unchanged `models.vy`.
-The import seeds use no qualified enum value, such as `M.Kind.CASH`, because forge writes wrong Daml for it (b31 in `bugs/imports/`).
+The import seeds use no qualified enum value, such as `M.Kind.CASH`, because forge rejects it (b31 in `bugs/imports/`).
 
 ### Loop seeds
 

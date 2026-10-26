@@ -1,46 +1,55 @@
-# Import bugs b28 to b32
+# Import bugs b28 to b33
 
-This folder has five small programs that show import bugs in DamlForge `0413ac6` (`forge_version` 0.0.12).
+This folder has six small programs that show import bugs in DamlForge.
+b28 to b32 were found on `0413ac6` (`forge_version` 0.0.12).
+On `5da0584` (`forge_version` 0.0.13), b28, b29, and b30 are fixed, and b31 and b32 are still open.
+b33 was found on 0.0.13, and 0.0.12 has it too.
 The numbers continue b01 to b27 ([the 20000-input analysis](../../reports/2026-10-19T18-45-34Z/analysis.md), [the loop report analysis](../../reports/2026-10-20T16-34-28Z/analysis.md)), and the categories are the categories of the 20000-input analysis.
 
-b28 was found by hand. The fuzzer found b29, b30, and b31 with the import seeds (`contracts/import_*`), the import rules, and the import check (unit 12). Each program here was then made by hand, as small as it can be.
-`models.vy` is the sibling module that b30, b31, and b32 import. It is not a bug program.
+b28 was found by hand. The fuzzer found b29, b30, and b31 with the import seeds (`contracts/import_*`), the import rules, and the import check (unit 12).
+b33 was found by hand, in [the analysis of the 0.0.13 import run](../../reports/2026-10-26T07-07-10Z/analysis.md).
+Each program here was then made by hand, as small as it can be.
+`models.vy` is the sibling module that b30 to b33 import. It is not a bug program.
 
-The two import bugs of the first report are fixed on 0.0.12. b13 (`import` in a function) and b14 (a typo in `from forge.X import ...`) now get `DF1213`.
+The two import bugs of the first report are fixed since 0.0.12. b13 (`import` in a function) and b14 (a typo in `from forge.X import ...`) get `DF1213`.
 
-| Bug | Category | Code | What happens | Proof |
-| --- | --- | --- | --- | --- |
-| [b28](#b28-a-relative-import-crashes) | C | `from . import models` | `AttributeError` at `forge/builtin_stubs.py:150`, no DF error | forge's traceback |
-| [b29](#b29-an-aliased-import-of-a-missing-forge-module-crashes) | C | `import forge.math as m`, and an enum | `ModuleNotFoundError` at `forge/semantics/analysis/imports.py:108`, no DF error | forge's traceback |
-| [b30](#b30-a-lower-case-module-alias-gives-bad-daml) | B | `import models as m`, then `m.double(x)` | forge writes `import qualified Models as m` | import check `I2`, and damlc: `parse error on input ‘m’` |
-| [b31](#b31-a-qualified-enum-value-gives-bad-daml) | B | `import models as M`, then `M.Kind.CASH` | forge writes `(M.Kind).CASH` | import check `I3`, and damlc: `Not in scope: data constructor ‘M.Kind’` |
-| [b32](#b32-a-plain-module-import-cannot-name-a-type) | B | `import models`, then `-> models.Kind` | `DF1213: No builtin or user-defined type named models.Kind`; with `as M` the same code is OK | forge's error |
+| Bug | Category | Code | 0.0.12 | 0.0.13 | State |
+| --- | --- | --- | --- | --- | --- |
+| [b28](#b28-a-relative-import-crashes) | C | `from . import models` | `AttributeError` at `forge/builtin_stubs.py:150` | `DF1213: Relative imports are not supported` | Fixed |
+| [b29](#b29-an-aliased-import-of-a-missing-forge-module-crashes) | C | `import forge.math as m`, and an enum | `ModuleNotFoundError` at `forge/semantics/analysis/imports.py:108` | `DF1213: No module named forge.math` | Fixed |
+| [b30](#b30-a-lower-case-module-alias-gives-bad-daml) | B | `import models as m`, then `m.double(x)` | `import qualified Models as m`; damlc: `parse error on input ‘m’` | `DF1213: Module alias m must start with an uppercase letter` | Fixed |
+| [b31](#b31-a-qualified-enum-value-is-not-compiled) | B | `import models as M`, then `M.Kind.CASH` | `(M.Kind).CASH`; damlc: `Not in scope: data constructor ‘M.Kind’` | `DF1213: Uppercase member CASH cannot be selected from an expression` | Open |
+| [b32](#b32-a-plain-module-import-cannot-name-a-type) | B | `import models`, then `models.Note` as a type | `DF1213: No builtin or user-defined type named models.Note` | the same | Open |
+| [b33](#b33-a-plain-module-import-gives-bad-daml-for-a-call) | B | `import models`, then `models.double(x)` | `models.double x` in the Daml; damlc: `Variable not in scope: models` | the same | Open |
 
 Category B is valid code that forge cannot compile right. Category C is code that makes forge crash with a Python traceback, where a DF error is the right answer.
 
 Run all the programs with one command from the repository root.
-This is the real output:
+This is the real output on 0.0.13:
 
 ```
 $ damlforge-fuzz check bugs/imports
-CRASH    check  bugs/imports/b28_relative_import.vy  AttributeError 'NoneType' object has no attribute 'split' at forge/builtin_stubs.py:150
-CRASH    check  bugs/imports/b29_missing_forge_module_with_alias.vy  ModuleNotFoundError No module named 'forge.math' at forge/semantics/analysis/imports.py:108
-BAD_IMP  emit   bugs/imports/b30_lower_case_module_alias.vy  I2: import alias m at Daml line 3 is not a Daml module name
-BAD_IMP  emit   bugs/imports/b31_qualified_enum_value.vy  I3: ).CASH at Daml line 7 selects an upper-case name from an expression
-REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Kind` (return type of `cash`)
+REJECTED check  bugs/imports/b28_relative_import.vy  DF1213: Relative imports are not supported; use an absolute module import
+REJECTED check  bugs/imports/b29_missing_forge_module_with_alias.vy  DF1213: No module named `forge.math`
+REJECTED check  bugs/imports/b30_lower_case_module_alias.vy  DF1213: Module alias `m` must start with an uppercase letter because Daml module aliases are constructors
+REJECTED check  bugs/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
+REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
+OK       emit   bugs/imports/b33_plain_module_import_call.vy
 OK       emit   bugs/imports/models.vy
 ```
 
 The command exits with 1.
-With `--damlc`, damlc builds each program's Daml together with forge's Daml of `models.vy`, and proves b30 and b31. It needs dpm and the Daml SDK 3.5.2:
+The import check does not find b33, so b33 shows as `OK`.
+With `--damlc`, damlc builds each program's Daml together with forge's Daml of `models.vy`, and proves b33. It needs dpm and the Daml SDK 3.5.2:
 
 ```
 $ damlforge-fuzz check --damlc bugs/imports
-CRASH    check  bugs/imports/b28_relative_import.vy  AttributeError 'NoneType' object has no attribute 'split' at forge/builtin_stubs.py:150
-CRASH    check  bugs/imports/b29_missing_forge_module_with_alias.vy  ModuleNotFoundError No module named 'forge.math' at forge/semantics/analysis/imports.py:108
-BAD_IMP  emit   bugs/imports/b30_lower_case_module_alias.vy  I2: import alias m at Daml line 3 is not a Daml module name; damlc rejects: parse error on input ‘m’
-BAD_IMP  emit   bugs/imports/b31_qualified_enum_value.vy  I3: ).CASH at Daml line 7 selects an upper-case name from an expression; damlc rejects: Not in scope: data constructor ‘M.Kind’
-REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Kind` (return type of `cash`)
+REJECTED check  bugs/imports/b28_relative_import.vy  DF1213: Relative imports are not supported; use an absolute module import
+REJECTED check  bugs/imports/b29_missing_forge_module_with_alias.vy  DF1213: No module named `forge.math`
+REJECTED check  bugs/imports/b30_lower_case_module_alias.vy  DF1213: Module alias `m` must start with an uppercase letter because Daml module aliases are constructors
+REJECTED check  bugs/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
+REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
+BAD_DAML emit   bugs/imports/b33_plain_module_import_call.vy  Variable not in scope: models
 OK       emit   bugs/imports/models.vy
 ```
 
@@ -50,7 +59,7 @@ OK       emit   bugs/imports/models.vy
 from . import models
 ```
 
-A relative import with no name after the dots crashes forge while it builds the module's scope, before its import checks run:
+On 0.0.12, forge crashed while it built the module's scope, before its import checks ran:
 
 ```
 forge/semantics/__init__.py:9, analyze_module
@@ -60,9 +69,10 @@ forge/semantics/__init__.py:9, analyze_module
        return module.split(".", 1)[0]
 ```
 
-`_root` expects `stmt.module` to be a string. Python's parser sets `ImportFrom.module` to `None` for `from . import X` and `from .. import X`.
-`from .models import X` does not crash, because its `module` is `"models"`.
-A related point, not counted as a bug here: forge ignores the dots of a relative import. `from ..models import X` loads `models.vy` next to the file, and `from .enum import Enum` is read as the standard library's `enum`.
+`_root` expected `stmt.module` to be a string. Python's parser sets `ImportFrom.module` to `None` for `from . import X`.
+
+On 0.0.13, forge rejects every relative import: `DF1213: Relative imports are not supported; use an absolute module import`.
+This also fixes a related point of 0.0.12, which read `from ..models import X` as `models.vy` next to the file.
 
 ## b29: an aliased import of a missing forge module crashes
 
@@ -76,7 +86,7 @@ class Kind(Enum):
     CASH = auto()
 ```
 
-`forge.math` does not exist. forge should give `DF1213`, as it does for `from forge.modles import Party`. Instead:
+`forge.math` does not exist. On 0.0.12, forge crashed:
 
 ```
 forge/semantics/analysis/types.py:289, known_type_names
@@ -87,9 +97,7 @@ forge/semantics/analysis/types.py:289, known_type_names
 ModuleNotFoundError: No module named 'forge.math'
 ```
 
-When forge collects the known type names, it imports each module of an aliased `import X as Y` with Python's `importlib`, and nothing catches the error.
-Any type declaration, such as the enum, makes forge collect the type names.
-Without the alias, `import forge.math` alone is accepted, with no error, and forge writes no Daml for it.
+On 0.0.13, forge gives `DF1213: No module named forge.math`.
 
 ## b30: a lower-case module alias gives bad Daml
 
@@ -102,27 +110,13 @@ def twice(x: Decimal) -> Decimal:
     return m.double(x)
 ```
 
-forge writes:
+On 0.0.12, forge wrote `import qualified Models as m`.
+A Daml module alias must start with an upper-case letter, so damlc rejected it: `./B30.daml:3:28: error: parse error on input ‘m’`.
 
-```
-import qualified Models as m
+On 0.0.13, forge rejects the alias: `DF1213: Module alias m must start with an uppercase letter because Daml module aliases are constructors`.
+forge does not rename the alias, but the error tells the user what to change.
 
-twice : Decimal -> Decimal
-twice x =
-  m.double x
-```
-
-A Daml module alias must start with an upper-case letter, so `damlc` rejects `as m`. forge should rename the alias (for example to `M`) or reject it with a DF error.
-
-Proof with damlc (SDK 3.5.2), building forge's Daml of this program together with forge's `Models.daml` of `models.vy`, the way `forge daml bugs/imports` writes them:
-
-```
-./B30.daml:3:28: error: parse error on input ‘m’
-```
-
-The control, the same program with `import models as M` and `M.double(x)`, builds.
-
-## b31: a qualified enum value gives bad Daml
+## b31: a qualified enum value is not compiled
 
 ```python
 import models as M
@@ -132,38 +126,72 @@ def cash() -> M.Kind:
     return M.Kind.CASH
 ```
 
-forge writes:
+On 0.0.12, forge wrote `(M.Kind).CASH`, and damlc rejected it: `./B31.daml:7:4: error: Not in scope: data constructor ‘M.Kind’`.
+
+On 0.0.13, forge rejects the code:
 
 ```
-cash : M.Kind
-cash =
-  (M.Kind).CASH
+DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
 ```
 
-In Daml, the qualified value is `M.CASH`. `(M.Kind).CASH` is not valid Daml.
-With `from models import Kind` and `Kind.CASH`, forge writes the right `CASH`.
-The same Daml shape, `(expression).UpperName`, also shows in forge's own example `examples/basic/simple.vy`, where a choice is called on an `Optional` field: `(self.cross_template).CrossTemplate_Cross`.
-
-Proof with damlc (SDK 3.5.2), building forge's Daml of this program together with forge's `Models.daml` of `models.vy`, the way `forge daml bugs/imports` writes them:
-
-```
-./B31.daml:7:4: error:
-    Not in scope: data constructor ‘M.Kind’
-```
-
-The control, `from models import Kind` with `-> Kind` and `return Kind.CASH`, builds.
+The code is valid, and the message is not correct: `M.Kind` is an enum name, not an expression.
+In Daml, the qualified value is `M.CASH`.
+With `from models import Kind` and `Kind.CASH`, forge writes the right `CASH`, and the Daml builds.
+The same error comes with `import models` and `models.Kind.CASH`.
 
 ## b32: a plain module import cannot name a type
 
 ```python
+from forge.models import ContractId
 import models
 
 
-def cash() -> models.Kind:
-    return models.Kind.CASH
+def same(c: ContractId[models.Note]) -> ContractId[models.Note]:
+    return c
 ```
 
-forge rejects it with `DF1213: No builtin or user-defined type named models.Kind (return type of cash)`.
-The same code with `import models as M` and `M.Kind` compiles.
-The cause is in `_qualified_import_type_names` (`forge/semantics/analysis/types.py:263`), which adds the type names of an imported module only for an import with an alias: `if alias.asname is None: continue`.
-The same function causes b29.
+forge rejects it with `DF1213: No builtin or user-defined type named models.Note (return type of same)`.
+The same code with `import models as M` and `M.Note` compiles.
+On 0.0.12, the cause was in `_qualified_import_type_names` (`forge/semantics/analysis/types.py:263`), which adds the type names of an imported module only for an import with an alias: `if alias.asname is None: continue`.
+
+The program of b32 was first `-> models.Kind` with `return models.Kind.CASH`.
+On 0.0.13, that program stops at b31 first, so it looked fixed.
+The program now uses `models.Note`, which shows b32 alone.
+
+## b33: a plain module import gives bad Daml for a call
+
+```python
+from forge.models import Decimal
+import models
+
+
+def twice(x: Decimal) -> Decimal:
+    return models.double(x)
+```
+
+forge writes:
+
+```
+module B33PlainModuleImportCall where
+
+import Models
+
+twice : Decimal -> Decimal
+twice x =
+  models.double x
+```
+
+forge changes the module name to `Models` in the import line, but keeps the Python name `models` in the call.
+A Daml qualifier must be a module name or an upper-case alias, so damlc rejects `models.double`.
+forge must write `Models.double x`.
+
+Proof with damlc (SDK 3.5.2), building forge's Daml of this program together with forge's `Models.daml` of `models.vy`:
+
+```
+./B33PlainModuleImportCall.daml:7:3: error:
+    Variable not in scope: models
+```
+
+Two controls build.
+The first is forge's Daml with only `models.double` changed to `Models.double`.
+The second is the program with `import models as Models` and `Models.double(x)`.
