@@ -23,7 +23,7 @@ With `--compare`, it also runs the `.vy` code and the Daml that `forge` writes o
 ## Features
 
 - **Repeatable runs.** One random seed fixes every copy and its changes. The same random seed always gives the same copies in the same order.
-- **Text change rules.** Ten rules each change one line: they delete it, copy it, insert a line above it, or replace or delete one word. Six loop rules make the code shapes that break forge's loops, such as a `fetch` inside an expression or a `return` inside a loop.
+- **Text change rules.** Ten rules each change one line: they delete it, copy it, insert a line above it, or replace or delete one word. Five loop rules make the code shapes that break forge's loops, such as a `fetch` inside an expression or a `return` inside a loop.
 - **Crash groups.** Crashes with the same exception at the same forge file and line are one group.
 - **Shrinking.** The run cuts the first input of each crash group and each loop group down to the lines that cause the crash or the loop bug.
 - **Daml checks.** With `--damlc`, the run builds the Daml that `forge` writes with `damlc`, and groups the Daml that `damlc` rejects.
@@ -548,7 +548,7 @@ Each value has the type of its annotation in the seed:
 | `list[T]` | A list of values of type `T`. |
 | `ContractId[T]` | `{create: T, with: {...}}`: a contract with these fields that the script creates before the call. |
 
-A call cannot name a `@ledger_effect` function, because Daml Script cannot call it. Call a choice that calls it, as `contracts/loop_verify/loop_verify.calls.yaml` does.
+A call cannot name a function that forge makes a Daml `Update` function, because Daml Script cannot call it. forge does this for a function that calls `fetch`, `create`, `exercise`, `archive`, `lookup`, or `datetime.now()`, or that calls such a function. Call a choice that calls it, as `contracts/loop_verify/loop_verify.calls.yaml` does.
 
 The five loop seeds have a calls file.
 Each calls file reaches every loop of its seed, with data where a lost `return`, a lost `assert`, or a lost `create` changes the result.
@@ -863,7 +863,7 @@ In each of these cases, the run writes the report and exits with 130:
 For each change, the run picks one line and one of these rules, each with the same chance.
 A word is a name, a number, or an operator.
 A rule that does not fit its line, such as `operator` on a line with no operator, leaves the line as it was.
-The first ten examples are real changes to `contracts/iou/iou.vy`, and the last six are real changes to the loop seeds.
+The first ten examples are real changes to `contracts/iou/iou.vy`, and the next five are real changes to the loop seeds.
 
 | Rule | What it does | Example |
 | --- | --- | --- |
@@ -878,7 +878,6 @@ The first ten examples are real changes to `contracts/iou/iou.vy`, and the last 
 | `name` | Replaces one name with another name from the same text. | `owner=self.owner` becomes `str=self.owner` |
 | `delete_word` | Deletes one word. | `self, new_owner: Party` becomes `self, : Party` |
 | `inline_local` | Replaces one use of a local name with the value that an assignment in the text gives it. The value gets parentheses unless it is a name or a call. | `if i.amount > Decimal(1):` becomes `if fetch(c).amount > Decimal(1):` |
-| `toggle_ledger_effect` | Deletes a line `@ledger_effect`, or inserts one above a `def` at column 0. | the `@ledger_effect` line above `def verify` is deleted |
 | `early_return` | In a loop body, inserts `if v == v:` and the `return` line that follows the loop, above the line. `v` is the loop's name. It looks out through `if` and `else` blocks and inner loops for the nearest loop that a `return` follows. | `if c == c:` and `return n` are inserted above `n = n + 1` |
 | `wrap_in_loop` | Puts a statement that has an indent into `for _k in range(0, 2):`. | `return cids` becomes `for _k in range(0, 2):` and `    return cids` |
 | `dedent_line` | Moves a line with an indent of 8 or more 4 spaces to the left. | `cid = create(...)` moves out of the `if` |
@@ -890,7 +889,7 @@ The first ten examples are real changes to `contracts/iou/iou.vy`, and the last 
 The rules take their new words from five lists in `src/damlforge_fuzz/mutate.py`: `_OPERATORS`, `_LITERALS`, `_TYPES`, `_EXPRESSIONS`, and `_STATEMENTS`.
 Most rules change only their own line.
 `inline_local` and `early_return` read the whole text, and `inline_var` and `import_form` also change other lines.
-The six loop rules never take a string or a comment for code.
+The five loop rules never take a string or a comment for code.
 
 ### Add a word or a rule
 
@@ -973,7 +972,7 @@ The import seeds use no qualified enum value, such as `M.Kind.CASH`, because for
 
 The `contracts/loop_*` seeds hold `for` loops.
 forge writes a loop with a ledger action, such as `create` or `fetch`, as `foldlA`.
-`loop_many`, `loop_give`, and `loop_count` each have one such loop in a choice, and `loop_verify` has one in a `@ledger_effect` function.
+`loop_many`, `loop_give`, and `loop_count` each have one such loop in a choice, and `loop_verify` has one in a top-level function, which forge makes a Daml `Update` function because it calls `fetch`.
 `loop_pure` has loops without a ledger action, and forge writes them in three other ways.
 It writes the sum with an `if` as `foldl`, the two nested loops as two `foldl`, the loop with an early `return` as a recursive helper function, and the loop with only an `assert` as `all`.
 

@@ -82,13 +82,6 @@ GIVE = "  contract: {issuer: alice, owner: alice, amount: '1.0'}\n"
             "  args: {owners: [alice], stop: stop}\n",
             ', call 1 (Iou.GiveAll): "1.00000000001" is not a Decimal for amount',
         ),
-        (
-            "loop_verify",
-            "- function: verify\n  args: {cids: [], p: alice}\n",
-            ", call 1 (verify): verify is a @ledger_effect function, "
-            "which Daml Script cannot call. "
-            "Call a choice that calls it.",
-        ),
         ("loop_give", "choice: Iou.GiveAll\n", ": a calls file is a list of calls"),
     ],
     ids=[
@@ -97,7 +90,6 @@ GIVE = "  contract: {issuer: alice, owner: alice, amount: '1.0'}\n"
         "unknown-choice",
         "unknown-function",
         "11-decimal-places",
-        "ledger-effect",
         "not-a-list",
     ],  # fmt: skip
 )

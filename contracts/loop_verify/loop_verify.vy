@@ -1,7 +1,6 @@
-from forge.models import ContractId, Decimal, Party, choice, ledger_effect, template
+from forge.models import ContractId, Decimal, Party, choice, template
 
 
-@ledger_effect
 def verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:
     total = Decimal(0)
     for c in cids:

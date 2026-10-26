@@ -64,7 +64,7 @@ def test_input_1_of_random_seed_1_on_a_two_line_text():
         number=1,
         seed=0,
         text="{} = 1\nb = 2",
-        changes=(Change("import_module", 1), Change("literal", 1), Change("inline_local", 1)),
+        changes=(Change("import_form", 1), Change("literal", 1), Change("inline_local", 1)),
         changed=True,
     )
 
@@ -89,8 +89,8 @@ def test_an_input_is_changed_exactly_when_its_text_differs_from_its_seed():
 
 
 def test_every_rule_changes_some_text_on_its_own():
-    # toggle_ledger_effect fits 7 of the 366 seed lines. Its first input with
-    # one change that changes the text is input 9892; import_name's is 7046.
+    # import_name fits 17 of the 378 seed lines. Its first input with one
+    # change that changes the text is input 9697.
     single = [i for i in first(9900, SEED_TEXTS) if len(i.changes) == 1]
     changed_by = {i.changes[0].rule for i in single if i.changed}
     assert changed_by == set(RULE_NAMES)
@@ -143,14 +143,6 @@ def test_inline_local_reads_only_code_and_not_its_own_target():
     )
     assert apply("inline_local", text, 3) is None
     assert apply("inline_local", "x = 1\ny = 2", 2) is None
-
-
-def test_toggle_ledger_effect_deletes_or_adds_the_decorator_of_a_top_level_function():
-    text = "@ledger_effect\ndef f() -> int:\n    return 1\nclass A:\n    def g(self) -> int:"
-    assert apply("toggle_ledger_effect", text, 1) == text.removeprefix("@ledger_effect\n")
-    assert apply("toggle_ledger_effect", text, 2) == "@ledger_effect\n" + text
-    assert apply("toggle_ledger_effect", text, 3) is None
-    assert apply("toggle_ledger_effect", text, 5) is None
 
 
 LOOPS = """def f(rows: list[list[int]]) -> int:
