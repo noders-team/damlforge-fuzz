@@ -381,11 +381,6 @@ class _Loader:
         node = self.functions.get(name) if isinstance(name, str) else None
         if node is None:
             raise self.fail(f"the seed has no function {name!r}")
-        if any(_decorator_name(d) == "ledger_effect" for d in node.decorator_list):
-            raise self.fail(
-                f"{name} is a @ledger_effect function, which Daml Script cannot call. "
-                "Call a choice that calls it."
-            )
         return node
 
     def choice(self, name: object) -> tuple[str, ast.FunctionDef]:

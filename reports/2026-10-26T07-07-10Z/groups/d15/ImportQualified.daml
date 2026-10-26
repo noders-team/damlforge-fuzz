@@ -1,0 +1,38 @@
+module ImportQualified where
+
+import qualified Models as M
+
+import DA.Action (foldlA)
+
+import DA.Optional (fromSome)
+
+template Desk
+  with
+    issuer : Party
+    owner : Party
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Issue : ContractId M.Note
+      with
+        amount : Decimal
+      controller issuer
+      do
+        let self = this
+        let lot = M.cash_lot (M.double amount)
+        create (M.Party with issuer = self.issuer, owner = self.owner, lot = lot)
+
+    nonconsuming choice Size : Decimal
+      with
+        cid : ContractId M.Note
+      controller owner
+      do
+        let self = this
+        _damlforge__damlforge_post_note13 <-
+          foldlA
+            (\_damlforge_post_note1 _k -> do
+              _damlforge_note2 <- fetch cid
+              pure (Some _damlforge_note2))
+            (None) ([0 .. (2) - 1])
+        pure ((fromSome _damlforge__damlforge_post_note13.lot).amount)

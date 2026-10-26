@@ -225,9 +225,8 @@ def _a_name_in_the_text(rng: random.Random, ctx: _Context) -> str:
 
 
 # The loop rules. They make the code shapes that break forge's loops: a ledger
-# action inside an expression, a `return` inside a loop, a missing
-# @ledger_effect. They read the text through _code, so a string or a comment
-# is never taken for code.
+# action inside an expression, a `return` inside a loop. They read the text
+# through _code, so a string or a comment is never taken for code.
 
 # A string, or a comment. A string that its line does not close ends there.
 _NOT_CODE: Final = re.compile(
@@ -320,15 +319,6 @@ def _inline_local(rng: random.Random, i: int, ctx: _Context) -> list[str] | None
     line = ctx.lines[i]
     new = line[: use.start()] + _as_operand(value) + line[use.end() :]
     return [*ctx.lines[:i], new, *ctx.lines[i + 1 :]]
-
-
-def _toggle_ledger_effect(rng: random.Random, line: str, ctx: _Context) -> list[str] | None:
-    """Delete a line `@ledger_effect`, or add one above a top-level `def`."""
-    if line.strip() == "@ledger_effect":
-        return []
-    if line.startswith("def "):
-        return ["@ledger_effect", line]
-    return None
 
 
 def _early_return(rng: random.Random, i: int, ctx: _Context) -> list[str] | None:
@@ -497,7 +487,6 @@ _RULES: Final[tuple[_Rule, ...]] = (
     _Rule("name", _replace_token(_NAME, _a_name_in_the_text)),
     _Rule("delete_word", _replace_token(_TOKEN, lambda rng, ctx: "")),
     _Rule("inline_local", _inline_local),
-    _Rule("toggle_ledger_effect", _line_rule(_toggle_ledger_effect)),
     _Rule("early_return", _early_return),
     _Rule("wrap_in_loop", _line_rule(_wrap_in_loop)),
     _Rule("dedent_line", _line_rule(_dedent_line)),

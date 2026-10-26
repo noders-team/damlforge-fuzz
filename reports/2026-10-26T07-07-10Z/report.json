@@ -1,0 +1,526 @@
+{
+  "schema": 1,
+  "run": {
+    "started": "2026-10-26T07:07:10Z",
+    "random_seed": 1,
+    "seconds": null,
+    "count": 20000,
+    "seeds": [
+      "contracts/import_qualified/import_qualified.vy",
+      "contracts/import_qualified/models.vy",
+      "contracts/import_sibling/import_sibling.vy",
+      "contracts/import_sibling/models.vy"
+    ],
+    "forge_version": "0.0.13",
+    "interrupted": false
+  },
+  "totals": {
+    "inputs": 20000,
+    "ok": 3176,
+    "rejected": 10783,
+    "crash": 0,
+    "skipped": 6041
+  },
+  "timeline": [
+    {
+      "second": 1,
+      "inputs": 1594,
+      "ok": 247,
+      "rejected": 870,
+      "crash": 0,
+      "skipped": 477
+    },
+    {
+      "second": 2,
+      "inputs": 3096,
+      "ok": 481,
+      "rejected": 1711,
+      "crash": 0,
+      "skipped": 904
+    },
+    {
+      "second": 3,
+      "inputs": 4538,
+      "ok": 716,
+      "rejected": 2491,
+      "crash": 0,
+      "skipped": 1331
+    },
+    {
+      "second": 4,
+      "inputs": 5922,
+      "ok": 942,
+      "rejected": 3234,
+      "crash": 0,
+      "skipped": 1746
+    },
+    {
+      "second": 5,
+      "inputs": 7419,
+      "ok": 1196,
+      "rejected": 3989,
+      "crash": 0,
+      "skipped": 2234
+    },
+    {
+      "second": 6,
+      "inputs": 8973,
+      "ok": 1430,
+      "rejected": 4840,
+      "crash": 0,
+      "skipped": 2703
+    },
+    {
+      "second": 7,
+      "inputs": 10455,
+      "ok": 1687,
+      "rejected": 5574,
+      "crash": 0,
+      "skipped": 3194
+    },
+    {
+      "second": 8,
+      "inputs": 12020,
+      "ok": 1945,
+      "rejected": 6388,
+      "crash": 0,
+      "skipped": 3687
+    },
+    {
+      "second": 9,
+      "inputs": 13510,
+      "ok": 2189,
+      "rejected": 7208,
+      "crash": 0,
+      "skipped": 4113
+    },
+    {
+      "second": 10,
+      "inputs": 15044,
+      "ok": 2423,
+      "rejected": 8036,
+      "crash": 0,
+      "skipped": 4585
+    },
+    {
+      "second": 11,
+      "inputs": 16553,
+      "ok": 2655,
+      "rejected": 8849,
+      "crash": 0,
+      "skipped": 5049
+    },
+    {
+      "second": 12,
+      "inputs": 17992,
+      "ok": 2860,
+      "rejected": 9685,
+      "crash": 0,
+      "skipped": 5447
+    },
+    {
+      "second": 13,
+      "inputs": 19457,
+      "ok": 3087,
+      "rejected": 10500,
+      "crash": 0,
+      "skipped": 5870
+    },
+    {
+      "second": 14,
+      "inputs": 20000,
+      "ok": 3176,
+      "rejected": 10783,
+      "crash": 0,
+      "skipped": 6041
+    }
+  ],
+  "damlc": {
+    "checked_texts": 570,
+    "bad_texts": 390,
+    "bad_inputs": 595,
+    "seconds": 10.52,
+    "interrupted": false
+  },
+  "compare": null,
+  "groups": [
+    {
+      "id": "d01",
+      "kind": "bad_daml",
+      "key": "Variable not in scope: …",
+      "message": "Variable not in scope: int : Decimal",
+      "damlc_stage": "typecheck",
+      "daml_line": 14,
+      "count": 159,
+      "first_seen": {
+        "second": 0.1,
+        "input": 153
+      },
+      "seed": "contracts/import_sibling/models.vy",
+      "input": "from enum import Enum, auto\n\nfrom forge.models import Decimal, Party, template\n\n\nclass Kind(Enum):\n    CASH = auto()\n    BOND = auto()\n\n\nstruct Lot:\n    kind: Kind\n    amount: Decimal\n\n\n@template\nclass Note:\n    issuer: Party\n    owner: Party\n    lot: Lot\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\ndef double(x: Decimal) -> Decimal:\n    return x + int\n",
+      "input_file": "groups/d01/models.vy",
+      "daml": "module Models where\n\ndata Lot = Lot\n  with\n    kind : Kind\n    amount : Decimal\n  deriving (Eq, Show)\n\ndata Kind = CASH | BOND\n  deriving (Eq, Show)\n\ndouble : Decimal -> Decimal\ndouble x =\n  x + int\n\ntemplate Note\n  with\n    issuer : Party\n    owner : Party\n    lot : Lot\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d01/Models.daml"
+    },
+    {
+      "id": "d02",
+      "kind": "bad_daml",
+      "key": "parse error on input ‘…’",
+      "message": "parse error on input ‘Party’",
+      "damlc_stage": "parser",
+      "daml_line": 6,
+      "count": 115,
+      "first_seen": {
+        "second": 0.1,
+        "input": 161
+      },
+      "seed": "contracts/import_sibling/models.vy",
+      "input": "from enum import Enum, auto\n\nfrom forge.models import Decimal, Party, template\n\n\nclass Kind(Enum):\n    CASH = auto()\n    BOND = auto()\n\n\nstruct Lot:\n    kind: Kind\n    Party: Decimal\n\n\n@template\nclass Note:\n    issuer: Party\n    owner: Party\n    lot: Lot\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\ndef double(x: Decimal) -> Decimal:\n    return x + x\n",
+      "input_file": "groups/d02/models.vy",
+      "daml": "module Models where\n\ndata Lot = Lot\n  with\n    kind : Kind\n    Party : Decimal\n  deriving (Eq, Show)\n\ndata Kind = CASH | BOND\n  deriving (Eq, Show)\n\ndouble : Decimal -> Decimal\ndouble x =\n  x + x\n\ntemplate Note\n  with\n    issuer : Party\n    owner : Party\n    lot : Lot\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d02/Models.daml"
+    },
+    {
+      "id": "d03",
+      "kind": "bad_daml",
+      "key": "Couldn't match expected type ‘…’",
+      "message": "Couldn't match expected type ‘(Text -> a0) -> Text -> Decimal’",
+      "damlc_stage": "typecheck",
+      "daml_line": 14,
+      "count": 33,
+      "first_seen": {
+        "second": 0.12,
+        "input": 178
+      },
+      "seed": "contracts/import_qualified/models.vy",
+      "input": "from enum import Enum, auto\n\nfrom forge.models import Decimal, Party, template\n\n\nclass Kind(Enum):\n    CASH = auto()\n    BOND = auto()\n\n\nstruct Lot:\n    kind: Kind\n    amount: Decimal\n\n\n@template\nclass Note:\n    issuer: Party\n    owner: Party\n    lot: Lot\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\ndef double(x: Decimal) -> Decimal:\n     x + x\n\n\ndef cash_lot(amount: Decimal) -> Lot:\n    return Lot(kind=Kind.CASH, amount=amount)\n",
+      "input_file": "groups/d03/models.vy",
+      "daml": "module Models where\n\ndata Lot = Lot\n  with\n    kind : Kind\n    amount : Decimal\n  deriving (Eq, Show)\n\ndata Kind = CASH | BOND\n  deriving (Eq, Show)\n\ndouble : Decimal -> Decimal\ndouble x =\n  x + x\n  error \"Function did not return a value\"\n\ncash_lot : Decimal -> Lot\ncash_lot amount =\n  Lot with kind = CASH, amount = amount\n\ntemplate Note\n  with\n    issuer : Party\n    owner : Party\n    lot : Lot\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d03/Models.daml"
+    },
+    {
+      "id": "d04",
+      "kind": "bad_daml",
+      "key": "Data constructor not in scope: …",
+      "message": "Data constructor not in scope: Decimal : M.Lot",
+      "damlc_stage": "typecheck",
+      "daml_line": 20,
+      "count": 45,
+      "first_seen": {
+        "second": 0.14,
+        "input": 217
+      },
+      "seed": "contracts/import_qualified/import_qualified.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nimport models as M\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[M.Note]:\n        lot = M.cash_lot(M.double(amount))\n        return create(M.Note(issuer=self.issuer, owner=self.owner, lot=Decimal))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[M.Note]) -> Decimal:\n        note = fetch(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d04/import_qualified.vy",
+      "daml": "module ImportQualified where\n\nimport qualified Models as M\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId M.Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = M.cash_lot (M.double amount)\n        create (M.Note with issuer = self.issuer, owner = self.owner, lot = Decimal)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId M.Note\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        pure ((note.lot).amount)\n",
+      "daml_file": "groups/d04/ImportQualified.daml"
+    },
+    {
+      "id": "d05",
+      "kind": "bad_daml",
+      "key": "Ambiguous type variable ‘…’ arising from a use of ‘…’",
+      "message": "Ambiguous type variable ‘a0’ arising from a use of ‘toParties’",
+      "damlc_stage": "typecheck",
+      "daml_line": 11,
+      "count": 28,
+      "first_seen": {
+        "second": 0.15,
+        "input": 224
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = []\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[Note]) -> Decimal:\n        note = fetch(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d05/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer []\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = Lot with kind = CASH, amount = double amount\n        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId Note\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        pure ((note.lot).amount)\n",
+      "daml_file": "groups/d05/ImportSibling.daml"
+    },
+    {
+      "id": "d06",
+      "kind": "bad_daml",
+      "key": "Tried to access nonexistent field ‘…’ with type ‘…’ on value of type ‘…’",
+      "message": "Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘r0’",
+      "damlc_stage": "typecheck",
+      "daml_line": 38,
+      "count": 76,
+      "first_seen": {
+        "second": 0.22,
+        "input": 320
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[Note]) -> Decimal:\n        for _k in range(0, 2):\n            note = fetch(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d06/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\nimport DA.Action (foldlA)\n\nimport DA.Optional (fromSome)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = Lot with kind = CASH, amount = double amount\n        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId Note\n      controller owner\n      do\n        let self = this\n        _damlforge__damlforge_post_note13 <-\n          foldlA\n            (\\_damlforge_post_note1 _k -> do\n              _damlforge_note2 <- fetch cid\n              pure (Some _damlforge_note2))\n            (None) ([0 .. (2) - 1])\n        pure ((fromSome _damlforge__damlforge_post_note13.lot).amount)\n",
+      "daml_file": "groups/d06/ImportSibling.daml"
+    },
+    {
+      "id": "d07",
+      "kind": "bad_daml",
+      "key": "No instance for (IsParties …)",
+      "message": "No instance for (IsParties Int) arising from a use of ‘toParties’",
+      "damlc_stage": "typecheck",
+      "daml_line": 16,
+      "count": 18,
+      "first_seen": {
+        "second": 0.32,
+        "input": 492
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=-9223372036854775808, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[Note]) -> Decimal:\n        note = fetch(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d07/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller -9223372036854775808\n      do\n        let self = this\n        let lot = Lot with kind = CASH, amount = double amount\n        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId Note\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        pure ((note.lot).amount)\n",
+      "daml_file": "groups/d07/ImportSibling.daml"
+    },
+    {
+      "id": "d08",
+      "kind": "bad_daml",
+      "key": "Invalid type signature: …",
+      "message": "Invalid type signature: Int :: ...",
+      "damlc_stage": "parser",
+      "daml_line": 12,
+      "count": 6,
+      "first_seen": {
+        "second": 0.44,
+        "input": 684
+      },
+      "seed": "contracts/import_sibling/models.vy",
+      "input": "from enum import Enum, auto\n\nfrom forge.models import Decimal, Party, template\n\n\nclass Kind(Enum):\n    CASH = auto()\n    BOND = auto()\n\n\nstruct Lot:\n    kind: Kind\n    amount: Decimal\n\n\n@template\nclass Note:\n    issuer: Party\n    owner: Party\n    lot: Lot\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\ndef Int(x: Decimal) -> Decimal:\n    return x + x",
+      "input_file": "groups/d08/models.vy",
+      "daml": "module Models where\n\ndata Lot = Lot\n  with\n    kind : Kind\n    amount : Decimal\n  deriving (Eq, Show)\n\ndata Kind = CASH | BOND\n  deriving (Eq, Show)\n\nInt : Decimal -> Decimal\nInt x =\n  x + x\n\ntemplate Note\n  with\n    issuer : Party\n    owner : Party\n    lot : Lot\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d08/Models.daml"
+    },
+    {
+      "id": "d09",
+      "kind": "bad_daml",
+      "key": "No instance for (HasFetch …)",
+      "message": "No instance for (HasFetch (TextMap Text))",
+      "damlc_stage": "typecheck",
+      "daml_line": 30,
+      "count": 2,
+      "first_seen": {
+        "second": 0.51,
+        "input": 807
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[TextMap[str]]) -> Decimal:\n        note = fetch(cid)\n        return fetch(cid).lot.amount\n",
+      "input_file": "groups/d09/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\nimport DA.TextMap as TextMap\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = Lot with kind = CASH, amount = double amount\n        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId (TextMap Text)\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        _damlforge_effect1 <- fetch cid\n        pure ((_damlforge_effect1.lot).amount)\n",
+      "daml_file": "groups/d09/ImportSibling.daml"
+    },
+    {
+      "id": "d10",
+      "kind": "bad_daml",
+      "key": "Tried to access nonexistent field ‘…’ with type ‘…’",
+      "message": "Tried to access nonexistent field ‘range’ with type ‘Int",
+      "damlc_stage": "typecheck",
+      "daml_line": 29,
+      "count": 7,
+      "first_seen": {
+        "second": 0.58,
+        "input": 896
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[Note]) -> Decimal:\n        note = fetch(cid)\n        return note.lot.range(0, 3)\n",
+      "input_file": "groups/d10/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = Lot with kind = CASH, amount = double amount\n        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId Note\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        pure ((note.lot).range 0 3)\n",
+      "daml_file": "groups/d10/ImportSibling.daml"
+    },
+    {
+      "id": "d11",
+      "kind": "bad_daml",
+      "key": "Ambiguous occurrence ‘…’",
+      "message": "Ambiguous occurrence ‘ContractId’",
+      "damlc_stage": "typecheck",
+      "daml_line": 1,
+      "count": 22,
+      "first_seen": {
+        "second": 0.64,
+        "input": 992
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def ContractId(self, cid: ContractId[Note]) -> Decimal:\n        return fetch(cid).lot.amount\n",
+      "input_file": "groups/d11/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = Lot with kind = CASH, amount = double amount\n        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice ContractId : Decimal\n      with\n        cid : ContractId Note\n      controller owner\n      do\n        let self = this\n        _damlforge_effect1 <- fetch cid\n        pure ((_damlforge_effect1.lot).amount)\n",
+      "daml_file": "groups/d11/ImportSibling.daml"
+    },
+    {
+      "id": "d12",
+      "kind": "bad_daml",
+      "key": "Couldn't match type ‘…’ with ‘…’",
+      "message": "Couldn't match type ‘ContractId Int’ with ‘Numeric 10’",
+      "damlc_stage": "typecheck",
+      "daml_line": 19,
+      "count": 37,
+      "first_seen": {
+        "second": 0.71,
+        "input": 1089
+      },
+      "seed": "contracts/import_qualified/import_qualified.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nimport models as M\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: ContractId[int]) -> ContractId[M.Note]:\n        lot = M.cash_lot(M.double(amount))\n        return create(M.Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[M.Note]) -> Decimal:\n        note = fetch(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d12/import_qualified.vy",
+      "daml": "module ImportQualified where\n\nimport qualified Models as M\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId M.Note\n      with\n        amount : ContractId Int\n      controller issuer\n      do\n        let self = this\n        let lot = M.cash_lot (M.double amount)\n        create (M.Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId M.Note\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        pure ((note.lot).amount)\n",
+      "daml_file": "groups/d12/ImportQualified.daml"
+    },
+    {
+      "id": "d13",
+      "kind": "bad_daml",
+      "key": "Not in scope: ‘…’",
+      "message": "Not in scope: ‘str’",
+      "damlc_stage": "typecheck",
+      "daml_line": 20,
+      "count": 11,
+      "first_seen": {
+        "second": 1.05,
+        "input": 1674
+      },
+      "seed": "contracts/import_qualified/import_qualified.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nimport models as M\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[M.Note]:\n        lot = M.cash_lot(M.double(amount))\n        return create(M.Note(str=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[M.Note]) -> Decimal:\n        note = fetch(cid)\n        return note.date(2020, 13, 40).amount\n",
+      "input_file": "groups/d13/import_qualified.vy",
+      "daml": "module ImportQualified where\n\nimport qualified Models as M\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId M.Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = M.cash_lot (M.double amount)\n        create (M.Note with str = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId M.Note\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        pure ((note.date 2020 13 40).amount)\n",
+      "daml_file": "groups/d13/ImportQualified.daml"
+    },
+    {
+      "id": "d14",
+      "kind": "bad_daml",
+      "key": "Multiple declarations of ‘…’",
+      "message": "Multiple declarations of ‘CASH’",
+      "damlc_stage": "typecheck",
+      "daml_line": 20,
+      "count": 2,
+      "first_seen": {
+        "second": 1.11,
+        "input": 1758
+      },
+      "seed": "contracts/import_qualified/models.vy",
+      "input": "from enum import Enum, auto\n\nfrom forge.models import Decimal, Party, template\n\n\nclass Kind(Enum):\n    CASH = auto()\n    BOND = auto()\n\n\nstruct Lot:\n    kind: Kind\n    amount: Decimal\n\n\n@template\nclass CASH:\n    issuer: Party\n    owner: Party\n    lot: Lot\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\ndef double(x: Decimal) -> Decimal:\n    return x + x\n\n\ndef cash_lot(amount: Decimal) -> Lot:\n    return Lot(kind=Kind.CASH, amount=amount)\n",
+      "input_file": "groups/d14/models.vy",
+      "daml": "module Models where\n\ndata Lot = Lot\n  with\n    kind : Kind\n    amount : Decimal\n  deriving (Eq, Show)\n\ndata Kind = CASH | BOND\n  deriving (Eq, Show)\n\ndouble : Decimal -> Decimal\ndouble x =\n  x + x\n\ncash_lot : Decimal -> Lot\ncash_lot amount =\n  Lot with kind = CASH, amount = amount\n\ntemplate CASH\n  with\n    issuer : Party\n    owner : Party\n    lot : Lot\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d14/Models.daml"
+    },
+    {
+      "id": "d15",
+      "kind": "bad_daml",
+      "key": "Not in scope: data constructor ‘…’",
+      "message": "Not in scope: data constructor ‘M.Party’",
+      "damlc_stage": "typecheck",
+      "daml_line": 24,
+      "count": 10,
+      "first_seen": {
+        "second": 1.29,
+        "input": 2045
+      },
+      "seed": "contracts/import_qualified/import_qualified.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nimport models as M\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[M.Note]:\n        lot = M.cash_lot(M.double(amount))\n        return create(M.Party(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[M.Note]) -> Decimal:\n        for _k in range(0, 2):\n            note = fetch(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d15/import_qualified.vy",
+      "daml": "module ImportQualified where\n\nimport qualified Models as M\n\nimport DA.Action (foldlA)\n\nimport DA.Optional (fromSome)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId M.Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = M.cash_lot (M.double amount)\n        create (M.Party with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId M.Note\n      controller owner\n      do\n        let self = this\n        _damlforge__damlforge_post_note13 <-\n          foldlA\n            (\\_damlforge_post_note1 _k -> do\n              _damlforge_note2 <- fetch cid\n              pure (Some _damlforge_note2))\n            (None) ([0 .. (2) - 1])\n        pure ((fromSome _damlforge__damlforge_post_note13.lot).amount)\n",
+      "daml_file": "groups/d15/ImportQualified.daml"
+    },
+    {
+      "id": "d16",
+      "kind": "bad_daml",
+      "key": "Constructor ‘…’ does not have the required strict field(s): …",
+      "message": "Constructor ‘Lot’ does not have the required strict field(s): lot",
+      "damlc_stage": "typecheck",
+      "daml_line": 19,
+      "count": 15,
+      "first_seen": {
+        "second": 1.57,
+        "input": 2478
+      },
+      "seed": "contracts/import_qualified/models.vy",
+      "input": "from enum import Enum, auto\n\nfrom forge.models import Decimal, Party, template\n\n\nclass Kind(Enum):\n    CASH = auto()\n    BOND = auto()\n\n\nstruct Lot:\n    kind: Kind\n    amount: Decimal\n\n\n    lot: Lot\n@template\nclass Note:\n    issuer: Party\n    owner: Party\n    lot: Lot\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\ndef double(x: Decimal) -> Decimal:\n    return x + x\n\n\ndef cash_lot(amount: Decimal) -> Lot:\n    return Lot(kind=Kind.CASH, amount=amount)\n",
+      "input_file": "groups/d16/models.vy",
+      "daml": "module Models where\n\ndata Lot = Lot\n  with\n    kind : Kind\n    amount : Decimal\n    lot : Lot\n  deriving (Eq, Show)\n\ndata Kind = CASH | BOND\n  deriving (Eq, Show)\n\ndouble : Decimal -> Decimal\ndouble x =\n  x + x\n\ncash_lot : Decimal -> Lot\ncash_lot amount =\n  Lot with kind = CASH, amount = amount\n\ntemplate Note\n  with\n    issuer : Party\n    owner : Party\n    lot : Lot\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d16/Models.daml"
+    },
+    {
+      "id": "d17",
+      "kind": "bad_daml",
+      "key": "Tried to get field ‘…’ with type ‘…’ on value of type ‘…’, but that field has type ‘…’",
+      "message": "Tried to get field ‘amount’ with type ‘Party’ on value of type ‘Lot’, but that field has type ‘Decimal’",
+      "damlc_stage": "typecheck",
+      "daml_line": 29,
+      "count": 2,
+      "first_seen": {
+        "second": 3.91,
+        "input": 5812
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[Note]) -> Party:\n        note = fetch(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d17/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = Lot with kind = CASH, amount = double amount\n        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Party\n      with\n        cid : ContractId Note\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        pure ((note.lot).amount)\n",
+      "daml_file": "groups/d17/ImportSibling.daml"
+    },
+    {
+      "id": "d18",
+      "kind": "bad_daml",
+      "key": "Couldn't match expected type ‘…’ with actual type ‘…’",
+      "message": "Couldn't match expected type ‘Lot’ with actual type ‘()’",
+      "damlc_stage": "typecheck",
+      "daml_line": 18,
+      "count": 4,
+      "first_seen": {
+        "second": 5.36,
+        "input": 7979
+      },
+      "seed": "contracts/import_qualified/models.vy",
+      "input": "from enum import Enum, auto\n\nfrom forge.models import Decimal, Party, template\n\n\nclass Kind(Enum):\n    CASH = auto()\n    BOND = auto()\n\n\nstruct Lot:\n    kind: Kind\n    amount: Decimal\n\n\n@template\nclass Note:\n    issuer: Party\n    owner: Party\n    lot: Lot\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\ndef double(x: Decimal) -> Decimal:\n    return x + x\n\n\ndef cash_lot(amount: Decimal) -> Lot:\n    return\n    return Lot(kind=Kind.CASH, amount=amount)\n",
+      "input_file": "groups/d18/models.vy",
+      "daml": "module Models where\n\ndata Lot = Lot\n  with\n    kind : Kind\n    amount : Decimal\n  deriving (Eq, Show)\n\ndata Kind = CASH | BOND\n  deriving (Eq, Show)\n\ndouble : Decimal -> Decimal\ndouble x =\n  x + x\n\ncash_lot : Decimal -> Lot\ncash_lot amount =\n  ()\n\ntemplate Note\n  with\n    issuer : Party\n    owner : Party\n    lot : Lot\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d18/Models.daml"
+    },
+    {
+      "id": "d19",
+      "kind": "bad_daml",
+      "key": "Tried to get field ‘…’ with type ‘…’",
+      "message": "Tried to get field ‘amount’ with type ‘ContractId",
+      "damlc_stage": "typecheck",
+      "daml_line": 36,
+      "count": 1,
+      "first_seen": {
+        "second": 6.01,
+        "input": 8983
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        for _k in range(0, 2):\n            lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[Note]) -> ContractId[int]:\n        note = fetch(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d19/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\nimport DA.Optional (fromSome)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let _damlforge__damlforge_post_lot13 =\n              foldl\n                (\\_damlforge_post_lot1 _k ->\n                  let _damlforge_lot2 = Lot with kind = CASH, amount = double amount in\n                  Some _damlforge_lot2)\n                (None) ([0 .. (2) - 1])\n        create (Note with issuer = self.issuer, owner = self.owner, lot = fromSome _damlforge__damlforge_post_lot13)\n\n    nonconsuming choice Size : ContractId Int\n      with\n        cid : ContractId Note\n      controller owner\n      do\n        let self = this\n        note <- fetch cid\n        pure ((note.lot).amount)\n",
+      "daml_file": "groups/d19/ImportSibling.daml"
+    },
+    {
+      "id": "d20",
+      "kind": "bad_daml",
+      "key": "No instance for (HasCreate …)",
+      "message": "No instance for (HasCreate (ContractId Note))",
+      "damlc_stage": "typecheck",
+      "daml_line": 28,
+      "count": 1,
+      "first_seen": {
+        "second": 7.76,
+        "input": 11663
+      },
+      "seed": "contracts/import_sibling/import_sibling.vy",
+      "input": "from forge.models import ContractId, Decimal, Party, choice, template\nfrom models import Kind, Lot, Note, double\n\n\n@template\nclass Desk:\n    issuer: Party\n    owner: Party\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n    @choice(controller=issuer, consuming=False)\n    def Issue(self, amount: Decimal) -> ContractId[Note]:\n        lot = Lot(kind=Kind.CASH, amount=double(amount))\n        return create(Note(issuer=self.issuer, owner=self.owner, lot=lot))\n\n    @choice(controller=owner, consuming=False)\n    def Size(self, cid: ContractId[Note]) -> Decimal:\n        note = create(cid)\n        return note.lot.amount\n",
+      "input_file": "groups/d20/import_sibling.vy",
+      "daml": "module ImportSibling where\n\nimport Models (Kind(..), Lot(..), Note(..), double)\n\ntemplate Desk\n  with\n    issuer : Party\n    owner : Party\n  where\n    signatory [issuer]\n    observer [owner]\n\n    nonconsuming choice Issue : ContractId Note\n      with\n        amount : Decimal\n      controller issuer\n      do\n        let self = this\n        let lot = Lot with kind = CASH, amount = double amount\n        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)\n\n    nonconsuming choice Size : Decimal\n      with\n        cid : ContractId Note\n      controller owner\n      do\n        let self = this\n        note <- create cid\n        pure ((note.lot).amount)\n",
+      "daml_file": "groups/d20/ImportSibling.daml"
+    },
+    {
+      "id": "d21",
+      "kind": "bad_daml",
+      "key": "Constructor ‘…’ does not have field ‘…’",
+      "message": "Constructor ‘[]’ does not have field ‘amount’",
+      "damlc_stage": "typecheck",
+      "daml_line": 18,
+      "count": 1,
+      "first_seen": {
+        "second": 9.52,
+        "input": 14374
+      },
+      "seed": "contracts/import_qualified/models.vy",
+      "input": "from enum import Enum, auto\n\nfrom forge.models import Decimal, Party, template\n\n\nclass Kind(Enum):\n    CASH = auto()\n    BOND = auto()\n\n\nstruct Lot:\n    kind: Kind\n    amount: Decimal\n\n\n@template\nclass Note:\n    issuer: Party\n    owner: Party\n    lot: Lot\n\n    signatory: list[Party] = [issuer]\n    observer: list[Party] = [owner]\n\n\ndef double(x: Decimal) -> Decimal:\n    return x + x\n\n\ndef cash_lot(amount: Decimal) -> Lot:\n    return [](kind=Kind.CASH, amount=amount)\n",
+      "input_file": "groups/d21/models.vy",
+      "daml": "module Models where\n\ndata Lot = Lot\n  with\n    kind : Kind\n    amount : Decimal\n  deriving (Eq, Show)\n\ndata Kind = CASH | BOND\n  deriving (Eq, Show)\n\ndouble : Decimal -> Decimal\ndouble x =\n  x + x\n\ncash_lot : Decimal -> Lot\ncash_lot amount =\n  [] with kind = CASH, amount = amount\n\ntemplate Note\n  with\n    issuer : Party\n    owner : Party\n    lot : Lot\n  where\n    signatory [issuer]\n    observer [owner]\n",
+      "daml_file": "groups/d21/Models.daml"
+    }
+  ]
+}

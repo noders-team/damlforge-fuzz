@@ -46,6 +46,8 @@ SEEDS = [
     "contracts/asset_proposal/asset_proposal.vy",
     "contracts/ballot/ballot.vy",
     "contracts/escrow/escrow.vy",
+    "contracts/import_call/import_call.vy",
+    "contracts/import_call/models.vy",
     "contracts/import_qualified/import_qualified.vy",
     "contracts/import_qualified/models.vy",
     "contracts/import_sibling/import_sibling.vy",
@@ -140,7 +142,7 @@ def test_report_json_has_every_field_with_its_type(counted):
 def test_group_counts_add_up_to_the_printed_crash_count(counted):
     status, (start, final, loops_line, report_line), folder, doc = counted
 
-    assert start == "random seed 1, 13 seeds, 1000 inputs"
+    assert start == "random seed 1, 15 seeds, 1000 inputs"
     printed = dict(zip(COUNTS, map(int, FINAL_LINE.fullmatch(final).groups()[1:])))
     assert printed == doc["totals"]
     assert sum(group["count"] for group in crash(doc)) == printed["crash"]
