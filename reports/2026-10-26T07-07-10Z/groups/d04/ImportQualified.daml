@@ -1,0 +1,29 @@
+module ImportQualified where
+
+import qualified Models as M
+
+template Desk
+  with
+    issuer : Party
+    owner : Party
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Issue : ContractId M.Note
+      with
+        amount : Decimal
+      controller issuer
+      do
+        let self = this
+        let lot = M.cash_lot (M.double amount)
+        create (M.Note with issuer = self.issuer, owner = self.owner, lot = Decimal)
+
+    nonconsuming choice Size : Decimal
+      with
+        cid : ContractId M.Note
+      controller owner
+      do
+        let self = this
+        note <- fetch cid
+        pure ((note.lot).amount)

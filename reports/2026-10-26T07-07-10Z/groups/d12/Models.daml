@@ -1,0 +1,27 @@
+module Models where
+
+data Lot = Lot
+  with
+    kind : Kind
+    amount : Decimal
+  deriving (Eq, Show)
+
+data Kind = CASH | BOND
+  deriving (Eq, Show)
+
+double : Decimal -> Decimal
+double x =
+  x + x
+
+cash_lot : Decimal -> Lot
+cash_lot amount =
+  Lot with kind = CASH, amount = amount
+
+template Note
+  with
+    issuer : Party
+    owner : Party
+    lot : Lot
+  where
+    signatory [issuer]
+    observer [owner]

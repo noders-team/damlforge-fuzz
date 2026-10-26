@@ -1,0 +1,29 @@
+module ImportSibling where
+
+import Models (Kind(..), Lot(..), Note(..), double)
+
+template Desk
+  with
+    issuer : Party
+    owner : Party
+  where
+    signatory [issuer]
+    observer [owner]
+
+    nonconsuming choice Issue : ContractId Note
+      with
+        amount : Decimal
+      controller issuer
+      do
+        let self = this
+        let lot = Lot with kind = CASH, amount = double amount
+        create (Note with issuer = self.issuer, owner = self.owner, lot = lot)
+
+    nonconsuming choice ContractId : Decimal
+      with
+        cid : ContractId Note
+      controller owner
+      do
+        let self = this
+        _damlforge_effect1 <- fetch cid
+        pure ((_damlforge_effect1.lot).amount)
