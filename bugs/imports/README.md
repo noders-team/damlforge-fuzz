@@ -20,7 +20,7 @@ The two import bugs of the first report are fixed since 0.0.12. b13 (`import` in
 | [b30](#b30-a-lower-case-module-alias-gives-bad-daml) | B | `import models as m`, then `m.double(x)` | `import qualified Models as m`; damlc: `parse error on input ‘m’` | `DF1213: Module alias m must start with an uppercase letter` | Fixed |
 | [b31](#b31-a-qualified-enum-value-is-not-compiled) | B | `import models as M`, then `M.Kind.CASH` | `(M.Kind).CASH`; damlc: `Not in scope: data constructor ‘M.Kind’` | `DF1213: Uppercase member CASH cannot be selected from an expression` | Open |
 | [b32](#b32-a-plain-module-import-cannot-name-a-type) | B | `import models`, then `models.Note` as a type | `DF1213: No builtin or user-defined type named models.Note` | the same | Open |
-| [b33](#b33-a-plain-module-import-gives-bad-daml-for-a-call) | B | `import models`, then `models.double(x)` | `models.double x` in the Daml; damlc: `Variable not in scope: models` | the same | Open |
+| [b33](#b33-a-plain-module-import-gives-bad-daml-for-a-call) | B | `import models`, then `models.double(x)` | `models.double x` in the Daml; import check `I1`, and damlc: `Variable not in scope: models` | the same | Open |
 
 Category B is valid code that forge cannot compile right. Category C is code that makes forge crash with a Python traceback, where a DF error is the right answer.
 
@@ -34,12 +34,12 @@ REJECTED check  bugs/imports/b29_missing_forge_module_with_alias.vy  DF1213: No 
 REJECTED check  bugs/imports/b30_lower_case_module_alias.vy  DF1213: Module alias `m` must start with an uppercase letter because Daml module aliases are constructors
 REJECTED check  bugs/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
 REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
-OK       emit   bugs/imports/b33_plain_module_import_call.vy
+BAD_IMP  emit   bugs/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models
 OK       emit   bugs/imports/models.vy
 ```
 
 The command exits with 1.
-The import check does not find b33, so b33 shows as `OK`.
+The import check finds b33 with no damlc.
 With `--damlc`, damlc builds each program's Daml together with forge's Daml of `models.vy`, and proves b33. It needs dpm and the Daml SDK 3.5.2:
 
 ```
@@ -49,7 +49,7 @@ REJECTED check  bugs/imports/b29_missing_forge_module_with_alias.vy  DF1213: No 
 REJECTED check  bugs/imports/b30_lower_case_module_alias.vy  DF1213: Module alias `m` must start with an uppercase letter because Daml module aliases are constructors
 REJECTED check  bugs/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
 REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
-BAD_DAML emit   bugs/imports/b33_plain_module_import_call.vy  Variable not in scope: models
+BAD_IMP  emit   bugs/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models; damlc rejects: Variable not in scope: models
 OK       emit   bugs/imports/models.vy
 ```
 

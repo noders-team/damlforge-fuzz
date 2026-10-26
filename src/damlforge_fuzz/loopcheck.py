@@ -56,7 +56,8 @@ LOOP_CHECK_TEXT: Final[dict[LoopCheck, str]] = {
     "not its result.",
     LoopCheck.I1: "The Daml uses a qualified name, such as `Map.insert`, `M.Note`, or a type "
     "used as a value, `Party.amount`, but no import line binds its qualifier. "
-    "damlc rejects the Daml.",
+    "A lower-case qualifier, such as `models.double`, counts only when the `.vy` text "
+    "binds that name to a module, as `import models` does. damlc rejects the Daml.",
     LoopCheck.I2: "An import line of the Daml has an alias that is not a Daml module name, "
     "such as `import qualified Models as m`. damlc rejects the Daml.",
     LoopCheck.I3: "The Daml selects an upper-case name, such as an enum value or a choice, "

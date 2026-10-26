@@ -394,7 +394,7 @@ It runs on each `OK` input of `check` and `run`, and it does not need `damlc`.
 | `L2` | forge writes the pure fold `foldl` for a loop whose body has a ledger action, such as `fetch` or `create`. A ledger action needs `foldlA` in an `Update`. |
 | `L3` | A `return` in a loop of the .vy code has no early-return helper (`_damlforge_loopN`) in the Daml, so the return is lost: the loop goes on, or the function returns another value. damlc can build this Daml. |
 | `L4` | A ledger action, in a loop or not, is used as a value: it is not bound with `<-` and is not a statement of a `do` block, so the code gets an `Update`, not its result. |
-| `I1` | The Daml uses a qualified name, such as `Map.insert`, `M.Note`, or a type used as a value, `Party.amount`, but no import line binds its qualifier. damlc rejects the Daml. |
+| `I1` | The Daml uses a qualified name, such as `Map.insert`, `M.Note`, or a type used as a value, `Party.amount`, but no import line binds its qualifier. A lower-case qualifier, such as `models.double`, counts only when the `.vy` text binds that name to a module, as `import models` does. damlc rejects the Daml. |
 | `I2` | An import line of the Daml has an alias that is not a Daml module name, such as `import qualified Models as m`. damlc rejects the Daml. |
 | `I3` | The Daml selects an upper-case name, such as an enum value or a choice, from an expression: `(M.Kind).CASH`. Daml has no such syntax, so damlc rejects the Daml. |
 | `I4` | The .vy code imports a name from a sibling module or a stub, but the Daml has no import of that module, or its import does not list the name. |

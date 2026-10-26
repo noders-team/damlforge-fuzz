@@ -22,12 +22,13 @@ _DAML_IMPORT: Final = re.compile(
 )
 _DAML_NOT_CODE: Final = re.compile(r'"(?:\\.|[^"\\\n])*"|--[^\n]*')
 _QUALIFIED_USE: Final = re.compile(r"(?<![\w.])((?:[A-Z]\w*\.)+)[A-Za-z_(]")
+_LOWER_QUALIFIED_USE: Final = re.compile(r"(?<![\w.])([a-z_]\w*\.)[A-Za-z_(]")
 _MODULE_ALIAS: Final = re.compile(r"[A-Z]\w*(?:\.[A-Z]\w*)*")
 _TYPE_SELECTOR: Final = re.compile(r"\)\.(?P<name>[A-Z]\w*)")
 _VY_FROM: Final = re.compile(
     r"^from +(?P<module>[\w.]+) +import +(?P<names>\([^)]*\)|[^\n#]+)", re.M
 )
-_VY_IMPORT: Final = re.compile(r"^import +(?P<module>[\w.]+)(?: +as +\w+)? *$", re.M)
+_VY_IMPORT: Final = re.compile(r"^import +(?P<module>[\w.]+)(?: +as +(?P<alias>\w+))? *$", re.M)
 _SEGMENT: Final = re.compile(r"[A-Za-z0-9]+")
 
 
@@ -43,18 +44,30 @@ def find_import_bugs(vy: str, daml: str) -> tuple[LoopBug, ...]:
         "" if line.startswith(("module ", "import ")) else _DAML_NOT_CODE.sub("", line)
         for line in lines
     ]
-    found = (_i1(code, imports), _i2(imports), _i3(code), _i4(vy, imports))
+    found = (_i1(vy, code, imports), _i2(imports), _i3(code), _i4(vy, imports))
     return tuple(finding for finding in found if finding is not None)
 
 
-def _i1(code: list[str], imports: list[tuple[int, re.Match[str]]]) -> LoopBug | None:
+def _i1(vy: str, code: list[str], imports: list[tuple[int, re.Match[str]]]) -> LoopBug | None:
     bound = {m["alias"] or m["module"] for _, m in imports} | {m["module"] for _, m in imports}
+    # A lower-case `x.y` is usually a field access. It is a module use only
+    # when the .vy text binds x to a module, as `import models` binds models.
+    modules = {m["alias"] or m["module"].split(".", 1)[0] for m in _VY_IMPORT.finditer(vy)}
     for n, line in enumerate(code):
-        for use in _QUALIFIED_USE.finditer(line):
-            qualifier = use[1][:-1]
-            if not any(qualifier == q or qualifier.startswith(q + ".") for q in bound):
-                detail = f"{qualifier}. at Daml line {n + 1} with no import that binds {qualifier}"
-                return LoopBug(LoopCheck.I1, n + 1, detail)
+        upper = [
+            use
+            for use in _QUALIFIED_USE.finditer(line)
+            if not any(use[1].startswith(q + ".") for q in bound)
+        ]
+        lower = [
+            use
+            for use in _LOWER_QUALIFIED_USE.finditer(line)
+            if use[1][:-1] in modules and use[1][:-1] not in bound
+        ]
+        if uses := sorted(upper + lower, key=lambda use: use.start()):
+            qualifier = uses[0][1][:-1]
+            detail = f"{qualifier}. at Daml line {n + 1} with no import that binds {qualifier}"
+            return LoopBug(LoopCheck.I1, n + 1, detail)
     return None
 
 

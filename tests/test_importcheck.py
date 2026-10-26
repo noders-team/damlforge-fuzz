@@ -51,6 +51,16 @@ def test_i1_a_qualifier_that_no_import_binds():
     assert checks("", "x = Party.amount\n") == [LoopCheck.I1]
 
 
+def test_i1_a_lower_case_qualifier_that_a_vy_import_binds():
+    daml = 'module A where\n\nimport Models\n\nf note =\n  (note.lot).amount + models.double "models.x"\n'
+    [bug] = find_import_bugs("import models\n", daml)
+    assert (bug.check, bug.daml_line) == (LoopCheck.I1, 6)
+    assert bug.detail == "models. at Daml line 6 with no import that binds models"
+    aliased = "import qualified Models as Lib\n\nx = lib.double 1\n"
+    assert checks("import models as lib\n", aliased) == [LoopCheck.I1]
+    assert checks("import models\n", daml.replace("models.double", "Models.double")) == []
+
+
 def test_i2_a_lower_case_module_alias():
     assert checks(GOOD_VY, GOOD_DAML.replace("as M\n", "as m\n").replace("M.size", "m.size")) == [
         LoopCheck.I2
