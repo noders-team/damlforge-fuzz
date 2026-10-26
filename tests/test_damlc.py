@@ -221,6 +221,8 @@ def test_plan_check_2_the_seeds_build(dpm, monkeypatch, capsys):
         "OK       emit   contracts/asset_proposal/asset_proposal.vy",
         "OK       emit   contracts/ballot/ballot.vy",
         "OK       emit   contracts/escrow/escrow.vy",
+        "OK       emit   contracts/import_call/import_call.vy",
+        "OK       emit   contracts/import_call/models.vy",
         "OK       emit   contracts/import_qualified/import_qualified.vy",
         "OK       emit   contracts/import_qualified/models.vy",
         "OK       emit   contracts/import_sibling/import_sibling.vy",

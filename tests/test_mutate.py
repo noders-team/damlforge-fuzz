@@ -89,8 +89,8 @@ def test_an_input_is_changed_exactly_when_its_text_differs_from_its_seed():
 
 
 def test_every_rule_changes_some_text_on_its_own():
-    # import_name fits 17 of the 378 seed lines. Its first input with one
-    # change that changes the text is input 9697.
+    # The import rules fit only the import lines. The last rule to change a
+    # text on its own is import_module, at input 3867.
     single = [i for i in first(9900, SEED_TEXTS) if len(i.changes) == 1]
     changed_by = {i.changes[0].rule for i in single if i.changed}
     assert changed_by == set(RULE_NAMES)

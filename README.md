@@ -124,6 +124,8 @@ Run these commands from the root of this repository.
    OK       emit   contracts/asset_proposal/asset_proposal.vy
    OK       emit   contracts/ballot/ballot.vy
    OK       emit   contracts/escrow/escrow.vy
+   OK       emit   contracts/import_call/import_call.vy
+   OK       emit   contracts/import_call/models.vy
    OK       emit   contracts/import_qualified/import_qualified.vy
    OK       emit   contracts/import_qualified/models.vy
    OK       emit   contracts/import_sibling/import_sibling.vy
@@ -942,7 +944,7 @@ To add a rule:
 ## Seeds
 
 The seeds are in `contracts/`.
-Each seed folder is its own Daml project, with a `daml.yaml` with `source: .`. Most have one `.vy` file. The two import seeds also have a sibling module, `models.vy`, which is a seed too.
+Each seed folder is its own Daml project, with a `daml.yaml` with `source: .`. Most have one `.vy` file. The three import seeds also have a sibling module, `models.vy`, which is a seed too.
 The five loop seeds also have a [calls file](#calls-files) for `--compare`.
 Separate projects let the fuzzer run on the seeds that you choose.
 
@@ -951,6 +953,7 @@ Separate projects let the fuzzer run on the seeds that you choose.
 | `contracts/asset_proposal/` | `Asset`, `AssetProposal` | `Give`, `Accept`, `Reject` |
 | `contracts/ballot/` | `Ballot` | `CastVote`, `Close` |
 | `contracts/escrow/` | `Payout`, `Escrow` | `Release`, `Refund` |
+| `contracts/import_call/` | `Pot` | `Paid`, `Net` |
 | `contracts/import_qualified/` | `Desk`; `Note` in `models.vy` | `Issue`, `Size` |
 | `contracts/import_sibling/` | `Desk`; `Note` in `models.vy` | `Issue`, `Size` |
 | `contracts/iou/` | `Iou` | `Transfer`, `Split` |
@@ -963,8 +966,11 @@ Separate projects let the fuzzer run on the seeds that you choose.
 ### Import seeds
 
 The `contracts/import_*` seeds test forge's imports between `.vy` files.
-In each folder, the main file imports a template, a struct, an enum, and a function from `models.vy`, the file next to it:
-`import_sibling.vy` with `from models import Kind, Lot, Note, double`, and `import_qualified.vy` with `import models as M` and `M.Note`.
+In each folder, the main file imports from `models.vy`, the file next to it.
+`import_sibling.vy` and `import_qualified.vy` import a template, a struct, an enum, and a function: `import_sibling.vy` with `from models import Kind, Lot, Note, double`, and `import_qualified.vy` with `import models as M` and `M.Note`.
+`import_call.vy` imports only two functions, with `from models import double, fee`, and uses no type from `models.vy`.
+When the `import_form` rule changes its import to `import models`, each call becomes `models.double(...)`, which shows b33.
+In the other two seeds, the same change also makes a type such as `models.Note`, and forge rejects it (b32) before it gets to a call.
 forge reads the sibling file from the disk, so a change to the main file is compiled against the unchanged `models.vy`.
 The import seeds use no qualified enum value, such as `M.Kind.CASH`, because forge rejects it (b31 in `bugs/imports/`).
 
