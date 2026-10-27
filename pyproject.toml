@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,10 @@ name = "damlforge-fuzz"
 version = "0.1.0"
 description = "A fuzzer for the DamlForge compiler, forge"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Ruslan Glaznyov", email = "ruslan.glaznyov@gmail.com" }]
+maintainers = [{ name = "Noders Team" }]
 requires-python = ">=3.11"
 # forge (DamlForge) is deliberately not listed. The PyPI project named "forge" is an
 # unrelated Django tool, so pip would install the wrong package. Install DamlForge

@@ -1098,3 +1098,9 @@ python scripts/show_inputs.py contracts/iou --count 5 --random-seed 1
 ```
 
 The script makes the same copies as `damlforge-fuzz run` with the same seed folders and random seed.
+
+## License
+
+damlforge-fuzz is licensed under the [Apache License, Version 2.0](LICENSE).
+
+Copyright 2026 Noders Team. Author: Ruslan Glaznyov <ruslan.glaznyov@gmail.com>.
