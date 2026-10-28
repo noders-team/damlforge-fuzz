@@ -441,7 +441,7 @@ class Report:
     _seeds: dict[str, Seed] = field(default_factory=dict, repr=False)
     """Group.seed -> the Seed, so write() can copy its daml.yaml."""
     _damlc: _Damlc | None = field(default=None, repr=False)
-    """None when the run has no damlc step. Then the report is unit 5's, with "damlc": null."""
+    """None when the run has no damlc step. Then report.json has "damlc": null."""
     _loops: dict[_LoopText, _LoopInputs] = field(default_factory=dict, repr=False)
     """The OK inputs with loop bugs, in first-seen order. loop_groups() reads it."""
     _compare: _Compare | None = field(default=None, repr=False)

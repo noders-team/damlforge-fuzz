@@ -15,7 +15,7 @@
 
 """damlforge-fuzz: change seed contracts at random and report where forge crashes.
 
-Unit 2 compiles one .vy text with forge, in this process, and sorts the result
+compile_and_sort compiles one .vy text with forge, in this process, and sorts the result
 into OK, REJECTED, or CRASH::
 
     from pathlib import Path
@@ -31,7 +31,7 @@ into OK, REJECTED, or CRASH::
         case Crash(key=key):
             ...  # a forge bug; key is (exception type, forge file:line)
 
-Unit 3 makes the inputs and runs them. input_sequence needs no forge::
+fuzz makes the inputs and runs them. input_sequence needs no forge::
 
     from damlforge_fuzz import Count, Totals, fuzz, input_sequence
 
@@ -40,7 +40,7 @@ Unit 3 makes the inputs and runs them. input_sequence needs no forge::
     for tried in fuzz([seed], random_seed=1, limit=Count(2000)):
         totals.add(tried)
 
-Unit 4 groups the crashes and writes the run folder (report.json, report.md,
+Report groups the crashes and writes the run folder (report.json, report.md,
 and one saved input per group)::
 
     from damlforge_fuzz import Report
@@ -51,7 +51,7 @@ and one saved input per group)::
     report.write()  # report.folder is reports/2026-10-19T13-50-00Z
     report.groups   # {CrashKey: Group}, in first-seen order
 
-Unit 5 shrinks each crashing input: it deletes lines while the text still
+shrink cuts each crashing input down: it deletes lines while the text still
 crashes with the same key. Report.shrink() does this for every group, and
 write() saves each result under groups/gNN/shrunk/::
 
@@ -60,8 +60,8 @@ write() saves each result under groups/gNN/shrunk/::
     small = shrink(text, seed, same_crash(crash.key))  # a subsequence of text's lines
     shrunk_path(path)  # groups/g02/escrow.vy -> groups/g02/shrunk/escrow.vy
 
-Unit 6 builds the Daml of OK inputs with damlc, through `dpm build`, and
-groups the texts damlc rejects (BAD_DAML). It needs dpm and the Daml SDK::
+build_daml builds the Daml of OK inputs with damlc, through `dpm build`, and
+the report groups the texts damlc rejects (BAD_DAML). It needs dpm and the Daml SDK::
 
     from damlforge_fuzz import DamlSource, build_daml
 
@@ -74,7 +74,7 @@ groups the texts damlc rejects (BAD_DAML). It needs dpm and the Daml SDK::
     report.check_daml()        # after the inputs: every distinct Daml text
     report.bad_daml_groups()   # [BadDamlGroup], ids d01, d02, ...
 
-Unit 8 checks the loops in forge's Daml (BAD_LOOP). The check reads the .vy
+find_loop_bugs checks the loops in forge's Daml (BAD_LOOP). The check reads the .vy
 text and the Daml, and needs no forge and no damlc. compile_and_sort runs it,
 so each Ok carries its loop bugs::
 
@@ -88,14 +88,14 @@ so each Ok carries its loop bugs::
 
     report.loop_groups()  # [LoopGroup], ids l01, l02, ...: one per first check (and damlc verdict)
 
-Unit 10 shrinks the first input of each loop group too. same_loop keeps the
+The report shrinks the first input of each loop group too. same_loop keeps the
 first check and, with a verdict, damlc's verdict on the Daml, so it needs dpm::
 
     from damlforge_fuzz import same_loop
 
     small = shrink(text, seed, same_loop(outcome.loop_key, "builds", seed))
 
-Unit 11 runs each OK input of a seed with a calls file (loop_give.calls.yaml
+run_and_compare runs each OK input of a seed with a calls file (loop_give.calls.yaml
 next to loop_give.vy) in Python and in Daml Script, and compares (BAD_RUN).
 It needs dpm and the Daml SDK::
 

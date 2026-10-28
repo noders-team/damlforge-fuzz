@@ -26,8 +26,8 @@ decisions:
 - what makes two damlc errors the same bug (DamlErrorKey).
 
 Measured with SDK 3.5.2: one `dpm build` costs about 0.7 s plus 9 ms per
-module, and a bad module does not stop damlc from checking the others. In the
-unit 6 design, the 200 distinct texts of a 2000-input run gave the same 157
+module, and a bad module does not stop damlc from checking the others. When the
+batches were designed, the 200 distinct texts of a 2000-input run gave the same 157
 failures, with the same first error lines, in one batch as when each was
 built alone.
 """
