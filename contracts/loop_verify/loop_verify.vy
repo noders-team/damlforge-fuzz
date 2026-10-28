@@ -1,4 +1,5 @@
 from forge.models import ContractId, Decimal, Party, choice, template
+from forge.builtins.daml_lang import fetch
 
 
 def verify(cids: list[ContractId[Iou]], p: Party) -> Decimal:

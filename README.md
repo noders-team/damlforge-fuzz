@@ -404,7 +404,8 @@ It runs on each `OK` input of `check` and `run`, and it does not need `damlc`.
 An input that fails a check `L1` to `L4` is `BAD_LOOP`.
 The checks `I1` to `I4` are the import check, in `src/damlforge_fuzz/importcheck.py`. They read the import lines of forge's Daml and the `.vy` text, and an input that fails one is `BAD_IMP`. Their groups are `i01`, `i02`, ..., next to the loop groups `l01`, `l02`, ..., and the `loops:` line counts both.
 `check` prints every check that the file fails, and the first bug.
-The seven programs in [`bugs/loops/`](bugs/loops/) each show a forge loop bug:
+The seven programs in [`bugs/loops/`](bugs/loops/) each show a forge loop bug.
+DamlForge 0.0.12 fixed all seven bugs, so this output is from DamlForge 0.0.11:
 
 ```
 $ damlforge-fuzz check bugs/loops

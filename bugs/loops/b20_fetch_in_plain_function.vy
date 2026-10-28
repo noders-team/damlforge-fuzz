@@ -1,4 +1,5 @@
 from forge.models import ContractId, Decimal, Party, choice, template
+from forge.builtins.daml_lang import fetch
 
 
 def total_of(cids: list[ContractId[Iou]]) -> Decimal:

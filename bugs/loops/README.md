@@ -2,6 +2,13 @@
 
 This folder has seven small programs that show loop bugs in DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11), checked with Daml SDK 3.5.2.
 
+> [!NOTE]
+> DamlForge 0.0.12 fixed all seven bugs.
+> On DamlForge 0.0.13, `damlforge-fuzz check --damlc --compare bugs/loops` gives `OK` for each program.
+> The output and the Daml on this page, and the files in `runtime/`, are from DamlForge 0.0.11, the version with the bugs.
+> The programs that call `create` or `fetch` import them from `forge.builtins.daml_lang`, because DamlForge 0.0.13 needs this import.
+> DamlForge 0.0.11 accepts the import and gives the same output.
+
 The numbers continue b01 to b16 in [the analysis of the 20000-input report](../../reports/2026-10-19T18-45-34Z/analysis.md).
 That analysis defines the categories. This folder uses three of them:
 
