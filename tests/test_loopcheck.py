@@ -16,9 +16,10 @@
 """The loop check, on saved pairs of a .vy text and forge's Daml for it, and on live forge.
 
 The pairs are in tests/loops/, with the checks each one must give in
-EXPECTED.tsv. The tests on the pairs do not run forge, so a forge fix does not
-change them. The live tests show when forge writes other Daml today. The run
-tests check relations, as test_report.py does, so they hold on any forge version.
+EXPECTED.tsv. They are frozen: the tests on the pairs do not run forge, so a
+forge fix does not change them. The seed tests run forge, and fail when forge
+writes Daml that the checks read wrong. The run tests check relations, as
+test_report.py does, so they hold on any forge version.
 """
 
 import collections
@@ -186,6 +187,11 @@ def test_every_check_has_a_text_and_the_readme_shows_it():
 
 @pytest.mark.parametrize("path", SEED_FILES, ids=lambda path: path.stem)
 def test_every_seed_is_ok_with_no_loop_bug(path):
+    """No loop or import check finds a bug in the Daml that the installed forge writes for a seed.
+
+    A forge fix never fails this test. A change in forge's layout that the
+    checks read wrong does.
+    """
     seed = Seed.load(path)
     outcome = compile_and_sort(seed.text, seed)
     assert isinstance(outcome, Ok)
@@ -218,23 +224,6 @@ BUG_PROGRAMS = {
 
 B23 = f"OK       emit   {LOOP_BUGS}/b23_pass_in_loop.vy"
 """b23 loses an assert in a loop, but no loop check finds it. Only --compare shows it."""
-
-
-@pytest.mark.parametrize("name", BUG_PROGRAMS)
-def test_each_bug_program_is_ok_with_its_loop_bugs(name, fixture_forge):
-    seed = Seed.load(PROJECT / LOOP_BUGS / f"{name}.vy")
-    outcome = compile_and_sort(seed.text, seed)
-    assert isinstance(outcome, Ok)
-    checks = " ".join(bug.check for bug in outcome.loop_bugs)
-    assert f"{checks}: {outcome.loop_bugs[0].detail}" == BUG_PROGRAMS[name]
-    assert outcome.loop_key == checks.split()[0]
-
-
-@pytest.mark.parametrize("name", EXPECTED)
-def test_forge_still_writes_the_saved_daml_and_its_ok_carries_the_loop_bugs(name, fixture_forge):
-    seed = Seed.load(LOOPS / f"{name}.vy")
-    vy, daml = pair(name)
-    assert compile_and_sort(seed.text, seed) == Ok(daml, seed.module_name, find_loop_bugs(vy, daml))
 
 
 LOOP_SEEDS = [str(path.parent.relative_to(PROJECT)) for path in SEED_FILES if "loop_" in path.name]

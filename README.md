@@ -465,7 +465,7 @@ The loop check has these limits:
 
 - It reads the Daml in the layout that forge writes: one statement on each line, and `do` at the end of the line that opens a block.
   If forge changes its layout, the check can give wrong results.
-  The tests in `tests/test_loopcheck.py` compare the Daml that forge writes with saved Daml, so they show such a change first.
+  The tests in `tests/test_loopcheck.py` run the loop check on the Daml that forge writes for each seed, so they show such a change first.
 - `L3` does not know whether the lost `return` changes the result. A lost `return` before code that does nothing is harmless.
 
 ### Run and compare
@@ -1066,13 +1066,13 @@ pytest
 ```
 
 The tests that need dpm skip when dpm or the Daml SDK is missing.
-The Daml in `tests/loops/` is the Daml that one DamlForge version wrote.
-The first lines of `tests/loops/EXPECTED.tsv` name that version.
-The tests that compare it with the Daml that forge writes skip on an older forge.
-On a newer forge that writes other Daml, they fail.
-Then run `python scripts/update_loop_fixtures.py`.
-It writes the Daml of each fixture again with the installed forge, puts the forge version in `tests/loops/EXPECTED.tsv`, and prints each fixture whose Daml or loop findings changed.
-Read each printed fixture. When its new loop findings are right, change its expected checks in `EXPECTED.tsv`.
+
+`tests/loops/` has pairs of a `.vy` file and the Daml that forge wrote for it.
+`tests/loops/EXPECTED.tsv` has the loop checks that each pair must give.
+The pairs are frozen test data.
+The tests read them and do not run forge, so a pair keeps its loop bug when a new forge fixes the bug.
+Do not write the Daml of a pair again with a newer forge.
+To test the loop check on other Daml, add a new pair and its line in `EXPECTED.tsv`.
 
 ### Show the inputs of a run
 
