@@ -21,8 +21,8 @@ No seed uses `%`, so the planted function is the only code that can keep the
 crash, and the test knows the exact lines that must come back. If forge
 renames the table, monkeypatch.delitem fails in the fixture, not in an assertion.
 
-The loop tests use HAS_PARTY, which has the loop bug b22 on DamlForge v0.0.7
-and 0.0.11.
+The loop tests use HAS_PARTY, with the shape of the loop bug b22 planted in
+forge's Daml (planted_daml.py), so the bug is there on any forge version.
 """
 
 import itertools
@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 import forge.ir.lower
 import pytest
 from conftest import CONTRACTS, copy_iou
+from planted_daml import lost_inner_return, plant, unit_for_no_return
 
 from damlforge_fuzz import (
     Crash,
@@ -64,8 +65,9 @@ def has_party(ps: list[Party], p: Party) -> bool:
             return True
     return False
 """
-"""forge loses the `return` in the inner loop (b22) and writes `has_party ps p = False`.
-That is L3, and damlc builds it. Without `return False`, forge writes `()`, which damlc rejects."""
+"""With the plant, the Daml loses the helper of the return in the inner loop, as in b22.
+That is L3, and damlc builds it. Without `return False`, the Daml ends has_party with
+`()`, which damlc rejects."""
 
 LOST_RETURN = """\
 def has_party(ps: list[Party], p: Party) -> bool:
@@ -83,8 +85,12 @@ def planted(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def has_party(tmp_path):
-    """loop_pure.vy with the text HAS_PARTY, in a copy of contracts/loop_pure/ with its daml.yaml."""
+def has_party(tmp_path, monkeypatch):
+    """loop_pure.vy with the text HAS_PARTY, in a copy of contracts/loop_pure/ with its daml.yaml.
+
+    The test runs with the shape of b22 planted in forge's Daml.
+    """
+    plant(monkeypatch, lambda daml: unit_for_no_return(lost_inner_return(daml)))
     folder = shutil.copytree(CONTRACTS / "loop_pure", tmp_path / "loop_pure")
     path = folder / "loop_pure.vy"
     path.write_text(HAS_PARTY)

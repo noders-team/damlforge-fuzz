@@ -1074,6 +1074,10 @@ The tests read them and do not run forge, so a pair keeps its loop bug when a ne
 Do not write the Daml of a pair again with a newer forge.
 To test the loop check on other Daml, add a new pair and its line in `EXPECTED.tsv`.
 
+A test of what `check`, `run`, or `shrink` does with a bug does not wait for forge to make the bug.
+The test plants the bug in the Daml that forge writes, with a function from `tests/planted_daml.py`.
+So a new forge that fixes a bug does not make these tests fail.
+
 ### Show the inputs of a run
 
 To see each copy, its changes, and its result, run `scripts/show_inputs.py`:

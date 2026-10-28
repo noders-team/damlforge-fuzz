@@ -18,8 +18,9 @@
 The pairs are in tests/loops/, with the checks each one must give in
 EXPECTED.tsv. They are frozen: the tests on the pairs do not run forge, so a
 forge fix does not change them. The seed tests run forge, and fail when forge
-writes Daml that the checks read wrong. The run tests check relations, as
-test_report.py does, so they hold on any forge version.
+writes Daml that the checks read wrong. The tests of what `check` and `run` do
+with a loop bug plant the bug in forge's Daml (planted_daml.py). The run tests
+check relations, as test_report.py does, so they hold on any forge version.
 """
 
 import collections
@@ -30,7 +31,8 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import LOOP_BUGS, PROJECT, SEED_FILES
+from conftest import PROJECT, SEED_FILES
+from planted_daml import crash_or_loop_bugs, loop_bugs, plant
 
 from damlforge_fuzz import (
     LOOP_CHECK_TEXT,
@@ -210,35 +212,55 @@ def test_each_loop_seed_has_at_most_one_foldla_loop():
     }  # fmt: skip
 
 
-BUG_PROGRAMS = {
-    "b17_create_append": "L1: foldlA at Daml line 20 with no import DA.Action",
-    "b18_fetch_in_sum": "L1: foldlA at Daml line 20 with no import DA.Action",
-    "b19_fetch_in_if_test": "L2 L4: fetch at Daml line 22 in the pure foldl of line 20",
-    "b20_fetch_in_plain_function": "L2 L4: fetch at Daml line 9 in the pure foldl of line 7",
-    "b21_return_in_create_loop": "L3: the return in a loop of choice GiveUntil at Daml line 14 "
-    "is lost (1 loop with a return, 0 early-return helpers)",
-    "b22_return_in_inner_loop": "L3: the return in a loop of function first_positive "
-    "at Daml line 3 is lost (2 loops with a return, 0 early-return helpers)",
-}
-"""Each bug program in LOOP_BUGS: every check it fails, and its first bug."""
-
-B23 = f"OK       emit   {LOOP_BUGS}/b23_pass_in_loop.vy"
-"""b23 loses an assert in a loop, but no loop check finds it. Only --compare shows it."""
-
-
-LOOP_SEEDS = [str(path.parent.relative_to(PROJECT)) for path in SEED_FILES if "loop_" in path.name]
+LOOP_SEED_FILES = [path for path in SEED_FILES if "loop_" in path.name]
+LOOP_SEEDS = [str(path.parent.relative_to(PROJECT)) for path in LOOP_SEED_FILES]
+LOOP_SEED_PATHS = [str(path.relative_to(PROJECT)) for path in LOOP_SEED_FILES]
 REPORT_LINE = re.compile(r"\d+ crash groups?, report in (.+)")
 
 
-def run(reports, *argv):
-    """main(["run", *argv, "--reports", reports]) in PROJECT: status, stdout lines, folder, report.json."""
+def planted_bug(path):
+    """The checks and first finding that `check` must print for a loop seed with loop_bugs planted.
+
+    loop_pure loses the early-return helper of has_party, so L3 names the first
+    line of has_party. Each other loop seed loses the import of its foldlA, so
+    L1 names the line of that foldlA.
+    """
+    seed = Seed.load(PROJECT / path)
+    daml = loop_bugs(compile_and_sort(seed.text, seed).daml)
+    if seed.module_name == "LoopPure":
+        line = first_line(daml, r"has_party :")
+        return (
+            f"L3: the return in a loop of function has_party at Daml line {line} is lost "
+            "(1 loop with a return, 0 early-return helpers)"
+        )
+    line = first_line(daml, r"(?!import ).*\bfoldlA\b")
+    return f"L1: foldlA at Daml line {line} with no import DA.Action"
+
+
+def first_line(daml, pattern):
+    return next(n for n, line in enumerate(daml.splitlines(), 1) if re.match(pattern, line))
+
+
+def run(reports, *argv, edit=None):
+    """main(["run", *argv, "--reports", reports]) in PROJECT: status, stdout lines, folder, report.json.
+
+    With `edit`, the run has it planted in the Daml of each input of the loop seeds.
+    """
     out = io.StringIO()
     with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
         patch.chdir(PROJECT)
+        if edit is not None:
+            plant(patch, edit, spare=LOOP_SEED_FILES)
         status = main(["run", *argv, "--reports", str(reports)])
     lines = out.getvalue().splitlines()
     folder = PROJECT / REPORT_LINE.fullmatch(lines[-1]).group(1)
     return status, lines, folder, json.loads((folder / "report.json").read_text())
+
+
+@pytest.fixture
+def planted(monkeypatch):
+    """loop_bugs planted as in the loop runs, for a test that checks their saved inputs again."""
+    plant(monkeypatch, loop_bugs, spare=LOOP_SEED_FILES)
 
 
 def loop_groups(doc):
@@ -251,28 +273,25 @@ def label(group):
 
 @pytest.fixture(scope="module")
 def loop_run(tmp_path_factory):
-    """`run contracts/loop_* --count 20000 --random-seed 1`, with the current change rules.
-
-    DamlForge 0.0.12 triggers the loop check far less often than earlier versions, so
-    this needs many more inputs than before to still catch one loop group.
-    """
-    return run(
-        tmp_path_factory.mktemp("reports"), *LOOP_SEEDS, "--count", "20000", "--random-seed", "1"
-    )
+    """`run contracts/loop_* --count 300 --random-seed 1`, with loop_bugs planted in the inputs."""
+    reports = tmp_path_factory.mktemp("reports")
+    return run(reports, *LOOP_SEEDS, "--count", "300", "--random-seed", "1", edit=loop_bugs)
 
 
 @pytest.fixture(scope="module")
 def loop_run_damlc(dpm, tmp_path_factory):
     """The same run with --damlc."""
     reports = tmp_path_factory.mktemp("reports")
-    return run(reports, *LOOP_SEEDS, "--count", "20000", "--random-seed", "1", "--damlc")
+    return run(
+        reports, *LOOP_SEEDS, "--count", "300", "--random-seed", "1", "--damlc", edit=loop_bugs
+    )
 
 
 def test_a_run_on_the_loop_seeds_makes_one_loop_group_per_first_check(loop_run):
     _, _, folder, doc = loop_run
     loops = loop_groups(doc)
 
-    assert any(g["check"].startswith("L") for g in loops), "20000 inputs should give a loop bug"
+    assert {"L1", "L3"} <= {g["check"] for g in loops}, "each planted check should give a group"
     for family, series in [("L", "l"), ("I", "i")]:
         own = [g for g in loops if g["check"].startswith(family)]
         assert [g["id"] for g in own] == [f"{series}{n:02d}" for n in range(1, len(own) + 1)]
@@ -317,7 +336,7 @@ def test_each_shrunk_loop_input_is_shorter_and_made_of_its_inputs_lines(loop_run
         assert all(line in rest for line in small), f"{group['id']}: not a subsequence"
 
 
-def test_check_shows_each_shrunk_loop_input_in_its_group(loop_run, capsys):
+def test_check_shows_each_shrunk_loop_input_in_its_group(loop_run, planted, capsys):
     _, _, folder, doc = loop_run
 
     for group in loop_groups(doc):
@@ -333,7 +352,7 @@ def test_check_shows_each_shrunk_loop_input_in_its_group(loop_run, capsys):
         )
 
 
-def test_each_saved_loop_input_gives_its_group_again(loop_run):
+def test_each_saved_loop_input_gives_its_group_again(loop_run, planted):
     _, _, folder, doc = loop_run
 
     for group in loop_groups(doc):
@@ -409,7 +428,9 @@ def test_with_damlc_report_md_shows_each_loop_groups_verdict(loop_run_damlc):
     assert set(cells) == {"builds", "rejects"}
 
 
-def test_check_damlc_shows_each_shrunk_loop_input_with_its_groups_verdict(loop_run_damlc, capsys):
+def test_check_damlc_shows_each_shrunk_loop_input_with_its_groups_verdict(
+    loop_run_damlc, planted, capsys
+):
     _, _, folder, doc = loop_run_damlc
 
     for group in loop_groups(doc):
@@ -432,8 +453,9 @@ def test_dpm_failing_while_a_loop_group_shrinks_returns_2_after_the_report(
     monkeypatch.setattr("damlforge_fuzz.shrinker.build_daml", dpm_fails)
 
     status, lines, folder, doc = run(
-        tmp_path, *LOOP_SEEDS, "--count", "150", "--random-seed", "1", "--damlc"
-    )
+        tmp_path, *LOOP_SEEDS, "--count", "150", "--random-seed", "1", "--damlc",
+        edit=crash_or_loop_bugs,
+    )  # fmt: skip
     assert status == 2
     assert capsys.readouterr().err == "damlforge-fuzz run: damlc: dpm build exited with 1\n"
     assert len(lines) == 5
@@ -463,15 +485,17 @@ def test_with_damlc_the_loop_groups_split_the_same_inputs_by_verdict(loop_run, l
         assert first["first_seen"]["input"] == group["first_seen"]["input"]
 
 
-def test_groups_of_each_kind_from_one_seed_have_their_own_folder(loop_run_damlc):
-    _, _, folder, doc = loop_run_damlc
-    kinds = collections.defaultdict(set)
+def test_groups_of_each_kind_from_one_seed_have_their_own_folder(dpm, tmp_path):
+    # damlc rejects the planted L1, so its inputs also make a bad Daml group.
+    _, _, folder, doc = run(
+        tmp_path, "contracts/loop_count", "--count", "100", "--random-seed", "1", "--damlc",
+        edit=crash_or_loop_bugs,
+    )  # fmt: skip
     for group in doc["groups"]:
-        kinds[group["seed"]].add(group["kind"])
-        assert group["input_file"] == f"groups/{group['id']}/{Path(group['seed']).name}"
+        assert group["input_file"] == f"groups/{group['id']}/loop_count.vy"
         assert (folder / group["input_file"]).read_text() == group["input"]
 
-    assert any(found == {"crash", "bad_daml", "bad_loop"} for found in kinds.values()), kinds
+    assert {group["kind"] for group in doc["groups"]} == {"crash", "bad_daml", "bad_loop"}
     files = [group["input_file"] for group in doc["groups"]]
     assert len(set(files)) == len(files)
 
@@ -513,52 +537,47 @@ def test_a_run_whose_only_finding_is_a_loop_bug_returns_1(tmp_path, monkeypatch)
     assert status == 1
 
 
-def test_check_prints_bad_loop_for_each_bug_program_and_returns_1(
-    fixture_forge, monkeypatch, capsys
-):
+def test_check_prints_bad_loop_for_each_planted_loop_bug_and_returns_1(monkeypatch, capsys):
+    plant(monkeypatch, loop_bugs)
     monkeypatch.chdir(PROJECT)
 
-    assert main(["check", LOOP_BUGS]) == 1
+    assert main(["check", *LOOP_SEEDS, "contracts/iou"]) == 1
     assert capsys.readouterr().out.splitlines() == [
-        f"BAD_LOOP emit   {LOOP_BUGS}/{name}.vy  {bugs}" for name, bugs in BUG_PROGRAMS.items()
-    ] + [B23]
+        f"BAD_LOOP emit   {path}  {planted_bug(path)}" for path in LOOP_SEED_PATHS
+    ] + ["OK       emit   contracts/iou/iou.vy"]
 
 
-def test_check_damlc_ends_each_bad_loop_line_with_damlcs_verdict(
-    dpm, fixture_forge, monkeypatch, capsys
-):
+def test_check_damlc_ends_each_bad_loop_line_with_damlcs_verdict(dpm, monkeypatch, capsys):
+    plant(monkeypatch, loop_bugs)
     monkeypatch.chdir(PROJECT)
-    no_foldl_a = "damlc rejects: Variable not in scope: foldlA"
-    no_field = (
-        "damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ "
-        "on value of type ‘Update"
-    )
-    verdicts = [no_foldl_a, no_foldl_a, no_field, no_field, "damlc builds", "damlc builds"]
+    # After "foldlA", damlc names the type it wants, which depends on the loop.
+    verdicts = {"L1": "damlc rejects: Variable not in scope: foldlA", "L3": "damlc builds"}
+    bugs = {path: planted_bug(path) for path in LOOP_SEED_PATHS}
 
-    assert main(["check", "--damlc", LOOP_BUGS]) == 1
-    assert capsys.readouterr().out.splitlines() == [
-        f"BAD_LOOP emit   {LOOP_BUGS}/{name}.vy  {bugs}; {verdict}"
-        for (name, bugs), verdict in zip(BUG_PROGRAMS.items(), verdicts, strict=True)
-    ] + [B23]
+    assert main(["check", "--damlc", *LOOP_SEEDS, "contracts/iou"]) == 1
+    *bad, ok = capsys.readouterr().out.splitlines()
+    for line, (path, bug) in zip(bad, bugs.items(), strict=True):
+        verdict = verdicts[bug.partition(":")[0]]
+        assert line.startswith(f"BAD_LOOP emit   {path}  {bug}; {verdict}"), line
+    assert ok == "OK       emit   contracts/iou/iou.vy"
 
 
 def test_a_seed_with_a_loop_bug_stops_the_run_before_input_1(tmp_path, monkeypatch, capsys):
+    plant(monkeypatch, loop_bugs)
     monkeypatch.chdir(PROJECT)
     reports = tmp_path / "reports"
+    seed = "contracts/loop_give/loop_give.vy"
 
-    status = main(
-        ["run", f"{LOOP_BUGS}/b17_create_append.vy", "--count", "10", "--reports", str(reports)]
-    )
+    status = main(["run", "contracts/loop_give", "--count", "10", "--reports", str(reports)])
     out, err = capsys.readouterr()
     assert (status, out) == (2, "")
     assert err == (
-        f"damlforge-fuzz run: the loop check finds a bug in seed {LOOP_BUGS}/b17_create_append.vy: "
-        "L1: foldlA at Daml line 20 with no import DA.Action\n"
+        f"damlforge-fuzz run: the loop check finds a bug in seed {seed}: {planted_bug(seed)}\n"
     )
     assert not reports.exists()
 
 
-def test_check_shows_each_saved_loop_group_again(loop_run, capsys):
+def test_check_shows_each_saved_loop_group_again(loop_run, planted, capsys):
     _, _, folder, doc = loop_run
 
     for group in loop_groups(doc):
@@ -569,7 +588,9 @@ def test_check_shows_each_saved_loop_group_again(loop_run, capsys):
         )
 
 
-def test_check_damlc_shows_each_saved_loop_group_again_with_its_verdict(loop_run_damlc, capsys):
+def test_check_damlc_shows_each_saved_loop_group_again_with_its_verdict(
+    loop_run_damlc, planted, capsys
+):
     _, _, folder, doc = loop_run_damlc
 
     for group in loop_groups(doc):
