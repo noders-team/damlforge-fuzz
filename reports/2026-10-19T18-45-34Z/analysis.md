@@ -245,7 +245,6 @@ def broken(a: int) -> int:
 forge has an error for this case, `DF1219: `b` is not defined`.
 But it uses it only for a name before a dot, such as `b` in `b.x`.
 So `return b` passes, and damlc reports `Variable not in scope: b`.
-`docs/progress.md` recorded this gap in unit 1.
 Groups `d02` (`len(x)`), `d13` (a renamed parameter), and `d25` (a parameter of another choice) are the same gap.
 
 ### The other bad Daml groups

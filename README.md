@@ -1,6 +1,6 @@
 # damlforge-fuzz
 
-A mutation fuzzer for `forge`, the DamlForge compiler that compiles `.vy` contracts to Daml.
+A mutation fuzzer for `forge`, the [DamlForge](https://github.com/noders-team/damlforge) compiler that compiles `.vy` contracts to Daml.
 
 damlforge-fuzz takes a few seed contracts and makes small random edits to them.
 It compiles each edited copy with `forge`, groups the crashes, shrinks each crashing input to a few lines, and writes a report.
@@ -36,7 +36,7 @@ With `--compare`, it also runs the `.vy` code and the Daml that `forge` writes o
 | Requirement | Version | Needed for |
 | --- | --- | --- |
 | Python | 3.11 or newer | All commands |
-| DamlForge (`forge`) | Tested with `0.0.7` and `0.0.11` | All commands |
+| DamlForge (`damlforge` on PyPI) | The latest release | All commands |
 | dpm and the Daml SDK | SDK 3.5.2 | Only `--damlc`, `--compare`, and the second [seed check](#check-the-seeds) |
 
 ## Install
@@ -50,35 +50,30 @@ python3 -m venv .venv
 
 ### Install DamlForge
 
+DamlForge is on PyPI as `damlforge`.
+It installs the `forge` command and the `forge` Python package.
+
 > [!WARNING]
 > Do not run `pip install forge`.
 > The `forge` package on PyPI is a different project, a Django tool.
 
-The DamlForge repository, `noders-team/damlforge`, is private.
-For the release wheel and the git install, you need GitHub access to that repository.
-Use one of these three methods:
+Use one of these two methods:
 
-- Install the release wheel. The latest release is `v0.0.7`.
+- Install the latest release from PyPI:
 
   ```sh
-  gh release download v0.0.7 --repo noders-team/damlforge --pattern '*.whl'
-  pip install forge-0.0.7-py3-none-any.whl
-  ```
-
-- Install from git:
-
-  ```sh
-  pip install "forge @ git+https://github.com/noders-team/damlforge.git@v0.0.7"
+  pip install damlforge
   ```
 
 - Install a local DamlForge checkout that you change. Your changes apply without a reinstall.
 
   ```sh
-  pip install -e /path/to/damlforge
+  git clone https://github.com/noders-team/damlforge.git
+  pip install -e ./damlforge
   ```
 
-To check the install, run `forge --help`.
-The output lists the `daml`, `dar`, `json`, and `stubs` commands.
+To check the install, run `forge --version` and `forge --help`.
+The help lists the `daml`, `dar`, `json`, and `stubs` commands.
 
 ### Install damlforge-fuzz
 
@@ -107,7 +102,6 @@ dpm install 3.5.2
 
 If your shell does not find `dpm` after the install, add `~/.dpm/bin` to your `PATH`.
 `forge dar` looks for `dpm` on your `PATH` and then in `~/.dpm/bin`.
-These commands are the same as in `.devcontainer/post-create.sh` in the DamlForge repository.
 
 ## Quick start
 
@@ -264,7 +258,7 @@ To repeat a run from before a seed was added, name the seeds of that run.
 A change to the [change rules](#change-rules) also changes the copies.
 To repeat a run from before such a change, use a commit from before it.
 For example, the report in `reports/2026-10-19T18-45-34Z` comes from a run with the ten rules from before the loop rules, on the four seeds that `contracts/` had before the loop seeds.
-At commit `e99695a`, this command makes the same copies:
+At commit `6c267a2`, this command makes the same copies:
 
 ```sh
 damlforge-fuzz run contracts/asset_proposal contracts/ballot contracts/escrow contracts/iou --damlc --count 20000 --random-seed 1
@@ -899,7 +893,7 @@ The five loop rules never take a string or a comment for code.
 > [!IMPORTANT]
 > Every change to the rules or the word lists changes some copies of every random seed.
 > So a result from before the change and a result from after it do not use the same copies.
-> Record the change in `docs/progress.md`.
+> Say so in the commit message.
 
 To add a word, add it at the end of its list in `mutate.py`.
 
@@ -1065,7 +1059,7 @@ damlforge-fuzz/
 ├── contracts/            the seeds, one Daml project for each seed, and the calls files
 ├── reports/              the reports that are kept in git
 ├── bugs/                 hand-written programs that prove forge bugs, with their write-ups
-├── docs/                 design notes and the progress log
+├── docs/                 mutation.html, a page that shows how the change rules edit the seeds
 └── pyproject.toml
 ```
 

@@ -2,7 +2,7 @@
 
 This analysis reads the report in this folder.
 The run was `damlforge-fuzz run contracts/import_qualified contracts/import_sibling --damlc --count 20000 --random-seed 1`, on DamlForge `v0.0.12-4-g5da0584` (`forge_version` 0.0.13), dpm 1.0.22, and the Daml SDK 3.5.2.
-The fuzzer was the code of unit 12 (imports), at commit c1d3dd4 on `main`.
+The fuzzer was the code of unit 12 (imports), at commit ee09114 on `main`.
 
 The run made 20000 inputs from the four import seeds: 3176 OK, 10783 rejected, 0 crash, and 6041 skipped.
 The report has 0 crash groups, 21 bad Daml groups (`d01` to `d21`), and 0 import or loop groups.
@@ -20,7 +20,7 @@ In short: B is valid code that forge cannot compile right (bad Daml, or a DF err
 - The import bugs b28, b29, and b30 are fixed on 0.0.13: forge gives `DF1213`. This analysis does not list them.
 - The fuzzer found no import crash in 60000 inputs. forge now rejects most bad imports with a DF error.
 
-The state of each bug was checked again on 2026-10-26, on damlforge-fuzz `main` at `d314edc`, with the same forge.
+The state of each bug was checked again on 2026-10-26, on damlforge-fuzz `main` at `2407b00`, with the same forge.
 
 ## The open bugs b31 to b35
 
@@ -70,7 +70,7 @@ The write-up, with the damlc proof and two controls, is in [`bugs/imports/`](../
 This run did not find b33, for two reasons.
 First, the import seeds use `M.Note` as a type, so when a rule changes `import models as M` to `import models`, b32 rejects the input before it gets to a call.
 Second, the import check `I1` looked only at upper-case qualifiers.
-After this run, `I1` finds b33 (commit `89b059e`), and the seed `contracts/import_call/` imports only functions (commit `f376bd6`).
+After this run, `I1` finds b33 (commit `911d335`), and the seed `contracts/import_call/` imports only functions (commit `6003c7b`).
 `run contracts/import_call --damlc --count 20000 --random-seed 1` finds b33 as group `i01`, first at input 4413, shrunk to 3 lines.
 
 ### b34: a value set in a loop and used after it
@@ -175,6 +175,6 @@ Two small points:
 
 ## Changes to the fuzzer after this run
 
-- `contracts/loop_verify` has no `@ledger_effect`, which 0.0.13 rejects (commit `35436aa`).
+- `contracts/loop_verify` has no `@ledger_effect`, which 0.0.13 rejects (commit `18dbd97`).
 - `bugs/imports/` has only the open import bugs b31 to b33.
-- `I1` finds b33, and the seed `contracts/import_call/` reaches it (commits `89b059e` and `f376bd6`).
+- `I1` finds b33, and the seed `contracts/import_call/` reaches it (commits `911d335` and `6003c7b`).

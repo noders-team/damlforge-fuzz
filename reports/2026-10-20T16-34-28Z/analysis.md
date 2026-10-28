@@ -2,7 +2,7 @@
 
 This analysis reads the report in this folder.
 The run was `damlforge-fuzz run contracts/loop_* --damlc --compare --count 20000 --random-seed 1`, on DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11) and the Daml SDK 3.5.2.
-The fuzzer was the code of unit 11 (`--compare`), at commit 1fab1bc on `main`.
+The fuzzer was the code of unit 11 (`--compare`), at commit 79b9115 on `main`.
 
 The run made 20000 inputs from the five loop seeds: 4092 OK, 10205 rejected, 1643 crash, and 4060 skipped.
 The report has 12 crash groups (`g01` to `g12`), 33 bad Daml groups (`d01` to `d33`), 5 loop groups (`l01` to `l05`), and 3 run groups (`r01` to `r03`).

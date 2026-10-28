@@ -8,3 +8,6 @@ contracts/**/*.map.json
 __pycache__/
 *.egg-info/
 .pytest_cache/
+.DS_Store
+# Local work notes. They are not published.
+internal/

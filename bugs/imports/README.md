@@ -1,9 +1,9 @@
 # Import bugs b31 to b33
 
 This folder has three small programs that show import bugs in DamlForge `5da0584` (`forge_version` 0.0.13).
-All three were checked again on 2026-10-26, on damlforge-fuzz `main` at `d314edc`.
+All three were checked again on 2026-10-26, on damlforge-fuzz `main` at `2407b00`.
 The numbers continue b01 to b30 ([the 20000-input analysis](../../reports/2026-10-19T18-45-34Z/analysis.md), [the loop report analysis](../../reports/2026-10-20T16-34-28Z/analysis.md), [the 0.0.13 import analysis](../../reports/2026-10-26T07-07-10Z/analysis.md)), and the categories are the categories of the 20000-input analysis.
-The import bugs b28, b29, and b30 are fixed on 0.0.13, so this folder no longer has them. Commit `4c620da` has their last programs and write-ups.
+The import bugs b28, b29, and b30 are fixed on 0.0.13, so this folder no longer has them. Commit `205b074` has their last programs and write-ups.
 
 The fuzzer found b31 with the import seeds and the import check (unit 12).
 b33 was found by hand on 0.0.13, and the fuzzer now finds it too, with the seed `contracts/import_call/`.
