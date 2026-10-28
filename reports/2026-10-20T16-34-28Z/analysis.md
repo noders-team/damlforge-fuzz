@@ -2,7 +2,7 @@
 
 This analysis reads the report in this folder.
 The run was `damlforge-fuzz run contracts/loop_* --damlc --compare --count 20000 --random-seed 1`, on DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11) and the Daml SDK 3.5.2.
-The fuzzer was the code of unit 11 (`--compare`), at commit 79b9115 on `main`.
+The fuzzer was the code at commit 79b9115 on `main`, which has `--compare`.
 
 The run made 20000 inputs from the five loop seeds: 4092 OK, 10205 rejected, 1643 crash, and 4060 skipped.
 The report has 12 crash groups (`g01` to `g12`), 33 bad Daml groups (`d01` to `d33`), 5 loop groups (`l01` to `l05`), and 3 run groups (`r01` to `r03`).
@@ -28,7 +28,7 @@ If DamlForge decides that the last declaration wins, as in Python, these bugs ar
 
 The loop groups and the run groups fit categories A, B, and E.
 They still get [a section of their own](#loop-and-run-groups), for two reasons.
-First, the loop work is the customer's priority.
+First, the loop bugs had the highest priority in this work.
 Second, one loop group or run group can hold more than one bug.
 A loop group holds all the inputs with the same first loop check and the same damlc verdict.
 A run group holds all the inputs with the same kind of difference and the same first loop check.
@@ -94,7 +94,7 @@ Two programs show a known bug in a new form. `b12_declaration_after_loop.vy` is 
 ## Every loop bug found so far
 
 This table has one row for each loop bug that the fuzzer or the analyses found, also when this report has no group for it.
-b25 and b26 are not loop bugs. They are here because unit 11 found them with `--compare`, together with b23 and b24.
+b25 and b26 are not loop bugs. They are here because the runs with `--compare` found them, together with b23 and b24.
 
 | Bug | Code shape | What happens | damlc | Category | Groups in this report | Found by |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -116,7 +116,7 @@ Why five of these bugs have no group of their own in this report:
 - **b21.** b21 is in this report, but it has no group of its own and no run group. [b21 in this report](#b21-in-this-report) tells why.
 - **b24.** `--compare` does not compare a call of a plain function that fails in Python, because the Daml `error` of a failed `assert` stops Daml Script. So b24 shows only through a choice that calls the function. In the loop seeds, the only plain function that a choice calls is `total_of` in `loop_pure.vy`, and its loop adds to `total`, so it has an accumulator.
 - **b25.** One input of this run has two `signatory` lines with different values, input 11691. Its first line is `signatory: list[Party] = [p]`, and the template has no `p`. forge keeps that line, and damlc rejects the Daml with `Variable not in scope: p`, so the input is in the bad Daml group `d08`. A b25 input that damlc builds needs two changes: a copy of the `signatory` line, and a valid change to one of the two copies.
-- **b26.** No `OK` input of this run has two methods with one name in a template. Unit 11 found b25 in its runs with the random seeds 2 and 3, and b26 in a prototype run with random seed 1 (input 4172).
+- **b26.** No `OK` input of this run has two methods with one name in a template. Other runs with `--compare` found b25, with the random seeds 2 and 3. An early version of `--compare` found b26, with random seed 1 (input 4172).
 
 All seven programs in [`analysis/loops/`](analysis/loops/README.md) still give their bug.
 This is the real output. The command exits with 1:
@@ -228,7 +228,7 @@ Each group below names its bug, why the bug matters for a contract, and whether 
 The run is deterministic, so a script can make its inputs again.
 `python scripts/show_inputs.py contracts/loop_* --count 20000 --random-seed 1` prints 188 `BAD_LOOP` results, the same number as the report.
 That script prints the seed, the change rules, and the changed lines of each input.
-For this analysis, a script in the scratch folder of the session called `fuzz()` with the same arguments, wrote the 188 inputs into files, and ran `check --damlc` on them.
+For this analysis, a script that is not in the repository called `fuzz()` with the same arguments, wrote the 188 inputs into files, and ran `check --damlc` on them.
 That script is not in the repository. These are its counts by first check and seed:
 
 | First check | Group | Inputs | Seeds and shapes |
@@ -448,15 +448,15 @@ In forge's Daml, each step takes the branch `pure ()`, and the `create` is in th
 In the 17th input, 17191, a `return` line is the first statement of the loop body. forge writes `pure ()` and drops the statements after it (`forge/codegen/emit.py:439` to `440`), so again neither side makes a contract.
 
 The run with random seed 4 shows b21 as a run group.
-This is the real output, with `<scratch>` in place of the scratch folder of the session:
+This is the real output, with `<tmp>` in place of a temporary folder:
 
 ```
-$ damlforge-fuzz run contracts/loop_* --compare --count 5000 --random-seed 4 --reports <scratch>/u11-rs4-check
+$ damlforge-fuzz run contracts/loop_* --compare --count 5000 --random-seed 4 --reports <tmp>/rs4-check
 random seed 4, 5 seeds, 5000 inputs
 random seed 4: 5000 inputs, 1058 OK, 2480 rejected, 405 crash, 1057 skipped
 loops: 44 inputs with loop findings, 4 loop groups
 compare: 380 inputs compared, 1 differs, 1 run group
-12 crash groups, report in <scratch>/u11-rs4-check/2026-10-20T16-38-47Z
+12 crash groups, report in <tmp>/rs4-check/2026-10-20T16-38-47Z
 ```
 
 Its group `r01` is `contracts` in `Iou.GiveAll #1`, with the first loop check `L3`.
@@ -583,7 +583,7 @@ forge gives DF1205 for such a method when it calls `fetch`, as [the b20 write-up
 The cause is `lower_template` (`forge/ir/lower.py:651`).
 Its loop over the template body (`lower.py:678` to `694`) keeps `__init__`, `@checked_fetch`, `@view`, and `@choice` methods. It drops every other method with no error.
 
-Unit 11 recorded b26 as "of two `def` with the same name, forge keeps the first".
+The first note on b26 said "of two `def` with the same name, forge keeps the first".
 This analysis found a different rule. forge keeps the choice:
 
 - With a `@choice` method `Fee` and then a plain method `Fee`, forge writes the choice. Python keeps the last `def`, the plain method. This is [`analysis/b26_choice_and_method_same_name.vy`](analysis/b26_choice_and_method_same_name.vy). With `amount` 100.0, `check --compare` gives `result in Iou.Fee #1: returns 2.0`, and the Daml choice returns `self.amount / (100.0 : Decimal)`, which is 1.0. damlc builds the Daml, so this form is category F.
@@ -591,7 +591,7 @@ This analysis found a different rule. forge keeps the choice:
 - With two `@choice` methods `Fee`, forge writes both, and damlc reports `Multiple declarations of ‘Fee’`.
 - With two top-level `def fee`, forge writes both, and damlc reports `Duplicate type signatures for ‘fee’`. Group `d26` is this case.
 
-The last three results are from programs in the scratch folder of the session, with `check --damlc`.
+The last three results are from programs that are not in the repository, with `check --damlc`.
 
 ## Category C: valid code, forge crashes
 
@@ -717,7 +717,7 @@ The form of b26 with a choice and a plain method of one name is also category F.
 
 ## Priority
 
-1. **b21, b22, b23, b24.** A loop loses a `return`, a `create`, or an `assert`. damlc builds the Daml, and the contract does the wrong thing. b23 and b24 show only with `--compare`. These are the customer's loop bugs.
+1. **b21, b22, b23, b24.** A loop loses a `return`, a `create`, or an `assert`. damlc builds the Daml, and the contract does the wrong thing. b23 and b24 show only with `--compare`. These are the loop bugs with the highest priority.
 2. **b25, b26 (same name), b01, b02.** The contract does something other than what the code says, and no tool gives an error. b25 can drop a signatory or an `ensure` condition.
 3. **b27.** A user can easily write `amount > 0`, and forge's own check step accepts it.
 4. **b17, b18, b19, b26, b03, b04, b05, b06 to b08.** Normal, correct code fails in damlc. The loop bugs b17 to b19 come first.
@@ -733,8 +733,8 @@ The form of b26 with a choice and a plain method of one name is also category F.
 - "A wrong result" means a difference from Python on the calls of the calls file, with the stand-ins of `--compare`. For b25 and b26, that assumes that the last declaration wins, as in Python.
 - The categories of b25, b26, and b27 depend on design choices of DamlForge. If the last declaration must win, b25 and the same-name form of b26 are category A. If `.vy` code must write `Decimal(0)`, b27 is category E.
 - Category E assumes that forge must catch these errors, because forge already has DF codes for several of them.
-- The programs in `analysis/` are small programs written by hand. The fuzzer found groups `d23` and `g12`, and unit 11 found b24 to b26. The programs show that a user can write the same code.
-- The census script and the programs for the last three results of b26 are in the scratch folder of the session, not in the repository. `scripts/show_inputs.py` gives the same inputs.
+- The programs in `analysis/` are small programs written by hand. The fuzzer found groups `d23` and `g12`, and the runs with `--compare` found b24 to b26. The programs show that a user can write the same code.
+- The census script and the programs for the last three results of b26 are not in the repository. `scripts/show_inputs.py` gives the same inputs.
 
 ## Repeat this analysis
 

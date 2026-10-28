@@ -594,7 +594,7 @@ With `@ledger_effect` above `total_of`, forge writes `foldlA` and the import, an
 
 - All output is from DamlForge `v0.0.10-1-gc11b5fe` (`forge_version` 0.0.11) and Daml SDK 3.5.2. No other version was tried, except that DamlForge `v0.0.7` writes the same Daml for b22 and b23.
 - b19 and b20 also happen with no loop. They are in this folder because the loop work found them.
-- The runtime patches for b19, b21, b22, and b23 ran in a scratch session. They test a cause. They are not fixes.
+- The runtime patches for b19, b21, b22, and b23 ran outside the repository. They test a cause. They are not fixes.
 - Category E for b20 assumes that forge must give DF1205 for a top-level function, as its language reference says.
 
 ## Repeat these checks

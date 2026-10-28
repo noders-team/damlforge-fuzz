@@ -2,7 +2,7 @@
 
 This analysis reads the report in this folder.
 The run was `damlforge-fuzz run contracts/import_qualified contracts/import_sibling --damlc --count 20000 --random-seed 1`, on DamlForge `v0.0.12-4-g5da0584` (`forge_version` 0.0.13), dpm 1.0.22, and the Daml SDK 3.5.2.
-The fuzzer was the code of unit 12 (imports), at commit ee09114 on `main`.
+The fuzzer was the code at commit ee09114 on `main`, the commit that added the import seeds and the import check.
 
 The run made 20000 inputs from the four import seeds: 3176 OK, 10783 rejected, 0 crash, and 6041 skipped.
 The report has 0 crash groups, 21 bad Daml groups (`d01` to `d21`), and 0 import or loop groups.

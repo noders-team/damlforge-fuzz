@@ -23,13 +23,13 @@ Each program is not fuzzer output: it was written by hand to prove the bug.
 | Bug | Category | Code | What happens | Report groups |
 | --- | --- | --- | --- | --- |
 | [b01](#b01-list-assignment-does-nothing) | A | `xs[0] = 0` on a list | The assignment does nothing | `d10` |
-| [b02](#b02-map-assignment-does-nothing) | A | `votes[voter] = True` on a `GenMap` | The assignment does nothing | (found in unit 1) |
+| [b02](#b02-map-assignment-does-nothing) | A | `votes[voter] = True` on a `GenMap` | The assignment does nothing | (found by hand, while the seeds were written) |
 | [b03](#b03-empty-observer-list) | B | `observer: list[Party] = []` | damlc: ambiguous type | `d16` |
 | [b04](#b04-module-level-constant) | B | `limit = 10` at the top of the file | damlc: `limit` not in scope | `d17` |
 | [b05](#b05-upper-case-local-name) | B | `FEE = 10` in a function | damlc: reads `FEE` as a constructor | `d14`, `d15`, `d29` |
-| [b06](#b06-to-b08-genmap-operations) | B | `voter in votes` on a `GenMap` | damlc: type error | (found in unit 1) |
-| [b07](#b06-to-b08-genmap-operations) | B | `voter not in votes` on a `GenMap` | damlc: type error | (found in unit 1) |
-| [b08](#b06-to-b08-genmap-operations) | B | `votes.values()` on a `GenMap` | damlc: no field `values` | (found in unit 1) |
+| [b06](#b06-to-b08-genmap-operations) | B | `voter in votes` on a `GenMap` | damlc: type error | (found by hand, while the seeds were written) |
+| [b07](#b06-to-b08-genmap-operations) | B | `voter not in votes` on a `GenMap` | damlc: type error | (found by hand, while the seeds were written) |
+| [b08](#b06-to-b08-genmap-operations) | B | `votes.values()` on a `GenMap` | damlc: no field `values` | (found by hand, while the seeds were written) |
 | [b09](#b09-and-b10-bitwise-operators) | C | `a >> 1` (also `<<`, `&`, `\|`, `^`) | `KeyError` at `forge/ir/lower.py:289` | `g07` |
 | [b10](#b09-and-b10-bitwise-operators) | C | `~a` | `KeyError` at `forge/ir/lower.py:298` | `g14` |
 | [b11](#b11-loop-with-a-total-and-an-early-return) | C | a `for` loop that adds to a total and can `return` early | `CompilerPanic` at `forge/codegen/emit.py:596` | `g11` |
@@ -150,7 +150,7 @@ Groups `d14` (a struct field named `Party`), `d15` (a loop variable named `Decim
 
 ### b06 to b08: GenMap operations
 
-Unit 1 found these bugs while it wrote the seeds, and they are still in `v0.0.10`:
+These bugs were found by hand while the seeds were written, and they are still in `v0.0.10`:
 
 - `voter in votes` becomes a list `elem`, which needs a list, not a map.
 - `voter not in votes` has the same problem.
@@ -287,3 +287,10 @@ cd reports/2026-10-19T18-45-34Z/analysis/runtime && dpm test
 ```
 
 The first command needs DamlForge and dpm. The second command needs dpm and the Daml SDK 3.5.2.
+
+The report in this folder comes from a run with the ten change rules from before the loop rules, on the four seeds that `contracts/` had before the loop seeds.
+At damlforge-fuzz commit `6c267a2`, this command makes the same inputs:
+
+```sh
+damlforge-fuzz run contracts/asset_proposal contracts/ballot contracts/escrow contracts/iou --damlc --count 20000 --random-seed 1
+```
