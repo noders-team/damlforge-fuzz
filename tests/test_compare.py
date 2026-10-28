@@ -15,10 +15,9 @@
 
 """The compare step: calls files, the Python side, `check --compare`, and `run --compare`.
 
-Tests that run Daml need the `dpm` fixture. The tests that name a difference
-that one forge version makes, such as the lost assert of b23 in LOOP_BUGS,
-also need `fixture_forge`, as the bug programs in test_loopcheck.py do. The run
-tests check relations, so they hold on any forge version.
+Tests that run Daml need the `dpm` fixture. The tests of a difference plant
+it in forge's Daml (planted_daml.py), so they hold on any forge version. The
+run tests check relations.
 """
 
 import contextlib
@@ -30,7 +29,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACTS, LOOP_BUGS, PROJECT, hide_dpm
+from conftest import CONTRACTS, PROJECT, hide_dpm
+from planted_daml import hidden_loop_helpers, plant, swapped_equality
 
 from damlforge_fuzz import (
     Count,
@@ -256,14 +256,20 @@ FINAL_LINE = re.compile(r"random seed \d+: \d+ inputs, (\d+) OK, .*")
 REPORT_LINE = re.compile(r"(\d+) crash groups?, report in (.+)")
 
 
+def runs_differently(daml):
+    """swapped_equality, and hidden_loop_helpers, so that a difference can also have a loop check."""
+    return hidden_loop_helpers(swapped_equality(daml))
+
+
 @pytest.fixture(scope="module")
 def compare_run(dpm, tmp_path_factory):
-    """`run contracts/loop_* --count 136 --random-seed 251 --compare`: status,
-    stdout lines, run folder, report.json."""
+    """`run contracts/loop_* --count 136 --random-seed 251 --compare`, with runs_differently
+    planted in the inputs: status, stdout lines, run folder, report.json."""
     reports = tmp_path_factory.mktemp("reports")
     out = io.StringIO()
     with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
         patch.chdir(PROJECT)
+        plant(patch, runs_differently, spare=sorted(CONTRACTS.glob("loop_*/*.vy")))
         status = main(
             ["run", *LOOP_SEEDS, "--count", "136", "--random-seed", "251", "--compare"]
             + ["--reports", str(reports)]
@@ -328,8 +334,8 @@ def test_each_run_group_folder_is_a_daml_project_whose_test_fails_on_the_call(co
         assert f"c{number}_{script[group['difference']]}" in failed, group["id"]
 
 
-def test_check_compare_prints_bad_run_for_the_bug_programs_and_each_saved_run_group(
-    compare_run, fixture_forge, tmp_path, monkeypatch, capsys
+def test_check_compare_prints_bad_run_for_each_planted_difference_and_each_saved_run_group(
+    compare_run, tmp_path, monkeypatch, capsys
 ):
     _, _, folder, doc = compare_run
     groups = run_groups(doc)
@@ -338,23 +344,25 @@ def test_check_compare_prints_bad_run_for_the_bug_programs_and_each_saved_run_gr
     owner = issuer.replace("[issuer]", "[owner]")
     signed_by_owner = copy_seed(tmp_path / "owner", "loop_many", issuer, owner)
     saved = [folder / group["input_file"] for group in groups]
-    bugs = ["b21_return_in_create_loop", "b22_return_in_inner_loop", "b23_pass_in_loop"]
+    iou = "contracts/iou/iou.vy"
     monkeypatch.chdir(PROJECT)
+    plant(monkeypatch, runs_differently, spare=[same, signed_by_owner, Path(iou)])
 
-    paths = [*(f"{LOOP_BUGS}/{name}.vy" for name in bugs), same, signed_by_owner, "contracts/iou"]
-    paths += saved
+    paths = ["contracts/loop_many", "contracts/loop_pure", "contracts/loop_verify"]
+    paths += [same, signed_by_owner, iou, *saved]
     assert main(["check", "--compare", *map(str, paths)]) == 1
     assert capsys.readouterr().out.splitlines() == [
-        f"BAD_RUN  emit   {LOOP_BUGS}/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: "
-        "returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); "
+        "BAD_RUN  emit   contracts/loop_many/loop_many.vy  result in Iou.Many #1: returns "
+        "[ContractId(Iou(issuer=alice, owner=alice, amount=1.0)), "
+        "ContractId(Iou(issuer=alice, owner=stop, amount=1.0))], makes 2 contracts: "
+        "Iou(issuer=alice, owner=alice, amount=1.0), Iou(issuer=alice, owner=stop, amount=1.0)",
+        "BAD_RUN  emit   contracts/loop_pure/loop_pure.vy  result in has_party #4: returns False; "
         "loop check L3",
-        f"BAD_RUN  emit   {LOOP_BUGS}/b22_return_in_inner_loop.vy  result in first_positive #1: "
-        "returns 3; loop check L3",
-        f"BAD_RUN  emit   {LOOP_BUGS}/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: "
-        "fails: positive",
+        "BAD_RUN  emit   contracts/loop_verify/loop_verify.vy  daml_fails in Iou.Sum #1: "
+        "returns 5.5, makes no contract",
         f"OK       emit   {same}",
         f"OK       emit   {signed_by_owner}",
-        "OK       emit   contracts/iou/iou.vy",
+        f"OK       emit   {iou}",
     ] + [
         f"BAD_RUN  emit   {path}  {g['difference']} in {g['call']}: {g['python']}"
         + ("" if g["loop_check"] is None else f"; loop check {g['loop_check']}")

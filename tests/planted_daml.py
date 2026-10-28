@@ -99,3 +99,8 @@ def crash_or_loop_bugs(daml: str) -> str | None:
     So the inputs of one seed give a crash group and loop groups.
     """
     return None if zlib.crc32(daml.encode()) % 4 == 0 else loop_bugs(daml)
+
+
+def swapped_equality(daml: str) -> str:
+    """Each `==` is `/=`, and each `/=` is `==`. damlc builds it, and it runs differently."""
+    return re.sub(r"==|/=", lambda match: "/=" if match[0] == "==" else "==", daml)
