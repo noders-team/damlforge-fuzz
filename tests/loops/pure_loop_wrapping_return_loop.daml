@@ -2,11 +2,7 @@ module PureLoopWrappingReturnLoop where
 
 find : [[Party]] -> Party -> Bool
 find groups p =
-  let _damlforge_maybe3 = _damlforge_loop1 p groups in
-  case _damlforge_maybe3 of
-    Some _damlforge_early4 -> _damlforge_early4
-    None ->
-      False
+  False
 
 template Iou
   with
@@ -15,19 +11,3 @@ template Iou
     amount : Decimal
   where
     signatory [issuer]
-
-_damlforge_loop2 p [] = None
-_damlforge_loop2 p (o :: _damlforge_rest) =
-  if o == p
-    then
-      Some (Some True)
-    else
-      _damlforge_loop2 p _damlforge_rest
-
-_damlforge_loop1 p [] = None
-_damlforge_loop1 p (g :: _damlforge_rest) =
-  let _damlforge_maybe1 = _damlforge_loop2 p g in
-  case _damlforge_maybe1 of
-    Some _damlforge_early2 -> _damlforge_early2
-    None ->
-      _damlforge_loop1 p _damlforge_rest

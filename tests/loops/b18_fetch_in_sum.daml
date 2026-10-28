@@ -1,7 +1,5 @@
 module B18FetchInSum where
 
-import DA.Action (foldlA)
-
 template Iou
   with
     issuer : Party

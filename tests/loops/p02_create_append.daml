@@ -1,7 +1,5 @@
 module P02CreateAppend where
 
-import DA.Action (foldlA)
-
 template Iou
   with
     issuer : Party

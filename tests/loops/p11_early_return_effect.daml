@@ -17,17 +17,14 @@ template Iou
       controller owner
       do
         let self = this
-        _damlforge_maybe1 <- _damlforge_loop1  cids
-        case _damlforge_maybe1 of
-          Some _damlforge_early2 -> pure _damlforge_early2
-          None -> do
-            pure ((0.0 : Decimal))
-
-_damlforge_loop1 [] = pure None
-_damlforge_loop1 (c :: _damlforge_rest) = do
-  i <- fetch c
-  if i.amount > (100.0 : Decimal)
-    then do
-      pure (Some i.amount)
-    else do
-      _damlforge_loop1  _damlforge_rest
+        _ <-
+          foldlA
+            (\() c -> do
+              i <- fetch c
+              if i.amount > (100.0 : Decimal)
+                then do
+                  pure (i.amount)
+                else do
+                  pure ())
+            () cids
+        pure ((0.0 : Decimal))

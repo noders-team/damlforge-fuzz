@@ -1,7 +1,5 @@
 module P04NestedEffect where
 
-import DA.Action (foldlA)
-
 template Iou
   with
     issuer : Party

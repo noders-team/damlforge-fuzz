@@ -2,11 +2,7 @@ module NestedPure where
 
 first_pos : [[Int]] -> Int
 first_pos xss =
-  let _damlforge_maybe3 = _damlforge_loop1  xss in
-  case _damlforge_maybe3 of
-    Some _damlforge_early4 -> _damlforge_early4
-    None ->
-      0
+  0
 
 template Iou
   with
@@ -16,19 +12,3 @@ template Iou
   where
     signatory [issuer]
     observer [owner]
-
-_damlforge_loop2 [] = None
-_damlforge_loop2 (x :: _damlforge_rest) =
-  if x > 0
-    then
-      Some (Some x)
-    else
-      _damlforge_loop2  _damlforge_rest
-
-_damlforge_loop1 [] = None
-_damlforge_loop1 (xs :: _damlforge_rest) =
-  let _damlforge_maybe1 = _damlforge_loop2  xs in
-  case _damlforge_maybe1 of
-    Some _damlforge_early2 -> _damlforge_early2
-    None ->
-      _damlforge_loop1  _damlforge_rest

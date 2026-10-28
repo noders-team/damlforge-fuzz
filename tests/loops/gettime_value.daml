@@ -37,6 +37,5 @@ template Escrow
       do
         let self = this
         now <- getTime
-        _damlforge_effect1 <- getTime
-        assertMsg "refund is allowed only after the deadline" (now > (_damlforge_effect1.terms).deadline)
+        assertMsg "refund is allowed only after the deadline" (now > ((getTime).terms).deadline)
         create (Payout with payer = self.arbiter, receiver = self.buyer, amount = (self.terms).amount)

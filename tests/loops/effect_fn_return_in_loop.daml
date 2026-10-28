@@ -4,11 +4,17 @@ import DA.Action (foldlA)
 
 first_big : [ContractId Iou] -> Update Decimal
 first_big cids = do
-  _damlforge_maybe1 <- _damlforge_loop1  cids
-  case _damlforge_maybe1 of
-    Some _damlforge_early2 -> pure _damlforge_early2
-    None -> do
-      pure ((0.0 : Decimal))
+  _ <-
+    foldlA
+      (\() c -> do
+        i <- fetch c
+        if i.amount > (1.0 : Decimal)
+          then do
+            pure (i.amount)
+          else do
+            pure ())
+      () cids
+  pure ((0.0 : Decimal))
 
 template Iou
   with
@@ -17,12 +23,3 @@ template Iou
     amount : Decimal
   where
     signatory [issuer]
-
-_damlforge_loop1 [] = pure None
-_damlforge_loop1 (c :: _damlforge_rest) = do
-  i <- fetch c
-  if i.amount > (1.0 : Decimal)
-    then do
-      pure (Some i.amount)
-    else do
-      _damlforge_loop1  _damlforge_rest
