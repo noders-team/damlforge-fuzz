@@ -106,6 +106,11 @@ def bad_daml(daml: str) -> str:
     return daml + '\nplanted : Int\nplanted = "planted"\n'
 
 
+def name_not_in_scope(daml: str) -> str:
+    """Daml that damlc rejects with another error than bad_daml: a name that no module defines."""
+    return daml + "\nplanted : Int\nplanted = notInScope\n"
+
+
 def import_without_its_last_name(daml: str) -> str:
     """I4: an import line with a list of names loses the last one. damlc rejects a use of it."""
     return re.sub(r"^(import [\w.]+ \(.*), [\w']+\)$", r"\1)", daml, flags=re.MULTILINE)

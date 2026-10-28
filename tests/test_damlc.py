@@ -33,8 +33,9 @@ import subprocess
 from pathlib import Path
 
 import forge.semantics.analysis.typecheck
+import planted_daml
 import pytest
-from conftest import CONTRACTS, PROJECT, copy_iou, hide_dpm
+from conftest import CONTRACTS, PROJECT, SEED_FILES, copy_iou, hide_dpm
 from planted_crash import IN_LOWER, IN_RUNS, plant
 
 from damlforge_fuzz import (
@@ -314,16 +315,38 @@ def run(reports, *argv):
     return status, lines, folder, json.loads((folder / "report.json").read_text())
 
 
+def bad_iou_and_ballot(daml):
+    """bad_daml in the Daml of Iou, name_not_in_scope in the Daml of Ballot, no edit in the rest.
+
+    So a run gets two bad Daml groups, each with its own key and first input, on any forge version.
+    """
+    module = re.search(r"^module (\w+) where", daml, re.MULTILINE)[1]
+    if module == "Iou":
+        return planted_daml.bad_daml(daml)
+    if module == "Ballot":
+        return planted_daml.name_not_in_scope(daml)
+    return daml
+
+
+def plant_bad_daml(patch):
+    planted_daml.plant(patch, bad_iou_and_ballot, spare=SEED_FILES)
+
+
 @pytest.fixture(scope="module")
 def runs(dpm, tmp_path_factory):
-    """`run --count 300 --random-seed 1`, with and without --damlc, with the crashes of IN_RUNS."""
+    """`run --count 300 --random-seed 1`, with and without --damlc.
+
+    With the crashes of IN_RUNS, and with bad_iou_and_ballot planted.
+    """
     reports = tmp_path_factory.mktemp("reports")
     with pytest.MonkeyPatch.context() as patch:
         plant(patch, *IN_RUNS)
+        plant_bad_daml(patch)
         with_damlc = run(reports, "--count", "300", "--random-seed", "1", "--damlc")
         without = run(reports, "--count", "300", "--random-seed", "1")
-    assert [g for g in with_damlc[3]["groups"] if g["kind"] == "bad_daml"], (
-        "300 inputs should give forge Daml that damlc rejects at least once"
+    seeds = {group["seed"] for group in bad_groups(with_damlc[3])}
+    assert {"contracts/iou/iou.vy", "contracts/ballot/ballot.vy"} <= seeds, (
+        "300 inputs should give the bad Daml planted in Iou and in Ballot"
     )
     return with_damlc, without
 
@@ -413,7 +436,8 @@ def test_each_bad_daml_folder_builds_with_the_same_error(runs, dpm):
         assert (first.message, first.line) == (group["message"], group["daml_line"]), group["id"]
 
 
-def test_each_saved_bad_daml_input_is_bad_daml_again_with_check(runs, capsys):
+def test_each_saved_bad_daml_input_is_bad_daml_again_with_check(runs, monkeypatch, capsys):
+    plant_bad_daml(monkeypatch)
     (_, _, folder, doc), _ = runs
 
     for group in bad_groups(doc):
