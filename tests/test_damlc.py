@@ -17,10 +17,10 @@
 
 The damlc messages below are SDK 3.5.2's, the SDK in contracts/*/daml.yaml,
 not results of one forge version. No test names a count or a key that one
-forge version gives. The bad Daml comes from a hand-written module, or from a
-forge bug the test plants. The crashes are planted too (planted_crash.py).
-Tests that build need the `dpm` fixture, which skips them when dpm or the SDK
-is missing.
+forge version gives. The bad Daml comes from a hand-written module, or the
+test plants it in the Daml that forge writes (planted_daml.py). The crashes are
+planted too (planted_crash.py). Tests that build need the `dpm` fixture, which
+skips them when dpm or the SDK is missing.
 """
 
 import contextlib
@@ -32,7 +32,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import forge.semantics.analysis.typecheck
 import planted_daml
 import pytest
 from conftest import CONTRACTS, PROJECT, SEED_FILES, copy_iou, hide_dpm
@@ -45,9 +44,7 @@ from damlforge_fuzz import (
     LoopBug,
     LoopCheck,
     Ok,
-    Seed,
     build_daml,
-    compile_and_sort,
     input_sequence,
 )
 from damlforge_fuzz.cli import main
@@ -203,32 +200,17 @@ def test_check_damlc_refuses_a_file_without_daml_yaml(write_vy, capsys):
 
 @pytest.fixture
 def planted(tmp_path, monkeypatch):
-    """A copy of iou.vy that uses str(self.amount), with forge made to write `str` for it.
-
-    DamlForge v0.0.10 writes `show self.amount`, which damlc builds; v0.0.7
-    writes `str self.amount` on its own, which is the bug the plan's check
-    looks for. On a forge with the conversion table, the test plants that bug
-    by making the table say "str" for Decimal.
-    """
-    if hasattr(forge.semantics.analysis.typecheck, "_TEXT_CONVERSION"):
-        conversions = forge.semantics.analysis.typecheck._TEXT_CONVERSION[1]
-        monkeypatch.setitem(conversions, "Decimal", "str")
-    path = copy_iou(
-        tmp_path / "iou",
-        '"split amount must be less than the full amount"',
-        "str(self.amount)",
-        count=1,
-    )
-    seed = Seed.load(path)
-    ok = compile_and_sort(seed.text, seed)
-    assert isinstance(ok, Ok) and re.search(r"assertMsg \(?str self\.amount", ok.daml), ok
-    return path
+    """A copy of iou.vy with one more function, and bad_daml planted in all Daml but iou.vy's."""
+    planted_daml.plant(monkeypatch, planted_daml.bad_daml, spare=[CONTRACTS / "iou" / "iou.vy"])
+    not_spared = "def one() -> int:\n    return 1\n"
+    return copy_iou(tmp_path / "iou", "@template", not_spared + "\n\n@template", count=1)
 
 
-def test_plan_check_1_str_amount_is_bad_daml(dpm, planted, capsys):
+def test_plan_check_1_daml_that_damlc_rejects_is_bad_daml(dpm, planted, capsys):
     assert main(["check", "--damlc", str(planted)]) == 1
-    [line] = capsys.readouterr().out.splitlines()
-    assert line.startswith(f"BAD_DAML emit   {planted}  Variable not in scope: str : "), line
+    assert capsys.readouterr().out == (
+        f"BAD_DAML emit   {planted}  Couldn't match expected type ‘Int’ with actual type ‘Text’\n"
+    )
 
 
 def test_plan_check_2_the_seeds_build(dpm, monkeypatch, capsys):
