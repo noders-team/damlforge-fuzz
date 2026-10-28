@@ -1,22 +1,32 @@
 # damlforge-fuzz
 
-A mutation fuzzer for `forge`, the [DamlForge](https://github.com/noders-team/damlforge) compiler that compiles `.vy` contracts to Daml.
+damlforge-fuzz is a fuzzer for `forge`, the compiler of [DamlForge](https://github.com/noders-team/damlforge).
+forge compiles `.vy` contracts to Daml. A `.vy` contract uses Python syntax.
 
-damlforge-fuzz takes a few seed contracts and makes small random edits to them.
-It compiles each edited copy with `forge`, groups the crashes, shrinks each crashing input to a few lines, and writes a report.
-It also checks the loops in the Daml that `forge` writes, and reports the loops that `forge` translated wrongly.
-With `--damlc`, it also builds the Daml that `forge` writes, and reports the Daml that the Daml compiler rejects.
-With `--compare`, it also runs the `.vy` code and the Daml that `forge` writes on the same data, and reports the Daml that does not do what the `.vy` code does.
+The fuzzer makes small random changes to seed contracts, and compiles each changed copy with `forge`.
+It finds four kinds of forge bugs:
+
+- forge crashes with a Python error.
+- forge writes a wrong loop or a wrong import in the Daml. The fuzzer finds these bugs in the Daml text, without a Daml compiler.
+- forge writes Daml that the Daml compiler, `damlc`, rejects. To find these bugs, use the option `--damlc`.
+- forge writes Daml that does not do what the `.vy` code does. To find these bugs, use the option `--compare`. It runs the `.vy` code in Python and the Daml with Daml Script, on the same data.
+
+The fuzzer puts the bugs into groups and writes a report.
+For a crash, a wrong loop, or a wrong import, it also cuts the input down to a few lines.
+
+The work on damlforge-fuzz found 35 DamlForge bugs. [Bugs found](#bugs-found) lists them.
 
 ## Contents
 
 - [Install](#install)
 - [Quick start](#quick-start)
+- [Bugs found](#bugs-found)
 - [Guides](#guides)
   - [Fuzz one area of forge](#fuzz-one-area-of-forge)
   - [Fuzz your own DamlForge checkout](#fuzz-your-own-damlforge-checkout)
   - [Find Daml that damlc rejects](#find-daml-that-damlc-rejects)
   - [Compare the Daml with the .vy code](#compare-the-daml-with-the-vy-code)
+  - [Write a calls file](#write-a-calls-file)
   - [See a group again](#see-a-group-again)
   - [Shrink a file](#shrink-a-file)
   - [Repeat a run](#repeat-a-run)
@@ -39,33 +49,23 @@ With `--compare`, it also runs the `.vy` code and the Daml that `forge` writes o
 
 ## Install
 
-| Requirement | Version | Needed for |
-| --- | --- | --- |
-| Python | 3.11 or newer | All commands |
-| DamlForge (`damlforge` on PyPI) | The latest release | All commands |
-| dpm and the Daml SDK | SDK 3.5.2 | Only `--damlc`, `--compare`, and the second [seed check](#check-the-seeds) |
-
-### Create a virtual environment
+You need Python 3.11 or newer.
+Run these commands:
 
 ```sh
+git clone https://github.com/noders-team/damlforge-fuzz.git
+cd damlforge-fuzz
 python3 -m venv .venv
 . .venv/bin/activate
-```
-
-### Install damlforge-fuzz
-
-Run this command from the root of this repository:
-
-```sh
 pip install -e ".[test]"
 ```
 
-This command also installs the latest release of DamlForge from PyPI, the `damlforge` package.
+The last command also installs the latest release of DamlForge from PyPI, the `damlforge` package.
 DamlForge has the `forge` command and the `forge` Python package.
 The `test` extra also installs pytest.
+If DamlForge is already installed, `pip install -U damlforge` gets the latest release.
 
-To check the install, run `forge --version` and `forge --help`.
-The help lists the `daml`, `dar`, `json`, and `stubs` commands.
+To check the install, run `damlforge-fuzz --help` and `forge --version`.
 
 ### Install dpm and the Daml SDK
 
@@ -88,7 +88,7 @@ If your shell does not find `dpm` after the install, add `~/.dpm/bin` to your `P
 
 Run these commands from the root of this repository.
 
-1. Compile the seeds. Every seed must be `OK`.
+1. Compile the seeds:
 
    ```
    $ damlforge-fuzz check contracts
@@ -109,6 +109,10 @@ Run these commands from the root of this repository.
    OK       emit   contracts/loop_verify/loop_verify.vy
    ```
 
+   Every line must start with `OK`.
+   If a line does not start with `OK`, the seed does not fit your DamlForge version.
+   Report it in the GitHub issues of this repository.
+
 2. Fuzz the seeds for 60 seconds:
 
    ```
@@ -119,26 +123,137 @@ Run these commands from the root of this repository.
    0 crash groups, report in reports/2026-10-28T10-31-07Z
    ```
 
+   Your numbers are different.
+   They depend on the random seed, the speed of your computer, and your DamlForge version.
+   [Output of run](#output-of-run) tells what each line means.
+
 3. Open `report.md` in the report folder.
-   It has one table row for each group, and the shrunk input of each crash group and each loop group.
+   It has one table row for each group, and the shrunk input of each crash group, loop group, and import group.
+   If the run found no group, the report has only the counts.
+
+4. Check the input of a group again:
+
+   ```sh
+   damlforge-fuzz check reports/<run>/groups/<group>
+   ```
+
+   `<run>` is the name of the report folder that the run printed.
+   `<group>` is a group folder in its `groups/` folder, such as `i01`.
+   Each line gives the same result as `report.md`.
+   The command also checks the shrunk input in `shrunk/`.
+
+5. Repeat the run.
+   Use the random seed from the first line of step 2, and the number of inputs from the second line:
+
+   ```sh
+   damlforge-fuzz run --count 81396 --random-seed 535031
+   ```
+
+   The run makes the same inputs in the same order.
+   With the same DamlForge, it also prints the same counts.
+   [Repeat a run](#repeat-a-run) tells more.
+
+## Bugs found
+
+The work on damlforge-fuzz found 35 DamlForge bugs, b01 to b35.
+Most of them came from fuzz runs and the analysis of their reports.
+Some were found by hand, for example while the seeds were written.
+Each bug has a write-up with a short program that shows it.
+The write-ups are in the analyses of the reports in [`reports/`](reports/).
+The write-ups of b28 to b30 are in commit `205b074`, because DamlForge fixed these bugs before the last analysis.
+
+The status is from the DamlForge 0.0.12 and 0.0.13 releases, checked on 2026-10-28.
+On these releases, 23 bugs are fixed, 9 are open, and 3 changed but are still wrong.
+To check a bug on your own DamlForge, run `check` on its program, as [Check a bug on your DamlForge](#check-a-bug-on-your-damlforge) shows.
+
+| Bug | Code | What forge did | Kind | Status |
+| --- | --- | --- | --- | --- |
+| [b01](reports/2026-10-19T18-45-34Z/analysis.md#b01-list-assignment-does-nothing) | `xs[0] = 0` on a list | The assignment does nothing. | A | Fixed in 0.0.12 |
+| [b02](reports/2026-10-19T18-45-34Z/analysis.md#b02-map-assignment-does-nothing) | `votes[voter] = True` on a `GenMap` | The assignment does nothing. | A | Open |
+| [b03](reports/2026-10-19T18-45-34Z/analysis.md#b03-empty-observer-list) | `observer: list[Party] = []` | damlc: ambiguous type. | B | Changed in 0.0.13 |
+| [b04](reports/2026-10-19T18-45-34Z/analysis.md#b04-module-level-constant) | `limit = 10` at the top of the file | forge drops the line. damlc: `limit` is not in scope. | B | Changed in 0.0.13 |
+| [b05](reports/2026-10-19T18-45-34Z/analysis.md#b05-upper-case-local-name) | An upper-case name, such as `FEE = 10` | damlc reads the name as a constructor. | B | Open |
+| [b06](reports/2026-10-19T18-45-34Z/analysis.md#b06-to-b08-genmap-operations) | `voter in votes` on a `GenMap` | damlc: type error. | B | Open |
+| [b07](reports/2026-10-19T18-45-34Z/analysis.md#b06-to-b08-genmap-operations) | `voter not in votes` on a `GenMap` | damlc: type error. | B | Open |
+| [b08](reports/2026-10-19T18-45-34Z/analysis.md#b06-to-b08-genmap-operations) | `votes.values()` on a `GenMap` | damlc: no field `values`. | B | Fixed in 0.0.12 |
+| [b09](reports/2026-10-19T18-45-34Z/analysis.md#b09-and-b10-bitwise-operators) | `a >> 1`, and also `<<`, `&`, `\|`, `^` | forge crashes with `KeyError`. | C | Fixed in 0.0.12 |
+| [b10](reports/2026-10-19T18-45-34Z/analysis.md#b09-and-b10-bitwise-operators) | `~a` | forge crashes with `KeyError`. | C | Fixed in 0.0.13 |
+| [b11](reports/2026-10-19T18-45-34Z/analysis.md#b11-loop-with-a-total-and-an-early-return) | A loop that adds to a total and can `return` early | forge crashes with `CompilerPanic`. | C | Fixed in 0.0.12 |
+| [b12](reports/2026-10-19T18-45-34Z/analysis.md#b12-local-declaration-without-a-value) | `b: int` in a function | forge crashes with `CompilerPanic`. | C | Fixed in 0.0.12 |
+| [b13](reports/2026-10-19T18-45-34Z/analysis.md#b13-import-inside-a-function) | `import math` in a function | forge crashes with `CompilerPanic`. | C | Fixed in 0.0.12 |
+| [b14](reports/2026-10-19T18-45-34Z/analysis.md#b14-typo-in-the-forge-import) | `from forge.modles import ...` | forge crashes with `ModuleNotFoundError`, not a DF error. | D | Fixed in 0.0.12 |
+| [b15](reports/2026-10-19T18-45-34Z/analysis.md#b15-wrong-indent-level) | A line that goes back to a wrong indent level | forge crashes with `IndentationError`, not a DF error. | D | Fixed in 0.0.12 |
+| [b16](reports/2026-10-19T18-45-34Z/analysis.md#b16-unknown-name) | `return b` with no `b` | No DF error. damlc: `b` is not in scope. | E | Fixed in 0.0.13 |
+| [b17](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b17-create-inside-append-loses-the-import) | `cids.append(create(...))` in a loop in a choice | forge writes `foldlA` with no import. | B | Fixed in 0.0.12 |
+| [b18](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b18-fetch-inside-a-sum-loses-the-import) | `total = total + fetch(c).amount` in a loop in a choice | forge writes `foldlA` with no import. | B | Fixed in 0.0.12 |
+| [b19](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b19-fetch-in-an-if-test-stays-in-a-pure-foldl) | `if fetch(c).amount > ...:` in a loop in a choice | `fetch` stays in a pure `foldl`. damlc: type error. | B | Fixed in 0.0.12 |
+| [b20](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b20-a-top-level-function-gets-no-df1205-check) | `fetch(c)` in a top-level function without `@ledger_effect` | No DF1205 error. damlc: type error. | E | Fixed in 0.0.12 |
+| [b21](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b21-return-in-the-loop-works-as-continue) | `return` in a loop of a choice with a ledger action or an `assert` | The `return` works as `continue`. | A | Fixed in 0.0.12 |
+| [b22](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b22-return-in-an-inner-loop-removes-both-loops) | `return` in an inner loop of a function | forge writes no code for the loops. | A | Fixed in 0.0.12 |
+| [b23](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b23-pass-drops-the-rest-of-its-block) | `pass` in a block | forge drops the statements after the `pass`. | A | Fixed in 0.0.12 |
+| [b24](reports/2026-10-20T16-34-28Z/analysis.md#b24-a-loop-in-a-plain-function-loses-its-asserts) | A loop in a plain function whose body is not one `assert` | forge writes no code for the loop, so its asserts are lost. | A | Fixed in 0.0.12 |
+| [b25](reports/2026-10-20T16-34-28Z/analysis.md#b25-a-second-signatory-observer-or-ensure-line-is-lost) | Two `signatory`, `observer`, or `ensure` lines in a template | forge keeps the first line and drops the second. | F | Fixed in 0.0.12 |
+| [b26](reports/2026-10-20T16-34-28Z/analysis.md#b26-a-template-method-that-is-not-a-choice-is-lost) | A method without `@choice` in a template | forge drops the method with no error. | B, F | Changed in 0.0.12 |
+| [b27](reports/2026-10-20T16-34-28Z/analysis.md#b27-an-int-literal-next-to-a-decimal) | `amount > 0` with a `Decimal` `amount` | forge writes `0`, an `Int` in Daml. damlc: type error. | B | Fixed in 0.0.12 |
+| [b28](https://github.com/noders-team/damlforge-fuzz/blob/205b074/bugs/imports/README.md#b28-a-relative-import-crashes) | `from . import models` | forge crashes with `AttributeError`. | C | Fixed in 0.0.13 |
+| [b29](https://github.com/noders-team/damlforge-fuzz/blob/205b074/bugs/imports/README.md#b29-an-aliased-import-of-a-missing-forge-module-crashes) | `import forge.math as m`, and an enum | forge crashes with `ModuleNotFoundError`. | C | Fixed in 0.0.13 |
+| [b30](https://github.com/noders-team/damlforge-fuzz/blob/205b074/bugs/imports/README.md#b30-a-lower-case-module-alias-gives-bad-daml) | `import models as m`, then `m.double(x)` | forge writes `import qualified Models as m`. damlc: parse error. | B | Fixed in 0.0.13 |
+| [b31](reports/2026-10-26T07-07-10Z/analysis.md#b31-a-qualified-enum-value-is-rejected) | `import models as M`, then `M.Kind.CASH` | forge rejects valid code with DF1213. | B | Open |
+| [b32](reports/2026-10-26T07-07-10Z/analysis.md#b32-a-plain-module-import-cannot-name-a-type) | `import models`, then `models.Note` as a type | forge rejects valid code with DF1213. | B | Open |
+| [b33](reports/2026-10-26T07-07-10Z/analysis.md#b33-a-plain-module-import-gives-bad-daml-for-a-call) | `import models`, then `models.double(x)` | forge writes `models.double x`. damlc: `models` is not in scope. | B | Open |
+| [b34](reports/2026-10-26T07-07-10Z/analysis.md#b34-a-value-set-in-a-loop-and-used-after-it) | `note = fetch(cid)` in a loop, then `note.lot.amount` after it | forge writes `fromSome x.lot`. damlc: no such field. | B | Open |
+| [b35](reports/2026-10-26T07-07-10Z/analysis.md#b35-a-template-with-the-name-of-an-enum-value) | `class Kind(Enum): CASH`, and `@template class CASH` | damlc: two declarations of `CASH`. | B | Open |
+
+The three changed bugs:
+
+- b03: forge now rejects the valid empty observer list, with DF1201.
+- b04: forge now gives DF1219, which says that `limit` is not defined. But the top of the file defines `limit`.
+- b26: forge now rejects a template method that is not a choice, with DF1233. For a helper method, DamlForge must decide whether that is a fix.
+
+The kinds of bugs:
+
+- **A.** Valid code. forge writes Daml that builds, but gives a wrong result. This is the most serious kind.
+- **B.** Valid code. forge writes Daml that damlc rejects, or forge rejects the code.
+- **C.** Valid code. forge crashes.
+- **D.** Wrong code. forge crashes, and gives no DF error.
+- **E.** Wrong code that forge accepts. damlc then rejects the Daml.
+- **F.** Wrong code with one name declared two times. forge keeps one declaration and gives no error.
+
+### Check a bug on your DamlForge
+
+To see if a bug is in your DamlForge, run `check` on its program.
+For example, this is the result for b33 when the bug is there:
+
+```
+$ damlforge-fuzz check reports/2026-10-26T07-07-10Z/analysis/imports/b33_plain_module_import_call.vy
+BAD_IMP  emit   reports/2026-10-26T07-07-10Z/analysis/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models
+```
+
+When the bug is there, the line starts with `BAD_IMP`.
+Another result means that forge changed.
+The write-up of the bug tells what the right result is.
+Some bugs show only with `--damlc` or `--compare`, as their write-ups say.
 
 ## Guides
 
+Each guide shows how to do one task.
+Run the commands from the root of the repository.
+
 ### Fuzz one area of forge
 
-To fuzz only the loop seeds, name their folders:
+To fuzz one area of forge, name the seed folders for that area.
+damlforge-fuzz has no option such as `--loops`.
+For example, this command fuzzes only the loop seeds:
 
 ```sh
 damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1
 ```
 
-damlforge-fuzz has no option such as `--loops`.
-To fuzz one area of forge, name the seed folders for that area.
+[Seeds](#seeds) lists the seed folders.
 
 ### Fuzz your own DamlForge checkout
 
-This step is optional.
-To fuzz a DamlForge checkout that you change, install it in the same virtual environment:
+To fuzz a DamlForge checkout that you change, install it in the virtual environment of damlforge-fuzz:
 
 ```sh
 git clone https://github.com/noders-team/damlforge.git
@@ -153,12 +268,29 @@ Your changes to the checkout apply without a reinstall.
 forge says `OK` when it writes Daml, but the Daml can still be wrong.
 With `--damlc`, `run` and `check` also build the Daml of the `OK` inputs with `damlc`.
 `BAD_DAML` means that forge wrote Daml, but `damlc` rejects that Daml.
-That is a bug in forge: its check stage let through a program that it then translated to wrong Daml.
+That is a bug in forge.
+Its check stage let through a program that it then translated to wrong Daml.
 
 `--damlc` needs dpm and the Daml SDK. [Install dpm and the Daml SDK](#install-dpm-and-the-daml-sdk) shows how to install them.
 
-With `check --damlc`, a file whose Daml `damlc` rejects is `BAD_DAML`.
+To find bad Daml in a run, add `--damlc`:
+
+```sh
+damlforge-fuzz run --damlc --seconds 60
+```
+
+The run prints a `damlc:` line.
+The report has one folder for each group of bad Daml, such as `groups/d01/`.
+
+To check one file, use `check --damlc`.
+A file whose Daml `damlc` rejects is `BAD_DAML`.
 The line ends with the first line of the first `damlc` error.
+For example, this is the result for the program of b35 when the bug is there:
+
+```
+$ damlforge-fuzz check --damlc reports/2026-10-26T07-07-10Z/analysis/b35_template_named_like_enum_value.vy
+BAD_DAML emit   reports/2026-10-26T07-07-10Z/analysis/b35_template_named_like_enum_value.vy  Multiple declarations of ‘CASH’
+```
 
 ### Compare the Daml with the .vy code
 
@@ -170,25 +302,61 @@ Then they compare the results and the contracts that each call creates.
 `BAD_RUN` means that the Daml does not do what the `.vy` code does.
 
 `--compare` needs dpm and the Daml SDK. [Install dpm and the Daml SDK](#install-dpm-and-the-daml-sdk) shows how to install them.
-Only the seeds that have a [calls file](#calls-files) are compared, so you choose the area with the seed folders, as for every run.
 
-With `check --compare`, each `OK` file that has a calls file next to it runs in the same way.
+Only the seeds that have a [calls file](#calls-files) are compared, so you choose the area with the seed folders, as for every run.
+The five loop seeds have a calls file:
+
+```sh
+damlforge-fuzz run contracts/loop_* --compare --count 5000
+```
+
+The run prints a `compare:` line.
+The report has one folder for each run group, such as `groups/r01/`.
+
+To compare one file, use `check --compare`.
+The file needs a calls file next to it.
 A file whose Daml does not do what its `.vy` code does is `BAD_RUN`.
 The line gives the kind of the difference, the call, and what the `.vy` code does in Python.
-`BAD_RUN` comes before `BAD_LOOP`: a file with both prints `BAD_RUN`, and the line ends with its first loop check.
+`BAD_RUN` comes before `BAD_LOOP`.
+A file with both prints `BAD_RUN`, and the line ends with its first loop check.
+
+An `OK` line from `check --compare` does not prove that the Daml does what the `.vy` code does.
+`check --compare` also prints `OK` when it skipped every call of the file, or when `damlc` rejected its test module.
+
+### Write a calls file
+
+A calls file tells `--compare` which functions and choices to call, and with which data.
+[Calls files](#calls-files) gives the format.
+
+1. Make the file next to the `.vy` file of the seed, with the same name and the extension `.calls.yaml`.
+2. Add a call for each function or choice that you want to compare.
+3. Give data where a lost `return`, a lost `assert`, or a lost `create` changes the result.
+   For example, `owners: [alice, stop, bob]` in `contracts/loop_give/loop_give.calls.yaml` makes the loop of `GiveAll` pass `stop`.
+4. Check the calls file with the seed:
+
+   ```sh
+   damlforge-fuzz run contracts/<seed> --compare --count 1
+   ```
+
+   `<seed>` is the folder of the seed.
+   The run checks the calls file against the seed, and runs the calls on the seed itself.
+   If the calls file does not fit the seed, or the Daml of the seed does not do what its `.vy` code does, the run prints one line to stderr and exits with 2.
 
 ### See a group again
 
-To see a crash again, run `check` on the input in the group folder.
+Each group folder of a report has the first input of the group.
+To see the group again, run `check` on the folder:
+
+```sh
+damlforge-fuzz check reports/<run>/groups/<group>
+```
+
+`<run>` is the name of the report folder, and `<group>` is the name of the group folder, such as `g01` or `l01`.
 A folder argument also checks the shrunk input, and the copied sibling files of an import seed, such as `models.vy`.
 
-To see a `damlc` error again without the fuzzer, run `dpm build` in the bad Daml group folder.
-
-To see a loop bug again, run `check` on the input in the loop group folder.
-With `--damlc`, the line also gives the verdict of `damlc`.
-A folder argument also checks the shrunk input.
-
-To see a run difference again, run `check --compare` on the input in the run group folder.
+- For a crash group (`g01`, `g02`, and so on), a loop group (`l01`), or an import group (`i01`), use `check`. With `--damlc`, the line also gives the verdict of `damlc`.
+- For a bad Daml group (`d01`), use `check --damlc`. To see the `damlc` error without the fuzzer, run `dpm build` in the group folder.
+- For a run group (`r01`), use `check --compare`.
 
 To see what the Daml does, without the fuzzer, run `dpm test` in the run group folder.
 The scripts that fail show the difference.
@@ -208,8 +376,15 @@ The left list has the contracts that the Daml of `GiveAll` created. The right li
 
 ### Shrink a file
 
-`run` already shrinks the first input of each crash group and each loop group.
-Use `shrink` for other files.
+`run` already shrinks the first input of each crash group, loop group, and import group.
+Use `shrink` for another file that crashes forge, or that is `BAD_LOOP` or `BAD_IMP`, such as a file that you changed by hand:
+
+```sh
+damlforge-fuzz shrink my_input.vy
+```
+
+`shrink` writes the shrunk file to `shrunk/my_input.vy`, and prints it.
+For any other file, `shrink` exits with 1 and writes nothing.
 [How the shrinker works](#how-the-shrinker-works) tells how the shrinker works.
 
 ### Repeat a run
@@ -232,6 +407,8 @@ A change to the [change rules](#change-rules) also changes the copies.
 To repeat a run from before such a change, use a commit from before it.
 
 ## Reference
+
+The reference gives the commands, their output, and the files that they read and write.
 
 ### Commands
 
@@ -298,6 +475,22 @@ For a file that crashes forge, `--damlc` changes nothing.
 
 ### Output of run
 
+This is the output of a run with `--damlc` and `--compare`:
+
+```
+$ damlforge-fuzz run contracts/loop_* --damlc --compare --count 2000 --random-seed 1
+random seed 1, 5 seeds, 2000 inputs
+random seed 1: 2000 inputs, 290 OK, 1207 rejected, 0 crash, 503 skipped
+damlc: 141 Daml texts, 83 bad, 16 bad Daml groups
+loops: 3 inputs with loop findings, 1 loop group, 0 build with damlc
+compare: 145 inputs compared, 0 differ, 0 run groups
+0 crash groups, report in reports/2026-10-28T11-07-26Z
+```
+
+The numbers depend on your DamlForge version.
+Without `--damlc`, the run prints no `damlc:` line.
+Without `--compare`, it prints no `compare:` line.
+
 The first line prints when the run starts.
 The second line prints when the run has made all the copies:
 
@@ -305,7 +498,7 @@ The second line prints when the run has made all the copies:
 - `skipped`: copies whose changes left the text as it was. The run does not compile them.
 - `OK`, `rejected`, and `crash`: the same [results](#results) as for `check`.
 
-The third line gives the number of `OK` copies with a loop bug or an import bug, and the number of their groups.
+The `loops:` line gives the number of `OK` copies with a loop bug or an import bug, and the number of their groups.
 [Loop check](#loop-check) tells what a loop bug is.
 The last line gives the number of crash groups and the [report](#report-files) folder.
 
@@ -474,8 +667,8 @@ If a folder with that name exists, the run adds `-2`, `-3`, and so on.
 To put the report folders in a different folder, give `--reports DIR`.
 
 Git does not ignore `reports/`.
-Commit the reports that you want to keep, and delete the others.
-The reports in git are in [`reports/`](reports/).
+Delete the report folders that you do not keep, or give `--reports DIR`.
+The reports in git are in [`reports/`](reports/), with the analyses of the bugs that they found.
 
 A report folder has these files.
 The example is the report `reports/2026-10-19T18-45-34Z`.
@@ -612,6 +805,8 @@ The five loop rules never take a string or a comment for code.
 
 ## How it works
 
+This part tells how the fuzzer does its work, and what it cannot find.
+
 ### What a run does
 
 A run has these steps:
@@ -722,6 +917,9 @@ The `shrunk/` folder of a loop group also has the Daml that forge wrote for the 
 
 ### Why the seeds look as they do
 
+Two kinds of seeds have a special form.
+These are the import seeds and the loop seeds.
+
 #### Import seeds
 
 The `contracts/import_*` seeds test forge's imports between `.vy` files.
@@ -748,6 +946,9 @@ When a seed has a second `foldlA` loop, that loop adds the import anyway.
 Then `damlc` builds the Daml, and the fuzzer does not see the bug.
 
 ## Development
+
+This part is for contributors.
+Install damlforge-fuzz as [Install](#install) shows. The `test` extra installs pytest.
 
 ### Run the tests
 
@@ -790,7 +991,7 @@ To check one seed, run the command in the loop yourself, for example `forge dar 
 2. Copy `contracts/iou/daml.yaml` into the new folder, and change its `name` line to `damlforge-fuzz-vault`.
 3. Put the `.vy` file in the new folder.
 4. Run both checks in [Check the seeds](#check-the-seeds).
-5. Optional: to compare the copies of the seed with `--compare`, write its [calls file](#calls-files), such as `contracts/vault/vault.calls.yaml`. `damlforge-fuzz run contracts/vault --compare --count 1` checks the calls file and runs it with the seed.
+5. Optional: to compare the copies of the seed with `--compare`, [write a calls file](#write-a-calls-file) for it.
 
 A seed that fails a check is a bug in the seed.
 Fix the seed before you use it, so that every crash that the fuzzer finds comes from an edit and not from the seed.
