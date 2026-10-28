@@ -73,7 +73,7 @@ BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy 
 A `BAD_RUN` line gives the kind of the difference, the call, and what the `.vy` code does in Python.
 For b23, the second call of `Check` fails in Python on the `assert`, but the Daml runs it (`daml_passes`).
 b17 to b20 have no calls file, and `damlc` rejects their Daml, so they cannot run.
-[Run and compare](../../../../README.md#run-and-compare) in the main README tells more.
+[Compare the Daml with the .vy code](../../../../README.md#compare-the-daml-with-the-vy-code) in the main README tells more.
 [The proof for b21](#the-proof-for-b21), [the proof for b22](#the-proof-for-b22), and [the proof for b23](#the-proof-for-b23) run the code with Daml Script by hand.
 
 ## How forge writes a loop
