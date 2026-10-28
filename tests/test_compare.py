@@ -16,7 +16,7 @@
 """The compare step: calls files, the Python side, `check --compare`, and `run --compare`.
 
 Tests that run Daml need the `dpm` fixture. The tests that name a difference
-that one forge version makes, such as the lost assert of b23 in bugs/loops/,
+that one forge version makes, such as the lost assert of b23 in LOOP_BUGS,
 also need `fixture_forge`, as the bug programs in test_loopcheck.py do. The run
 tests check relations, so they hold on any forge version.
 """
@@ -30,7 +30,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACTS, PROJECT, hide_dpm
+from conftest import CONTRACTS, LOOP_BUGS, PROJECT, hide_dpm
 
 from damlforge_fuzz import (
     Count,
@@ -338,16 +338,16 @@ def test_check_compare_prints_bad_run_for_the_bug_programs_and_each_saved_run_gr
     bugs = ["b21_return_in_create_loop", "b22_return_in_inner_loop", "b23_pass_in_loop"]
     monkeypatch.chdir(PROJECT)
 
-    paths = [*(f"bugs/loops/{name}.vy" for name in bugs), same, signed_by_owner, "contracts/iou"]
+    paths = [*(f"{LOOP_BUGS}/{name}.vy" for name in bugs), same, signed_by_owner, "contracts/iou"]
     paths += saved
     assert main(["check", "--compare", *map(str, paths)]) == 1
     assert capsys.readouterr().out.splitlines() == [
-        "BAD_RUN  emit   bugs/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: "
+        f"BAD_RUN  emit   {LOOP_BUGS}/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: "
         "returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); "
         "loop check L3",
-        "BAD_RUN  emit   bugs/loops/b22_return_in_inner_loop.vy  result in first_positive #1: "
+        f"BAD_RUN  emit   {LOOP_BUGS}/b22_return_in_inner_loop.vy  result in first_positive #1: "
         "returns 3; loop check L3",
-        "BAD_RUN  emit   bugs/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: "
+        f"BAD_RUN  emit   {LOOP_BUGS}/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: "
         "fails: positive",
         f"OK       emit   {same}",
         f"OK       emit   {signed_by_owner}",

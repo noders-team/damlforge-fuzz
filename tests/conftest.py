@@ -22,6 +22,10 @@ import pytest
 PROJECT = Path(__file__).resolve().parents[1]
 CONTRACTS = PROJECT / "contracts"
 SEED_FILES = sorted(CONTRACTS.glob("*/*.vy"))
+LOOP_BUGS = "reports/2026-10-20T16-34-28Z/analysis/loops"
+"""The loop bug programs b17 to b23, in the analysis of the report that found them."""
+IMPORT_BUGS = "reports/2026-10-26T07-07-10Z/analysis/imports"
+"""The import bug programs b31 to b33, in the analysis of the report that found them."""
 
 BITAND = "def f(count: int) -> int:\n    return count & 1\n"
 """Crashes forge in lower: `&` is missing from forge's _BIN_OPS table. `a // b` did too, until DamlForge v0.0.10."""

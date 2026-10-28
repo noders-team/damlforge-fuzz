@@ -2,7 +2,7 @@
 
 This folder has three small programs that show import bugs in DamlForge `5da0584` (`forge_version` 0.0.13).
 All three were checked again on 2026-10-26, on damlforge-fuzz `main` at `2407b00`.
-The numbers continue b01 to b30 ([the 20000-input analysis](../../reports/2026-10-19T18-45-34Z/analysis.md), [the loop report analysis](../../reports/2026-10-20T16-34-28Z/analysis.md), [the 0.0.13 import analysis](../../reports/2026-10-26T07-07-10Z/analysis.md)), and the categories are the categories of the 20000-input analysis.
+The numbers continue b01 to b30 ([the 20000-input analysis](../../../2026-10-19T18-45-34Z/analysis.md), [the loop report analysis](../../../2026-10-20T16-34-28Z/analysis.md), [the 0.0.13 import analysis](../../analysis.md)), and the categories are the categories of the 20000-input analysis.
 The import bugs b28, b29, and b30 are fixed on 0.0.13, so this folder no longer has them. Commit `205b074` has their last programs and write-ups.
 
 The fuzzer found b31 with the import seeds and the import check (unit 12).
@@ -22,22 +22,22 @@ Run all the programs with one command from the repository root.
 This is the real output:
 
 ```
-$ damlforge-fuzz check bugs/imports
-REJECTED check  bugs/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
-REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
-BAD_IMP  emit   bugs/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models
-OK       emit   bugs/imports/models.vy
+$ damlforge-fuzz check reports/2026-10-26T07-07-10Z/analysis/imports
+REJECTED check  reports/2026-10-26T07-07-10Z/analysis/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
+REJECTED check  reports/2026-10-26T07-07-10Z/analysis/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
+BAD_IMP  emit   reports/2026-10-26T07-07-10Z/analysis/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models
+OK       emit   reports/2026-10-26T07-07-10Z/analysis/imports/models.vy
 ```
 
 The command exits with 1.
 With `--damlc`, damlc builds each program's Daml together with forge's Daml of `models.vy`, and proves b33. It needs dpm and the Daml SDK 3.5.2:
 
 ```
-$ damlforge-fuzz check --damlc bugs/imports
-REJECTED check  bugs/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
-REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
-BAD_IMP  emit   bugs/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models; damlc rejects: Variable not in scope: models
-OK       emit   bugs/imports/models.vy
+$ damlforge-fuzz check --damlc reports/2026-10-26T07-07-10Z/analysis/imports
+REJECTED check  reports/2026-10-26T07-07-10Z/analysis/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
+REJECTED check  reports/2026-10-26T07-07-10Z/analysis/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
+BAD_IMP  emit   reports/2026-10-26T07-07-10Z/analysis/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models; damlc rejects: Variable not in scope: models
+OK       emit   reports/2026-10-26T07-07-10Z/analysis/imports/models.vy
 ```
 
 ## b31: a qualified enum value is rejected

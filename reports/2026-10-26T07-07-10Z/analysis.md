@@ -13,7 +13,7 @@ In short: B is valid code that forge cannot compile right (bad Daml, or a DF err
 
 ## Summary
 
-- Five bugs are open on 0.0.13. b31, b32, and b33 are import bugs, and their programs are in [`bugs/imports/`](../../bugs/imports/README.md). b34 and b35 are not import bugs, and their programs are in [`analysis/`](analysis/).
+- Five bugs are open on 0.0.13. b31, b32, and b33 are import bugs, and their programs are in [`analysis/imports/`](analysis/imports/README.md). b34 and b35 are not import bugs, and their programs are in [`analysis/`](analysis/).
 - b31 and b32 are DF1213 rejections of valid code.
 - **b33** is new: after `import models` (no alias), a call `models.double(x)` gives Daml that damlc rejects.
 - **b34** (a loop) and **b35** (a name clash) are new. The import seeds found them, but they are not import bugs.
@@ -28,20 +28,20 @@ Each program was written by hand. It is not fuzzer output.
 
 | Bug | Category | Code | What happens | Program |
 | --- | --- | --- | --- | --- |
-| [b31](#b31-a-qualified-enum-value-is-rejected) | B | `import models as M`, then `M.Kind.CASH` | `DF1213: Uppercase member CASH cannot be selected from an expression` | [`bugs/imports/`](../../bugs/imports/README.md#b31-a-qualified-enum-value-is-rejected) |
-| [b32](#b32-a-plain-module-import-cannot-name-a-type) | B | `import models`, then `models.Note` as a type | `DF1213: No builtin or user-defined type named models.Note` | [`bugs/imports/`](../../bugs/imports/README.md#b32-a-plain-module-import-cannot-name-a-type) |
-| [b33](#b33-a-plain-module-import-gives-bad-daml-for-a-call) | B | `import models`, then `models.double(x)` | forge writes `models.double x`; damlc: `Variable not in scope: models` | [`bugs/imports/`](../../bugs/imports/README.md#b33-a-plain-module-import-gives-bad-daml-for-a-call) |
+| [b31](#b31-a-qualified-enum-value-is-rejected) | B | `import models as M`, then `M.Kind.CASH` | `DF1213: Uppercase member CASH cannot be selected from an expression` | [`analysis/imports/`](analysis/imports/README.md#b31-a-qualified-enum-value-is-rejected) |
+| [b32](#b32-a-plain-module-import-cannot-name-a-type) | B | `import models`, then `models.Note` as a type | `DF1213: No builtin or user-defined type named models.Note` | [`analysis/imports/`](analysis/imports/README.md#b32-a-plain-module-import-cannot-name-a-type) |
+| [b33](#b33-a-plain-module-import-gives-bad-daml-for-a-call) | B | `import models`, then `models.double(x)` | forge writes `models.double x`; damlc: `Variable not in scope: models` | [`analysis/imports/`](analysis/imports/README.md#b33-a-plain-module-import-gives-bad-daml-for-a-call) |
 | [b34](#b34-a-value-set-in-a-loop-and-used-after-it) | B | `note = fetch(cid)` in a loop, then `note.lot.amount` after it | forge writes `fromSome x.lot`; damlc: `nonexistent field` | [`analysis/`](analysis/b34_loop_value_used_after_loop.vy) |
 | [b35](#b35-a-template-with-the-name-of-an-enum-value) | B | `class Kind(Enum): CASH`, and `@template class CASH` | damlc: `Multiple declarations of ‘CASH’` | [`analysis/`](analysis/b35_template_named_like_enum_value.vy) |
 
 This is the real output on `main`, for the two folders:
 
 ```
-$ damlforge-fuzz check --damlc bugs/imports
-REJECTED check  bugs/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
-REJECTED check  bugs/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
-BAD_IMP  emit   bugs/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models; damlc rejects: Variable not in scope: models
-OK       emit   bugs/imports/models.vy
+$ damlforge-fuzz check --damlc reports/2026-10-26T07-07-10Z/analysis/imports
+REJECTED check  reports/2026-10-26T07-07-10Z/analysis/imports/b31_qualified_enum_value.vy  DF1213: Uppercase member `CASH` cannot be selected from an expression; use an enum or module name
+REJECTED check  reports/2026-10-26T07-07-10Z/analysis/imports/b32_plain_module_import_type.vy  DF1213: No builtin or user-defined type named `models.Note` (return type of `same`)
+BAD_IMP  emit   reports/2026-10-26T07-07-10Z/analysis/imports/b33_plain_module_import_call.vy  I1: models. at Daml line 7 with no import that binds models; damlc rejects: Variable not in scope: models
+OK       emit   reports/2026-10-26T07-07-10Z/analysis/imports/models.vy
 ```
 
 ```
@@ -53,19 +53,19 @@ BAD_DAML emit   reports/2026-10-26T07-07-10Z/analysis/b35_template_named_like_en
 ### b31: a qualified enum value is rejected
 
 forge rejects `M.Kind.CASH` after `import models as M`, with a message that is not correct: `M.Kind` is an enum name, not an expression.
-The write-up is in [`bugs/imports/`](../../bugs/imports/README.md#b31-a-qualified-enum-value-is-rejected).
+The write-up is in [`analysis/imports/`](analysis/imports/README.md#b31-a-qualified-enum-value-is-rejected).
 The run made 13 inputs of this kind, with three import forms: `import models as M`, `import models as Lib`, and `import models` (`models.Kind.CASH`).
 
 ### b32: a plain module import cannot name a type
 
 forge rejects `models.Note` as a type after `import models`, but accepts `M.Note` after `import models as M`.
-The write-up is in [`bugs/imports/`](../../bugs/imports/README.md#b32-a-plain-module-import-cannot-name-a-type).
+The write-up is in [`analysis/imports/`](analysis/imports/README.md#b32-a-plain-module-import-cannot-name-a-type).
 The run made 18 inputs with this error, but most of them are correct rejections, such as `M.float` or `M.set`.
 
 ### b33: a plain module import gives bad Daml for a call
 
 After `import models`, forge writes the call `models.double(x)` as `models.double x`. A Daml qualifier must be a module name, so damlc rejects it.
-The write-up, with the damlc proof and two controls, is in [`bugs/imports/`](../../bugs/imports/README.md#b33-a-plain-module-import-gives-bad-daml-for-a-call).
+The write-up, with the damlc proof and two controls, is in [`analysis/imports/`](analysis/imports/README.md#b33-a-plain-module-import-gives-bad-daml-for-a-call).
 
 This run did not find b33, for two reasons.
 First, the import seeds use `M.Note` as a type, so when a rule changes `import models as M` to `import models`, b32 rejects the input before it gets to a call.
@@ -176,5 +176,5 @@ Two small points:
 ## Changes to the fuzzer after this run
 
 - `contracts/loop_verify` has no `@ledger_effect`, which 0.0.13 rejects (commit `18dbd97`).
-- `bugs/imports/` has only the open import bugs b31 to b33.
+- `reports/2026-10-26T07-07-10Z/analysis/imports/` has only the open import bugs b31 to b33.
 - `I1` finds b33, and the seed `contracts/import_call/` reaches it (commits `911d335` and `6003c7b`).

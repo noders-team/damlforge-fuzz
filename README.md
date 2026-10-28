@@ -388,19 +388,19 @@ It runs on each `OK` input of `check` and `run`, and it does not need `damlc`.
 An input that fails a check `L1` to `L4` is `BAD_LOOP`.
 The checks `I1` to `I4` are the import check, in `src/damlforge_fuzz/importcheck.py`. They read the import lines of forge's Daml and the `.vy` text, and an input that fails one is `BAD_IMP`. Their groups are `i01`, `i02`, ..., next to the loop groups `l01`, `l02`, ..., and the `loops:` line counts both.
 `check` prints every check that the file fails, and the first bug.
-The seven programs in [`bugs/loops/`](bugs/loops/) each show a forge loop bug.
+The seven programs in [`reports/2026-10-20T16-34-28Z/analysis/loops/`](reports/2026-10-20T16-34-28Z/analysis/loops/) each show a forge loop bug.
 DamlForge has fixed all seven bugs, so a newer DamlForge prints `OK` for each program.
 This is the output of a DamlForge with the bugs:
 
 ```
-$ damlforge-fuzz check bugs/loops
-BAD_LOOP emit   bugs/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
-BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
-BAD_LOOP emit   bugs/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers)
-BAD_LOOP emit   bugs/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers)
-OK       emit   bugs/loops/b23_pass_in_loop.vy
+$ damlforge-fuzz check reports/2026-10-20T16-34-28Z/analysis/loops
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers)
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers)
+OK       emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy
 ```
 
 No loop check finds b23, so its line is `OK`. [Run and compare](#run-and-compare) shows how `--compare` finds it.
@@ -410,14 +410,14 @@ The `damlc` error is usually a result of that cause, such as `Variable not in sc
 `damlc builds` is the most serious case: forge wrote wrong Daml that compiles.
 
 ```
-$ damlforge-fuzz check --damlc bugs/loops
-BAD_LOOP emit   bugs/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
-BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
-BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_LOOP emit   bugs/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
-BAD_LOOP emit   bugs/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
-OK       emit   bugs/loops/b23_pass_in_loop.vy
+$ damlforge-fuzz check --damlc reports/2026-10-20T16-34-28Z/analysis/loops
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
+OK       emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy
 ```
 
 How a run uses the loop check:
@@ -426,8 +426,8 @@ How a run uses the loop check:
   A seed with a loop bug stops the run with exit code 2, because almost every copy would have the same bug:
 
   ```
-  $ damlforge-fuzz run bugs/loops/b17_create_append.vy --count 10
-  damlforge-fuzz run: the loop check finds a bug in seed bugs/loops/b17_create_append.vy: L1: foldlA at Daml line 20 with no import DA.Action
+  $ damlforge-fuzz run reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy --count 10
+  damlforge-fuzz run: the loop check finds a bug in seed reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy: L1: foldlA at Daml line 20 with no import DA.Action
   ```
 
 - After the last copy, the run groups the `OK` copies with a loop bug.
@@ -500,7 +500,7 @@ On a DamlForge with loop bugs, the same command found two run groups.
 Group `r01` was a lost `return` in `has_party`, which the loop check also finds (`L3`).
 Group `r02` was a copy with a `pass` above the `if` in the loop of `GiveAll`.
 forge dropped the `create` after the `pass`, the Daml built, and no loop check failed.
-That is bug b23. [b23 in `bugs/loops/`](bugs/loops/README.md#b23-pass-drops-the-rest-of-its-block) tells its cause.
+That is bug b23. [b23 in `reports/2026-10-20T16-34-28Z/analysis/loops/`](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b23-pass-drops-the-rest-of-its-block) tells its cause.
 
 #### Why `--compare` is an option
 
@@ -590,17 +590,17 @@ With `check --compare`, each `OK` file that has a calls file next to it runs in 
 A file whose Daml does not do what its `.vy` code does is `BAD_RUN`.
 The line gives the kind of the difference, the call, and what the `.vy` code does in Python.
 `BAD_RUN` comes before `BAD_LOOP`: a file with both prints `BAD_RUN`, and the line ends with its first loop check.
-b21, b22, and b23 in `bugs/loops/` have a calls file:
+b21, b22, and b23 in `reports/2026-10-20T16-34-28Z/analysis/loops/` have a calls file:
 
 ```
-$ damlforge-fuzz check --compare bugs/loops
-BAD_LOOP emit   bugs/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
-BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
-BAD_RUN  emit   bugs/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); loop check L3
-BAD_RUN  emit   bugs/loops/b22_return_in_inner_loop.vy  result in first_positive #1: returns 3; loop check L3
-BAD_RUN  emit   bugs/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: fails: positive
+$ damlforge-fuzz check --compare reports/2026-10-20T16-34-28Z/analysis/loops
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); loop check L3
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  result in first_positive #1: returns 3; loop check L3
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: fails: positive
 ```
 
 `--compare` has these limits:
@@ -958,7 +958,7 @@ In each folder, the main file imports from `models.vy`, the file next to it.
 When the `import_form` rule changes its import to `import models`, each call becomes `models.double(...)`, which shows b33.
 In the other two seeds, the same change also makes a type such as `models.Note`, and forge rejects it (b32) before it gets to a call.
 forge reads the sibling file from the disk, so a change to the main file is compiled against the unchanged `models.vy`.
-The import seeds use no qualified enum value, such as `M.Kind.CASH`, because forge rejects it (b31 in `bugs/imports/`).
+The import seeds use no qualified enum value, such as `M.Kind.CASH`, because forge rejects it (b31 in `reports/2026-10-26T07-07-10Z/analysis/imports/`).
 
 ### Loop seeds
 
@@ -1024,7 +1024,7 @@ Fix the seed before you use it, so that every crash that the fuzzer finds comes 
 A seed with a `for` loop has two more rules:
 
 - At most one loop in the file has a ledger action, such as `create` or `fetch`. [Loop seeds](#loop-seeds) tells why.
-- No loop uses the code of a known forge loop bug in `bugs/loops/`. Some of these bugs, such as a `return` in a loop that creates a contract, give Daml that `damlc` builds, so the two checks do not find them. The [loop check](#loop-check) finds them: `damlforge-fuzz check` prints `BAD_LOOP` for such a seed, and `damlforge-fuzz run` stops before the first copy.
+- No loop uses the code of a known forge loop bug in `reports/2026-10-20T16-34-28Z/analysis/loops/`. Some of these bugs, such as a `return` in a loop that creates a contract, give Daml that `damlc` builds, so the two checks do not find them. The [loop check](#loop-check) finds them: `damlforge-fuzz check` prints `BAD_LOOP` for such a seed, and `damlforge-fuzz run` stops before the first copy.
 
 ## Development
 
@@ -1048,8 +1048,7 @@ damlforge-fuzz/
 │   ├── compare_rules.py  compares sets of change rules by what the loop check finds
 │   └── update_loop_fixtures.py  writes the Daml in tests/loops/ again with the installed forge
 ├── contracts/            the seeds, one Daml project for each seed, and the calls files
-├── reports/              the reports that are kept in git
-├── bugs/                 hand-written programs that prove forge bugs, with their write-ups
+├── reports/              the reports that are kept in git, with the analyses of the bugs that they found
 ├── docs/                 mutation.html, a page that shows how the change rules edit the seeds
 └── pyproject.toml
 ```

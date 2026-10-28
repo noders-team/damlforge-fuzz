@@ -39,7 +39,7 @@ Each program was written by hand. It is not fuzzer output.
 
 ## The confirmed bugs
 
-b01 to b16 are from [the first analysis](../2026-10-19T18-45-34Z/analysis.md), and b17 to b23 are from [`bugs/loops/`](../../bugs/loops/README.md).
+b01 to b16 are from [the first analysis](../2026-10-19T18-45-34Z/analysis.md), and b17 to b23 are from [`analysis/loops/`](analysis/loops/README.md).
 Their write-ups are there. This analysis gives only the groups of this report that show them.
 b24 to b27 are new.
 
@@ -59,13 +59,13 @@ b24 to b27 are new.
 | [b14](../2026-10-19T18-45-34Z/analysis.md#b14-typo-in-the-forge-import) | D | `from forge.modles import ...` | `ModuleNotFoundError` at `forge/semantics/analysis/imports.py:108` | `g06` |
 | [b15](../2026-10-19T18-45-34Z/analysis.md#b15-wrong-indent-level) | D | A line that goes back to a wrong indent level | `IndentationError` at `forge/ast/pre_parser.py:304` | `g02` |
 | [b16](../2026-10-19T18-45-34Z/analysis.md#b16-unknown-name) | E | `return b` with no `b` | No DF error. damlc: `b` not in scope | `d04`, `d05`, `d06`, `d08`, `d16`, `d33` |
-| [b17](../../bugs/loops/README.md#b17-create-inside-append-loses-the-import) | B | `cids.append(create(...))` in a loop in a choice | `foldlA` with no import | `l04` |
-| [b18](../../bugs/loops/README.md#b18-fetch-inside-a-sum-loses-the-import) | B | `total = total + fetch(c).amount` in a loop in a choice | `foldlA` with no import | none |
-| [b19](../../bugs/loops/README.md#b19-fetch-in-an-if-test-stays-in-a-pure-foldl) | B | `if fetch(c).amount > ...:` in a loop in a choice | `fetch` stays in the test. damlc: type error | `l02`, and 11 inputs of `l03` |
-| [b20](../../bugs/loops/README.md#b20-a-top-level-function-gets-no-df1205-check) | E | `fetch(c)` in a top-level function without `@ledger_effect` | No DF1205. damlc: type error | `l03` |
-| [b21](../../bugs/loops/README.md#b21-return-in-the-loop-works-as-continue) | A | `return` in a loop of a choice that has a ledger action or an `assert` | `return` works as `continue` | `l05` (a `return` with a value, which damlc rejects), and 17 inputs of `l01` |
-| [b22](../../bugs/loops/README.md#b22-return-in-an-inner-loop-removes-both-loops) | A | `return` in an inner loop of a function | forge writes no code for the loops | `l01`, `r01` |
-| [b23](../../bugs/loops/README.md#b23-pass-drops-the-rest-of-its-block) | A | `pass` in a block | forge drops the statements after the `pass` | `r02`, `r03` |
+| [b17](analysis/loops/README.md#b17-create-inside-append-loses-the-import) | B | `cids.append(create(...))` in a loop in a choice | `foldlA` with no import | `l04` |
+| [b18](analysis/loops/README.md#b18-fetch-inside-a-sum-loses-the-import) | B | `total = total + fetch(c).amount` in a loop in a choice | `foldlA` with no import | none |
+| [b19](analysis/loops/README.md#b19-fetch-in-an-if-test-stays-in-a-pure-foldl) | B | `if fetch(c).amount > ...:` in a loop in a choice | `fetch` stays in the test. damlc: type error | `l02`, and 11 inputs of `l03` |
+| [b20](analysis/loops/README.md#b20-a-top-level-function-gets-no-df1205-check) | E | `fetch(c)` in a top-level function without `@ledger_effect` | No DF1205. damlc: type error | `l03` |
+| [b21](analysis/loops/README.md#b21-return-in-the-loop-works-as-continue) | A | `return` in a loop of a choice that has a ledger action or an `assert` | `return` works as `continue` | `l05` (a `return` with a value, which damlc rejects), and 17 inputs of `l01` |
+| [b22](analysis/loops/README.md#b22-return-in-an-inner-loop-removes-both-loops) | A | `return` in an inner loop of a function | forge writes no code for the loops | `l01`, `r01` |
+| [b23](analysis/loops/README.md#b23-pass-drops-the-rest-of-its-block) | A | `pass` in a block | forge drops the statements after the `pass` | `r02`, `r03` |
 | [b24](#b24-a-loop-in-a-plain-function-loses-its-asserts) | A | A loop in a plain function whose body is not one `assert` alone | forge writes no code for the loop, so every `assert` in it is lost | none |
 | [b25](#b25-a-second-signatory-observer-or-ensure-line-is-lost) | F | Two `signatory`, `observer`, or `ensure` lines in a template | forge keeps the first line and drops the second | none. Input 11691 is in `d08`. |
 | [b26](#b26-a-template-method-that-is-not-a-choice-is-lost) | B, F | A method without `@choice` in a template | forge drops the method with no error | none |
@@ -118,18 +118,18 @@ Why five of these bugs have no group of their own in this report:
 - **b25.** One input of this run has two `signatory` lines with different values, input 11691. Its first line is `signatory: list[Party] = [p]`, and the template has no `p`. forge keeps that line, and damlc rejects the Daml with `Variable not in scope: p`, so the input is in the bad Daml group `d08`. A b25 input that damlc builds needs two changes: a copy of the `signatory` line, and a valid change to one of the two copies.
 - **b26.** No `OK` input of this run has two methods with one name in a template. Unit 11 found b25 in its runs with the random seeds 2 and 3, and b26 in a prototype run with random seed 1 (input 4172).
 
-All seven programs in [`bugs/loops/`](../../bugs/loops/README.md) still give their bug.
+All seven programs in [`analysis/loops/`](analysis/loops/README.md) still give their bug.
 This is the real output. The command exits with 1:
 
 ```
-$ damlforge-fuzz check --damlc --compare bugs/loops
-BAD_LOOP emit   bugs/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
-BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
-BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_RUN  emit   bugs/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); loop check L3
-BAD_RUN  emit   bugs/loops/b22_return_in_inner_loop.vy  result in first_positive #1: returns 3; loop check L3
-BAD_RUN  emit   bugs/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: fails: positive
+$ damlforge-fuzz check --damlc --compare reports/2026-10-20T16-34-28Z/analysis/loops
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); loop check L3
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  result in first_positive #1: returns 3; loop check L3
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: fails: positive
 ```
 
 b24 to b26 are in [the first command](#the-confirmed-bugs).
@@ -220,7 +220,7 @@ For a loop group, it also counted all the inputs of the group. [The census of th
 forge writes a loop as `foldl` when its body has no ledger action, and as `foldlA` when it has one.
 In a choice, an `assert` also counts as a ledger action.
 A loop with an early `return` needs a recursive helper, `_damlforge_loopN`.
-[How forge writes a loop](../../bugs/loops/README.md#how-forge-writes-a-loop) tells the details.
+[How forge writes a loop](analysis/loops/README.md#how-forge-writes-a-loop) tells the details.
 Each group below names its bug, why the bug matters for a contract, and whether damlc catches it.
 
 ### The census of the loop inputs
@@ -420,7 +420,7 @@ daml/Test.daml:c6_fails: failed
 ```
 
 The failure message of `c6_fails` is `Expected submit to fail but it succeeded`.
-This is b23 again, with the same shape as the program `bugs/loops/b23_pass_in_loop.vy`.
+This is b23 again, with the same shape as the program `reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy`.
 For a contract, the choice accepts `[1.0, -1.0]`, so a rule of the contract is gone. damlc builds the Daml.
 
 ### b21 in this report
@@ -578,7 +578,7 @@ class Iou:
 forge writes the choice as `pure (self.fee)`, and it writes no `fee` function.
 damlc rejects it with `Tried to access nonexistent field ‘fee’ with type ‘Decimal’ on value of type ‘Iou’`.
 A method that is not a choice is part of the language.
-forge gives DF1205 for such a method when it calls `fetch`, as [the b20 write-up](../../bugs/loops/README.md#b20-a-top-level-function-gets-no-df1205-check) shows for `Iou.total_of`.
+forge gives DF1205 for such a method when it calls `fetch`, as [the b20 write-up](analysis/loops/README.md#b20-a-top-level-function-gets-no-df1205-check) shows for `Iou.total_of`.
 
 The cause is `lower_template` (`forge/ir/lower.py:651`).
 Its loop over the template body (`lower.py:678` to `694`) keeps `__init__`, `@checked_fetch`, `@view`, and `@choice` methods. It drops every other method with no error.
@@ -742,7 +742,7 @@ Run these commands from the repository root:
 
 ```sh
 damlforge-fuzz check --damlc --compare reports/2026-10-20T16-34-28Z/analysis
-damlforge-fuzz check --damlc --compare bugs/loops
+damlforge-fuzz check --damlc --compare reports/2026-10-20T16-34-28Z/analysis/loops
 damlforge-fuzz check --damlc reports/2026-10-19T18-45-34Z/analysis
 python scripts/show_inputs.py contracts/loop_* --count 20000 --random-seed 1 | grep -c "result: BAD_LOOP"
 damlforge-fuzz run contracts/loop_* --compare --count 5000 --random-seed 4

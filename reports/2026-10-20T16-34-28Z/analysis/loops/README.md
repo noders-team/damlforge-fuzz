@@ -4,12 +4,12 @@ This folder has seven small programs that show loop bugs in DamlForge `v0.0.10-1
 
 > [!NOTE]
 > DamlForge 0.0.12 fixed all seven bugs.
-> On DamlForge 0.0.13, `damlforge-fuzz check --damlc --compare bugs/loops` gives `OK` for each program.
+> On DamlForge 0.0.13, `damlforge-fuzz check --damlc --compare reports/2026-10-20T16-34-28Z/analysis/loops` gives `OK` for each program.
 > The output and the Daml on this page, and the files in `runtime/`, are from DamlForge 0.0.11, the version with the bugs.
 > The programs that call `create` or `fetch` import them from `forge.builtins.daml_lang`, because DamlForge 0.0.13 needs this import.
 > DamlForge 0.0.11 accepts the import and gives the same output.
 
-The numbers continue b01 to b16 in [the analysis of the 20000-input report](../../reports/2026-10-19T18-45-34Z/analysis.md).
+The numbers continue b01 to b16 in [the analysis of the 20000-input report](../../../2026-10-19T18-45-34Z/analysis.md).
 That analysis defines the categories. This folder uses three of them:
 
 | Category | Input | What forge did |
@@ -38,18 +38,18 @@ Run all seven programs with one command from the repository root.
 This is the real output:
 
 ```
-$ damlforge-fuzz check --damlc bugs/loops
-BAD_LOOP emit   bugs/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
-BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
-BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_LOOP emit   bugs/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
-BAD_LOOP emit   bugs/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
-OK       emit   bugs/loops/b23_pass_in_loop.vy
+$ damlforge-fuzz check --damlc reports/2026-10-20T16-34-28Z/analysis/loops
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
+OK       emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy
 ```
 
 The command exits with 1.
-Each `BAD_LOOP` line names the checks of the [loop check](../../README.md#loop-check) that the program fails, and ends with the verdict of `damlc`.
+Each `BAD_LOOP` line names the checks of the [loop check](../../../../README.md#loop-check) that the program fails, and ends with the verdict of `damlc`.
 b21, b22, and b23 are the only programs whose Daml `damlc` builds, because their bugs show only when the code runs.
 The loop check finds b21 and b22 without a run: a `return` in a loop has no early-return helper in the Daml (`L3`).
 No loop check finds b23, so `check` prints `OK` for it.
@@ -60,20 +60,20 @@ b21, b22, and b23 each have a calls file next to them, such as `b23_pass_in_loop
 It needs dpm and the Daml SDK 3.5.2:
 
 ```
-$ damlforge-fuzz check --compare bugs/loops
-BAD_LOOP emit   bugs/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   bugs/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   bugs/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
-BAD_LOOP emit   bugs/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
-BAD_RUN  emit   bugs/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); loop check L3
-BAD_RUN  emit   bugs/loops/b22_return_in_inner_loop.vy  result in first_positive #1: returns 3; loop check L3
-BAD_RUN  emit   bugs/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: fails: positive
+$ damlforge-fuzz check --compare reports/2026-10-20T16-34-28Z/analysis/loops
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
+BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); loop check L3
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  result in first_positive #1: returns 3; loop check L3
+BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: fails: positive
 ```
 
 A `BAD_RUN` line gives the kind of the difference, the call, and what the `.vy` code does in Python.
 For b23, the second call of `Check` fails in Python on the `assert`, but the Daml runs it (`daml_passes`).
 b17 to b20 have no calls file, and `damlc` rejects their Daml, so they cannot run.
-[Run and compare](../../README.md#run-and-compare) in the main README tells more.
+[Run and compare](../../../../README.md#run-and-compare) in the main README tells more.
 [The proof for b21](#the-proof-for-b21), [the proof for b22](#the-proof-for-b22), and [the proof for b23](#the-proof-for-b23) run the code with Daml Script by hand.
 
 ## How forge writes a loop
@@ -177,7 +177,7 @@ The scripts for b21 are:
 Run the test:
 
 ```sh
-cd bugs/loops/runtime
+cd reports/2026-10-20T16-34-28Z/analysis/loops/runtime
 dpm test
 ```
 
@@ -362,21 +362,21 @@ The control passes, because the Daml of `Check` accepts every list.
 To make them again, run these commands from the repository root:
 
 ```sh
-forge daml --no-i bugs/loops/b21_return_in_create_loop.vy -o /tmp/b21
-cp /tmp/b21/B21ReturnInCreateLoop.daml bugs/loops/runtime/daml/
-forge daml --no-i bugs/loops/b22_return_in_inner_loop.vy -o /tmp/b22
-cp /tmp/b22/B22ReturnInInnerLoop.daml bugs/loops/runtime/daml/
-forge daml --no-i bugs/loops/b23_pass_in_loop.vy -o /tmp/b23
-cp /tmp/b23/B23PassInLoop.daml bugs/loops/runtime/daml/
+forge daml --no-i reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy -o /tmp/b21
+cp /tmp/b21/B21ReturnInCreateLoop.daml reports/2026-10-20T16-34-28Z/analysis/loops/runtime/daml/
+forge daml --no-i reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy -o /tmp/b22
+cp /tmp/b22/B22ReturnInInnerLoop.daml reports/2026-10-20T16-34-28Z/analysis/loops/runtime/daml/
+forge daml --no-i reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy -o /tmp/b23
+cp /tmp/b23/B23PassInLoop.daml reports/2026-10-20T16-34-28Z/analysis/loops/runtime/daml/
 ```
 
 forge also writes a source map for each file, such as `B21ReturnInCreateLoop.map.json`. The test does not need them.
 To check that the copies are still what forge writes, run the `forge daml` lines again and compare:
 
 ```sh
-diff /tmp/b21/B21ReturnInCreateLoop.daml bugs/loops/runtime/daml/B21ReturnInCreateLoop.daml
-diff /tmp/b22/B22ReturnInInnerLoop.daml bugs/loops/runtime/daml/B22ReturnInInnerLoop.daml
-diff /tmp/b23/B23PassInLoop.daml bugs/loops/runtime/daml/B23PassInLoop.daml
+diff /tmp/b21/B21ReturnInCreateLoop.daml reports/2026-10-20T16-34-28Z/analysis/loops/runtime/daml/B21ReturnInCreateLoop.daml
+diff /tmp/b22/B22ReturnInInnerLoop.daml reports/2026-10-20T16-34-28Z/analysis/loops/runtime/daml/B22ReturnInInnerLoop.daml
+diff /tmp/b23/B23PassInLoop.daml reports/2026-10-20T16-34-28Z/analysis/loops/runtime/daml/B23PassInLoop.daml
 ```
 
 forge names the module after the file, so `b21_return_in_create_loop.vy` becomes the module `B21ReturnInCreateLoop`.
@@ -602,9 +602,9 @@ With `@ledger_effect` above `total_of`, forge writes `foldlA` and the import, an
 Run these commands from the repository root:
 
 ```sh
-damlforge-fuzz check --damlc bugs/loops
-damlforge-fuzz check --compare bugs/loops
-cd bugs/loops/runtime && dpm test
+damlforge-fuzz check --damlc reports/2026-10-20T16-34-28Z/analysis/loops
+damlforge-fuzz check --compare reports/2026-10-20T16-34-28Z/analysis/loops
+cd reports/2026-10-20T16-34-28Z/analysis/loops/runtime && dpm test
 ```
 
 The first two commands need DamlForge and dpm. The last command needs dpm and the Daml SDK 3.5.2.

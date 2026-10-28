@@ -29,7 +29,7 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import PROJECT, SEED_FILES
+from conftest import LOOP_BUGS, PROJECT, SEED_FILES
 
 from damlforge_fuzz import (
     LOOP_CHECK_TEXT,
@@ -214,15 +214,15 @@ BUG_PROGRAMS = {
     "b22_return_in_inner_loop": "L3: the return in a loop of function first_positive "
     "at Daml line 3 is lost (2 loops with a return, 0 early-return helpers)",
 }
-"""Each bug program in bugs/loops/: every check it fails, and its first bug."""
+"""Each bug program in LOOP_BUGS: every check it fails, and its first bug."""
 
-B23 = "OK       emit   bugs/loops/b23_pass_in_loop.vy"
+B23 = f"OK       emit   {LOOP_BUGS}/b23_pass_in_loop.vy"
 """b23 loses an assert in a loop, but no loop check finds it. Only --compare shows it."""
 
 
 @pytest.mark.parametrize("name", BUG_PROGRAMS)
 def test_each_bug_program_is_ok_with_its_loop_bugs(name, fixture_forge):
-    seed = Seed.load(PROJECT / "bugs" / "loops" / f"{name}.vy")
+    seed = Seed.load(PROJECT / LOOP_BUGS / f"{name}.vy")
     outcome = compile_and_sort(seed.text, seed)
     assert isinstance(outcome, Ok)
     checks = " ".join(bug.check for bug in outcome.loop_bugs)
@@ -529,9 +529,9 @@ def test_check_prints_bad_loop_for_each_bug_program_and_returns_1(
 ):
     monkeypatch.chdir(PROJECT)
 
-    assert main(["check", "bugs/loops"]) == 1
+    assert main(["check", LOOP_BUGS]) == 1
     assert capsys.readouterr().out.splitlines() == [
-        f"BAD_LOOP emit   bugs/loops/{name}.vy  {bugs}" for name, bugs in BUG_PROGRAMS.items()
+        f"BAD_LOOP emit   {LOOP_BUGS}/{name}.vy  {bugs}" for name, bugs in BUG_PROGRAMS.items()
     ] + [B23]
 
 
@@ -546,9 +546,9 @@ def test_check_damlc_ends_each_bad_loop_line_with_damlcs_verdict(
     )
     verdicts = [no_foldl_a, no_foldl_a, no_field, no_field, "damlc builds", "damlc builds"]
 
-    assert main(["check", "--damlc", "bugs/loops"]) == 1
+    assert main(["check", "--damlc", LOOP_BUGS]) == 1
     assert capsys.readouterr().out.splitlines() == [
-        f"BAD_LOOP emit   bugs/loops/{name}.vy  {bugs}; {verdict}"
+        f"BAD_LOOP emit   {LOOP_BUGS}/{name}.vy  {bugs}; {verdict}"
         for (name, bugs), verdict in zip(BUG_PROGRAMS.items(), verdicts, strict=True)
     ] + [B23]
 
@@ -558,12 +558,12 @@ def test_a_seed_with_a_loop_bug_stops_the_run_before_input_1(tmp_path, monkeypat
     reports = tmp_path / "reports"
 
     status = main(
-        ["run", "bugs/loops/b17_create_append.vy", "--count", "10", "--reports", str(reports)]
+        ["run", f"{LOOP_BUGS}/b17_create_append.vy", "--count", "10", "--reports", str(reports)]
     )
     out, err = capsys.readouterr()
     assert (status, out) == (2, "")
     assert err == (
-        "damlforge-fuzz run: the loop check finds a bug in seed bugs/loops/b17_create_append.vy: "
+        f"damlforge-fuzz run: the loop check finds a bug in seed {LOOP_BUGS}/b17_create_append.vy: "
         "L1: foldlA at Daml line 20 with no import DA.Action\n"
     )
     assert not reports.exists()
