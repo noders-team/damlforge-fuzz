@@ -153,11 +153,8 @@ Run these commands from the root of this repository.
 
 ## Found issues
 
-The work on damlforge-fuzz found 35 issues in DamlForge, b01 to b35.
-An issue is a result of forge that looks wrong. The DamlForge team decides whether it is a bug.
-
-[ISSUES.md](ISSUES.md) lists each issue with the code that shows it, what forge did, and a link to its write-up.
-It also gives the status of each issue in the latest DamlForge releases, and tells how to check an issue on your own DamlForge.
+The work on damlforge-fuzz found issues in DamlForge.
+[ISSUES.md](ISSUES.md) lists them, with their status and how to check them on your own DamlForge.
 
 ## Guides
 

@@ -1,12 +1,27 @@
 # Found issues
 
-The work on damlforge-fuzz found 35 issues in DamlForge, b01 to b35.
+The work on damlforge-fuzz found 35 numbered issues in DamlForge, b01 to b35.
 Most of them came from fuzz runs and the analysis of their reports.
 Some were found by hand, for example while the seeds were written.
 An issue is a result of forge that looks wrong. The DamlForge team decides whether it is a bug.
-Each issue has a write-up with a short program that shows it.
+Each numbered issue has a write-up and a proof of concept (PoC).
+The PoC is a short program, written by hand, that shows the issue in code that a user can write.
 The write-ups are in the analyses of the reports in [`reports/`](reports/).
 The write-ups of b28 to b30 are in commit `205b074`, because DamlForge fixed these issues before the last analysis.
+
+The analyses also contain issues with no number.
+Most of them are fuzzer groups of wrong code that a user seldom writes, such as `for row for rows:`.
+For such code, forge crashes (kind D), or forge accepts the code and damlc then rejects the Daml (kind E).
+Nobody wrote a PoC for these groups, so they have no number.
+Each group has the fuzzer input that shows the issue, in the `groups/` folder of its report.
+A crash group also has a shrunk input, and a bad Daml group also has forge's Daml.
+The other issues with no number are short notes in an analysis, for example a field default value that forge drops.
+This file does not list the issues with no number, and gives no status for them.
+These sections of the analyses list them:
+
+- [The 2026-10-19 analysis](reports/2026-10-19T18-45-34Z/analysis.md#category-d-wrong-code-forge-crashes-instead-of-a-df-error), the groups of kinds D and E
+- [The 2026-10-20 analysis](reports/2026-10-20T16-34-28Z/analysis.md#every-group-one-line-each), every group
+- [The 2026-10-26 analysis](reports/2026-10-26T07-07-10Z/analysis.md#the-21-bad-daml-groups), the bad Daml groups
 
 The status is from the DamlForge 0.0.12 and 0.0.13 releases, checked on 2026-10-28.
 On that day, 0.0.13 was the latest release.
