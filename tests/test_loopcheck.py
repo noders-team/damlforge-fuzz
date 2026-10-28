@@ -30,9 +30,10 @@ import json
 import re
 from pathlib import Path
 
+import planted_crash
 import pytest
 from conftest import PROJECT, SEED_FILES
-from planted_daml import crash_or_loop_bugs, loop_bugs, plant
+from planted_daml import loop_bugs, plant
 
 from damlforge_fuzz import (
     LOOP_CHECK_TEXT,
@@ -451,11 +452,11 @@ def test_dpm_failing_while_a_loop_group_shrinks_returns_2_after_the_report(
         raise DamlcUnavailable("dpm build exited with 1")
 
     monkeypatch.setattr("damlforge_fuzz.shrinker.build_daml", dpm_fails)
+    planted_crash.plant(monkeypatch, *planted_crash.IN_RUNS)
 
     status, lines, folder, doc = run(
-        tmp_path, *LOOP_SEEDS, "--count", "150", "--random-seed", "1", "--damlc",
-        edit=crash_or_loop_bugs,
-    )  # fmt: skip
+        tmp_path, *LOOP_SEEDS, "--count", "150", "--random-seed", "1", "--damlc", edit=loop_bugs
+    )
     assert status == 2
     assert capsys.readouterr().err == "damlforge-fuzz run: damlc: dpm build exited with 1\n"
     assert len(lines) == 5
@@ -485,11 +486,12 @@ def test_with_damlc_the_loop_groups_split_the_same_inputs_by_verdict(loop_run, l
         assert first["first_seen"]["input"] == group["first_seen"]["input"]
 
 
-def test_groups_of_each_kind_from_one_seed_have_their_own_folder(dpm, tmp_path):
+def test_groups_of_each_kind_from_one_seed_have_their_own_folder(dpm, tmp_path, monkeypatch):
+    planted_crash.plant(monkeypatch, *planted_crash.IN_RUNS)
     # damlc rejects the planted L1, so its inputs also make a bad Daml group.
     _, _, folder, doc = run(
         tmp_path, "contracts/loop_count", "--count", "100", "--random-seed", "1", "--damlc",
-        edit=crash_or_loop_bugs,
+        edit=loop_bugs,
     )  # fmt: skip
     for group in doc["groups"]:
         assert group["input_file"] == f"groups/{group['id']}/loop_count.vy"

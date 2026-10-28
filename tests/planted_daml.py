@@ -28,7 +28,6 @@ really wrote.
 """
 
 import re
-import zlib
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -39,24 +38,20 @@ from damlforge_fuzz import Seed, compile_and_sort
 
 
 def plant(
-    patch: pytest.MonkeyPatch, edit: Callable[[str], str | None], spare: Iterable[Path] = ()
+    patch: pytest.MonkeyPatch, edit: Callable[[str], str], spare: Iterable[Path] = ()
 ) -> None:
     """Make compile_and_sort see edit(daml) wherever forge writes `daml`.
 
-    When edit returns None, forge crashes in emit instead: generate_daml runs
-    again with no IR, so the exception comes from forge's own code. The Daml
-    of each .vy file in `spare` stays as forge writes it. A run spares its
-    seeds, so its seed checks pass and only the inputs carry the bug.
+    Daml that is the same text as forge's Daml for a .vy file in `spare` stays
+    as forge writes it. A run spares its seeds, so its seed checks pass and
+    only the inputs carry the bug.
     """
     spared = {compile_and_sort(seed.text, seed).daml for seed in map(Seed.load, spare)}
     real = damlforge_fuzz.compiler.generate_daml
 
     def planted(ir, **kwargs):
         daml, source_map = real(ir, **kwargs)
-        if daml in spared:
-            return daml, source_map
-        daml = edit(daml)
-        return real(None, **kwargs) if daml is None else (daml, source_map)
+        return (daml if daml in spared else edit(daml)), source_map
 
     patch.setattr(damlforge_fuzz.compiler, "generate_daml", planted)
 
@@ -91,14 +86,6 @@ def unit_for_no_return(daml: str) -> str:
 def loop_bugs(daml: str) -> str:
     """L1 where the Daml has foldlA, and L3 where it has an early-return helper."""
     return hidden_loop_helpers(no_foldla_import(daml))
-
-
-def crash_or_loop_bugs(daml: str) -> str | None:
-    """A forge crash for one Daml text in four, by a checksum, and loop_bugs for the rest.
-
-    So the inputs of one seed give a crash group and loop groups.
-    """
-    return None if zlib.crc32(daml.encode()) % 4 == 0 else loop_bugs(daml)
 
 
 def bad_daml(daml: str) -> str:
