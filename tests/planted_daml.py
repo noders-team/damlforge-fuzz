@@ -101,6 +101,16 @@ def crash_or_loop_bugs(daml: str) -> str | None:
     return None if zlib.crc32(daml.encode()) % 4 == 0 else loop_bugs(daml)
 
 
+def bad_daml(daml: str) -> str:
+    """Daml that damlc rejects: a definition of the wrong type at the end."""
+    return daml + '\nplanted : Int\nplanted = "planted"\n'
+
+
+def import_without_its_last_name(daml: str) -> str:
+    """I4: an import line with a list of names loses the last one. damlc rejects a use of it."""
+    return re.sub(r"^(import [\w.]+ \(.*), [\w']+\)$", r"\1)", daml, flags=re.MULTILINE)
+
+
 def swapped_equality(daml: str) -> str:
     """Each `==` is `/=`, and each `/=` is `==`. damlc builds it, and it runs differently."""
     return re.sub(r"==|/=", lambda match: "/=" if match[0] == "==" else "==", daml)

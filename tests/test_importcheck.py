@@ -13,11 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The import check (I1 to I4), the import rules, and the import bug programs.
+"""The import check (I1 to I4), the import rules, and `check` and damlc on the import seeds.
 
-The check and rule tests need no forge. The last test runs forge on
-IMPORT_BUGS and shows when forge writes other Daml today, as the loop bug
-programs do.
+The check and rule tests need no forge. The `check` tests plant their import
+bug in forge's Daml (planted_daml.py), so they hold on any forge version.
 """
 
 import random
@@ -25,6 +24,7 @@ import re
 
 import pytest
 from conftest import IMPORT_BUGS, PROJECT
+from planted_daml import bad_daml, import_without_its_last_name, plant
 
 from damlforge_fuzz import LoopCheck, Seed, build_daml, compile_and_sort, find_import_bugs
 from damlforge_fuzz.cli import main
@@ -158,39 +158,50 @@ def test_import_name_deletes_or_adds_a_name_and_import_module_changes_the_path()
     assert moved == {f"import {path} as m" for path in paths}
 
 
-def readme_block(command):
-    readme = (PROJECT / IMPORT_BUGS / "README.md").read_text()
-    return readme.split(f"$ {command}\n", 1)[1].split("```", 1)[0]
+IMPORT_SEEDS = ["contracts/import_call", "contracts/import_qualified"]
+BAD_IMP = (
+    "BAD_IMP  emit   contracts/import_call/import_call.vy  I4: the .vy imports fee from models, "
+    "and the Daml import of Models does not list it"
+)
+OK_LINES = [
+    "OK       emit   contracts/import_call/models.vy",
+    "OK       emit   contracts/import_qualified/import_qualified.vy",
+    "OK       emit   contracts/import_qualified/models.vy",
+]
 
 
-def test_check_prints_each_import_bug_program_as_the_bug_readme_shows(monkeypatch, capsys):
+def test_check_prints_bad_imp_for_a_planted_import_bug_and_returns_1(monkeypatch, capsys):
+    plant(monkeypatch, import_without_its_last_name)
     monkeypatch.chdir(PROJECT)
 
-    assert main(["check", IMPORT_BUGS]) == 1
-    assert capsys.readouterr().out == readme_block(f"damlforge-fuzz check {IMPORT_BUGS}")
+    assert main(["check", *IMPORT_SEEDS]) == 1
+    assert capsys.readouterr().out.splitlines() == [BAD_IMP, *OK_LINES]
 
 
-def test_check_damlc_builds_each_program_with_its_sibling_as_the_bug_readme_shows(
-    dpm, monkeypatch, capsys
+def test_check_damlc_builds_each_program_with_its_sibling(dpm, monkeypatch, capsys):
+    # Without its sibling, damlc would not find module Models, and would not get to `fee`.
+    plant(monkeypatch, import_without_its_last_name)
+    monkeypatch.chdir(PROJECT)
+
+    assert main(["check", "--damlc", *IMPORT_SEEDS]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        f"{BAD_IMP}; damlc rejects: Variable not in scope: fee : Decimal -> Decimal -> Decimal",
+        *OK_LINES,
+    ]
+
+
+def test_damlc_builds_a_text_with_the_siblings_it_imports_and_no_other(
+    dpm, tmp_path, monkeypatch
 ):
-    monkeypatch.chdir(PROJECT)
-
-    assert main(["check", "--damlc", IMPORT_BUGS]) == 1
-    assert capsys.readouterr().out == readme_block(f"damlforge-fuzz check --damlc {IMPORT_BUGS}")
-
-
-def test_damlc_builds_a_text_with_the_siblings_it_imports_and_no_other(dpm, tmp_path):
     folder = tmp_path / "proj"
     folder.mkdir()
     (folder / "daml.yaml").write_bytes((PROJECT / IMPORT_BUGS / "daml.yaml").read_bytes())
     (folder / "models.vy").write_bytes((PROJECT / IMPORT_BUGS / "models.vy").read_bytes())
-    (folder / "broken.vy").write_text(
-        "from forge.models import Decimal\nimport models\n\n\n"
-        "def f(x: Decimal) -> Decimal:\n    return models.double(x)\n"
-    )
+    (folder / "broken.vy").write_text("def f(x: int) -> int:\n    return x\n")
     (folder / "main.vy").write_text(
         "from models import Kind\n\n\ndef f() -> Kind:\n    return Kind.CASH\n"
     )
+    plant(monkeypatch, bad_daml, spare=[folder / "main.vy", folder / "models.vy"])
     seed = Seed.load(folder / "main.vy")
     assert [sibling.module_name for sibling in seed.siblings] == ["Broken", "Models"]
     ok = compile_and_sort(seed.text, seed)
