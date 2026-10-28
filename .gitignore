@@ -11,3 +11,7 @@ __pycache__/
 .DS_Store
 # Local work notes. They are not published.
 internal/
+# A local DamlForge checkout, as the README installs it.
+damlforge/
+# Claude Code settings and agent worktrees.
+.claude/
