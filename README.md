@@ -1049,7 +1049,6 @@ damlforge-fuzz/
 │   └── update_loop_fixtures.py  writes the Daml in tests/loops/ again with the installed forge
 ├── contracts/            the seeds, one Daml project for each seed, and the calls files
 ├── reports/              the reports that are kept in git, with the analyses of the bugs that they found
-├── docs/                 mutation.html, a page that shows how the change rules edit the seeds
 └── pyproject.toml
 ```
 
