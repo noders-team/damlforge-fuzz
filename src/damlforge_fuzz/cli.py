@@ -50,8 +50,13 @@ difference, the call, and what Python does:
 
 BAD_RUN comes first: a file with a run difference prints BAD_RUN, not BAD_LOOP,
 because the run shows the wrong result. The line then ends with the first loop
-check, `; loop check L3`. A file whose Daml damlc rejects cannot run, so it
-prints its line as without --compare, and so does a file with no calls file.
+check, `; loop check L3`. A file with no calls file prints its line as without
+--compare. When the compare step compares nothing, the OK line ends with the
+reason: Python skipped every call, or damlc rejects the Daml or the test module.
+
+    OK       emit   loop_verify.vy  not compared: damlc rejects: Couldn't match ...
+
+With --damlc, a file whose Daml damlc rejects prints BAD_DAML instead.
 
 Exit status: 0 when every file is OK, 1 when any file is REJECTED, CRASH,
 BAD_DAML, BAD_LOOP, BAD_IMP, or BAD_RUN, 2 for a usage error (a missing path, a folder
@@ -279,8 +284,10 @@ def _check(paths: Sequence[Path], damlc: bool, compare: bool) -> int:
             Compared,
             CompareInput,
             DamlcUnavailable,
+            Dropped,
             Ok,
             Seed,
+            Skipped,
             build_daml,
             compile_and_sort,
             run_and_compare,
@@ -330,6 +337,10 @@ def _check(paths: Sequence[Path], damlc: bool, compare: bool) -> int:
             print(_bad_loop_line(seed.path, bugs, source in verdicts, error))
         elif error is not None:
             print(_bad_daml_line(seed.path, error))
+        elif isinstance(result, Skipped):
+            print(f"{_line(seed.path, outcome)}  not compared: {'; '.join(result.reasons)}")
+        elif isinstance(result, Dropped):
+            print(f"{_line(seed.path, outcome)}  not compared: damlc rejects: {result.error.message}")
         else:
             print(_line(seed.path, outcome))
         if not isinstance(outcome, Ok) or error is not None or bugs or difference is not None:

@@ -245,8 +245,10 @@ The line gives the kind of the difference, the call, and what the `.vy` code doe
 `BAD_RUN` comes before `BAD_LOOP`.
 A file with both prints `BAD_RUN`, and the line ends with its first loop check.
 
-An `OK` line from `check --compare` does not prove that the Daml does what the `.vy` code does.
-`check --compare` also prints `OK` when it skipped every call of the file, or when `damlc` rejected its test module.
+When `check --compare` compares nothing, the `OK` line ends with `not compared:` and the reason.
+This happens when Python skipped every call of the file, or when `damlc` rejects the Daml or the test module.
+For example, a call of a function that forge makes a Daml `Update` function gives `not compared: damlc rejects: Couldn't match expected type ‘Update Decimal’`.
+Only an `OK` line without `not compared` means that the calls ran in Python and in Daml and gave the same results.
 
 ### Write a calls file
 
