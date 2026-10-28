@@ -10,7 +10,6 @@ With `--compare`, it also runs the `.vy` code and the Daml that `forge` writes o
 
 ## Contents
 
-- [Features](#features)
 - [Requirements](#requirements)
 - [Install](#install)
 - [Quick start](#quick-start)
@@ -19,17 +18,6 @@ With `--compare`, it also runs the `.vy` code and the Daml that `forge` writes o
 - [Change rules](#change-rules)
 - [Seeds](#seeds)
 - [Development](#development)
-
-## Features
-
-- **Repeatable runs.** One random seed fixes every copy and its changes. The same random seed always gives the same copies in the same order.
-- **Text change rules.** Ten rules each change one line: they delete it, copy it, insert a line above it, or replace or delete one word. Five loop rules make the code shapes that break forge's loops, such as a `fetch` inside an expression or a `return` inside a loop.
-- **Crash groups.** Crashes with the same exception at the same forge file and line are one group.
-- **Shrinking.** The run cuts the first input of each crash group and each loop group down to the lines that cause the crash or the loop bug.
-- **Daml checks.** With `--damlc`, the run builds the Daml that `forge` writes with `damlc`, and groups the Daml that `damlc` rejects.
-- **Loop check.** For each `OK` input, the run checks the loops in the Daml that `forge` writes for four kinds of wrong translation, and groups the inputs with a loop bug. It does not need `damlc`.
-- **Run and compare.** With `--compare`, the run calls the functions and choices of each `OK` input in Python and with Daml Script, on the same data, and groups the inputs whose Daml gives another result or creates other contracts.
-- **Reports** in JSON and Markdown, with one folder for each group. You can compile each saved input again.
 
 ## Requirements
 
@@ -95,11 +83,6 @@ If your shell does not find `dpm` after the install, add `~/.dpm/bin` to your `P
 
 ## Quick start
 
-> [!NOTE]
-> The example output in this README is real output, but your output can be different.
-> The counts, the results, and the forge line numbers depend on the DamlForge version.
-> A newer DamlForge can fix a crash or a loop bug that an example shows.
-
 Run these commands from the root of this repository.
 
 1. Compile the seeds. Every seed must be `OK`.
@@ -136,14 +119,6 @@ Run these commands from the root of this repository.
 3. Open `report.md` in the report folder.
    It has one table row for each group, and the shrunk input of each crash group and each loop group.
 
-4. Compile a saved crash input again.
-   This example uses the report that is in the repository:
-
-   ```
-   $ damlforge-fuzz check reports/2026-10-19T18-45-34Z/groups/g01/iou.vy
-   CRASH    lower  reports/2026-10-19T18-45-34Z/groups/g01/iou.vy  CompilerPanic lower_stmt: unsupported statement node Import at forge/ir/lower.py:314
-   ```
-
 ## Usage
 
 ```
@@ -168,20 +143,6 @@ damlforge-fuzz shrink [--damlc] FILE
 | `--damlc` | Also build the Daml of the `OK` files with `damlc`. See [Check the Daml with damlc](#check-the-daml-with-damlc). |
 | `--compare` | Also run each `OK` file that has a calls file in Python and with Daml Script, and compare. See [Run and compare](#run-and-compare). |
 
-For example, `bitand.vy` has these two lines:
-
-```python
-def f(count: int) -> int:
-    return count & 1
-```
-
-```
-$ damlforge-fuzz check bitand.vy
-CRASH    lower  bitand.vy  KeyError 'BitAnd' at forge/ir/lower.py:289
-```
-
-forge has no entry for `&` in its table of operators.
-
 Each line has the [result](#results), the [stage](#stages), and the file.
 A `REJECTED`, `CRASH`, `BAD_DAML`, `BAD_LOOP`, or `BAD_RUN` line ends with the error.
 
@@ -200,14 +161,6 @@ Each copy starts from one seed and gets 1 to 4 random changes.
 | `--reports DIR` | The folder for the report folders. The default is `reports`. |
 | `--damlc` | Also build the Daml of the `OK` copies with `damlc`. See [Check the Daml with damlc](#check-the-daml-with-damlc). |
 | `--compare` | Also run the `OK` copies of the seeds that have a calls file in Python and with Daml Script, and compare. See [Run and compare](#run-and-compare). |
-
-```
-$ damlforge-fuzz run contracts/iou --count 2000 --random-seed 1
-random seed 1, 1 seed, 2000 inputs
-random seed 1: 2000 inputs, 419 OK, 1135 rejected, 63 crash, 383 skipped
-loops: 11 inputs with loop findings, 2 loop groups
-7 crash groups, report in reports/2026-10-20T11-45-50Z
-```
 
 The first line prints when the run starts.
 The second line prints when the run has made all the copies:
@@ -247,13 +200,6 @@ A run without `SEED_FOLDER` uses every seed in `contracts/`, so a new seed in `c
 To repeat a run from before a seed was added, name the seeds of that run.
 A change to the [change rules](#change-rules) also changes the copies.
 To repeat a run from before such a change, use a commit from before it.
-For example, the report in `reports/2026-10-19T18-45-34Z` comes from a run with the ten rules from before the loop rules, on the four seeds that `contracts/` had before the loop seeds.
-At commit `6c267a2`, this command makes the same copies:
-
-```sh
-damlforge-fuzz run contracts/asset_proposal contracts/ballot contracts/escrow contracts/iou --damlc --count 20000 --random-seed 1
-```
-
 ### `damlforge-fuzz shrink`
 
 `shrink` deletes lines of a `.vy` file that crashes forge or that is `BAD_LOOP`.
@@ -264,54 +210,14 @@ It writes the result to `shrunk/` next to FILE, with the same file name, and pri
 | `FILE` | A `.vy` file that crashes forge, or that has a loop bug. |
 | `--damlc` | For a `BAD_LOOP` file, also keep the verdict of `damlc` on the Daml. |
 
-For a file that crashes forge, `shrink` keeps a deletion only when the file still crashes with the same exception at the same forge line:
-
-```
-$ damlforge-fuzz shrink reports/2026-10-19T18-45-34Z/groups/g02/escrow.vy
-shrunk reports/2026-10-19T18-45-34Z/groups/g02/escrow.vy from 42 to 3 lines: reports/2026-10-19T18-45-34Z/groups/g02/shrunk/escrow.vy
-@template
-class Escrow:
-    tuple[int, str]: EscrowTerms
-```
+For a file that crashes forge, `shrink` keeps a deletion only when the file still crashes with the same exception at the same forge line.
 
 For a `BAD_LOOP` file, `shrink` keeps a deletion only when forge still writes Daml and the first check of the [loop check](#loop-check) is the same.
-This example uses the loop group `l01` of the run without `--damlc` in [Loop check](#loop-check):
-
-```
-$ damlforge-fuzz shrink reports/2026-10-20T12-41-34Z/groups/l01/loop_pure.vy
-shrunk reports/2026-10-20T12-41-34Z/groups/l01/loop_pure.vy from 40 to 4 lines: reports/2026-10-20T12-41-34Z/groups/l01/shrunk/loop_pure.vy
-def has_party(ps: list[Party], p: Party) -> bool:
-    for q in ps:
-            for _k in range(0, 2):
-                return True
-```
-
-forge loses the `return` in the inner loop, so the first check is `L3`.
-`damlc` builds the Daml of the full input, but not the Daml of the shrunk input.
-The shrinker deleted the `return False` after the loop, and forge then writes `()` as the result of `has_party`:
-
-```
-$ damlforge-fuzz check --damlc reports/2026-10-20T12-41-34Z/groups/l01/shrunk/loop_pure.vy
-BAD_LOOP emit   reports/2026-10-20T12-41-34Z/groups/l01/shrunk/loop_pure.vy  L3: the return in a loop of function has_party at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc rejects: Couldn't match expected type ‘Bool’ with actual type ‘()’
-```
 
 With `--damlc`, `shrink` first builds the Daml of FILE with `damlc`.
 Then it keeps a deletion only when `damlc` also gives the same verdict, `builds` or `rejects`.
-So the shrunk input keeps `return False`, and its Daml builds.
-This example uses the same group in the report of the `--damlc` run:
-
-```
-$ damlforge-fuzz shrink --damlc reports/2026-10-20T12-41-38Z/groups/l01/loop_pure.vy
-shrunk reports/2026-10-20T12-41-38Z/groups/l01/loop_pure.vy from 40 to 5 lines: reports/2026-10-20T12-41-38Z/groups/l01/shrunk/loop_pure.vy
-def has_party(ps: list[Party], p: Party) -> bool:
-    for q in ps:
-            for _k in range(0, 2):
-                return True
-    return False
-```
-
 With `--damlc`, `shrink` needs dpm, the Daml SDK, and a `daml.yaml` for FILE.
-Each try that keeps the first check needs a `dpm build` of its Daml, about 0.7 seconds, so this command took about 11 seconds.
+Each try that keeps the first check needs a `dpm build` of its Daml, about 0.7 seconds.
 For a file that crashes forge, `--damlc` changes nothing.
 
 `run` already shrinks the first input of each crash group and each loop group.
@@ -327,15 +233,6 @@ That is a bug in forge: its check stage let through a program that it then trans
 
 `--damlc` needs dpm and the Daml SDK. [Install dpm and the Daml SDK](#install-dpm-and-the-daml-sdk) shows how to install them.
 
-```
-$ damlforge-fuzz run --damlc --count 2000 --random-seed 1
-random seed 1, 13 seeds, 2000 inputs
-random seed 1: 2000 inputs, 357 OK, 1077 rejected, 4 crash, 562 skipped
-damlc: 205 Daml texts, 108 bad, 20 bad Daml groups
-loops: 2 inputs with loop findings, 1 loop group, 0 build with damlc
-3 crash groups, report in reports/2026-10-22T11-34-07Z
-```
-
 The `damlc:` line comes before the `loops:` line:
 
 - `Daml texts`: the number of different Daml texts among the `OK` copies. Many copies give the same Daml, so the run builds each text only once.
@@ -348,12 +245,7 @@ With `--damlc`, the `loops:` line also gives the number of loop groups whose Dam
 [Loop check](#loop-check) tells more.
 
 With `check --damlc`, a file whose Daml `damlc` rejects is `BAD_DAML`.
-The line ends with the first line of the first `damlc` error:
-
-```
-$ damlforge-fuzz check --damlc reports/2026-10-19T18-45-34Z/groups/d02/iou.vy
-BAD_DAML emit   reports/2026-10-19T18-45-34Z/groups/d02/iou.vy  Variable not in scope: x : [a0]
-```
+The line ends with the first line of the first `damlc` error.
 
 How a run uses `damlc`:
 
@@ -388,75 +280,23 @@ It runs on each `OK` input of `check` and `run`, and it does not need `damlc`.
 An input that fails a check `L1` to `L4` is `BAD_LOOP`.
 The checks `I1` to `I4` are the import check, in `src/damlforge_fuzz/importcheck.py`. They read the import lines of forge's Daml and the `.vy` text, and an input that fails one is `BAD_IMP`. Their groups are `i01`, `i02`, ..., next to the loop groups `l01`, `l02`, ..., and the `loops:` line counts both.
 `check` prints every check that the file fails, and the first bug.
-The seven programs in [`reports/2026-10-20T16-34-28Z/analysis/loops/`](reports/2026-10-20T16-34-28Z/analysis/loops/) each show a forge loop bug.
-DamlForge has fixed all seven bugs, so a newer DamlForge prints `OK` for each program.
-This is the output of a DamlForge with the bugs:
-
-```
-$ damlforge-fuzz check reports/2026-10-20T16-34-28Z/analysis/loops
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers)
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers)
-OK       emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy
-```
-
-No loop check finds b23, so its line is `OK`. [Run and compare](#run-and-compare) shows how `--compare` finds it.
 With `--damlc`, each `BAD_LOOP` line ends with the verdict of `damlc`.
 A file with a loop bug is `BAD_LOOP`, not `BAD_DAML`, because the loop bug tells the cause.
 The `damlc` error is usually a result of that cause, such as `Variable not in scope: foldlA` for `L1`.
 `damlc builds` is the most serious case: forge wrote wrong Daml that compiles.
 
-```
-$ damlforge-fuzz check --damlc reports/2026-10-20T16-34-28Z/analysis/loops
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action; damlc rejects: Variable not in scope: foldlA
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7; damlc rejects: Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  L3: the return in a loop of choice GiveUntil at Daml line 14 is lost (1 loop with a return, 0 early-return helpers); damlc builds
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  L3: the return in a loop of function first_positive at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
-OK       emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy
-```
-
 How a run uses the loop check:
 
 - Before the first copy, the run compiles the unchanged seeds and runs the loop check on them.
-  A seed with a loop bug stops the run with exit code 2, because almost every copy would have the same bug:
-
-  ```
-  $ damlforge-fuzz run reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy --count 10
-  damlforge-fuzz run: the loop check finds a bug in seed reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy: L1: foldlA at Daml line 20 with no import DA.Action
-  ```
+  A seed with a loop bug stops the run with exit code 2, because almost every copy would have the same bug.
 
 - After the last copy, the run groups the `OK` copies with a loop bug.
   A copy goes to the group of its first check, so a run without `--damlc` has at most eight groups: four loop groups and four import groups.
-  The `loops:` line comes before the last line:
-
-  ```
-  $ damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1
-  random seed 1, 5 seeds, 5000 inputs
-  random seed 1: 5000 inputs, 852 OK, 2828 rejected, 4 crash, 1316 skipped
-  loops: 2 inputs with loop findings, 1 loop group
-  1 crash group, report in reports/2026-10-22T11-12-56Z
-  ```
+  The `loops:` line comes before the last line.
 
 - With `--damlc`, the run also splits the loop groups by the verdict of `damlc`.
   So a group whose Daml builds does not hide behind an earlier input whose Daml `damlc` rejects.
-  The `loops:` line also gives the number of groups that build:
-
-  ```
-  $ damlforge-fuzz run contracts/loop_* --damlc --count 5000 --random-seed 1
-  random seed 1, 5 seeds, 5000 inputs
-  random seed 1: 5000 inputs, 852 OK, 2828 rejected, 4 crash, 1316 skipped
-  damlc: 353 Daml texts, 238 bad, 17 bad Daml groups
-  loops: 2 inputs with loop findings, 1 loop group, 0 build with damlc
-  1 crash group, report in reports/2026-10-22T11-34-07Z
-  ```
-
-  Here the one group, `i01` (`I1`), is Daml that `damlc` rejects.
-  On a DamlForge with more loop bugs, the same command gave five loop groups, and the `L3` inputs made two of them: `l01`, whose Daml `damlc` builds, and `l05`, whose Daml `damlc` rejects.
+  The `loops:` line also gives the number of groups that build.
 
 - After the crash groups, the run shrinks the first input of each loop group.
   [Shrunk inputs](#shrunk-inputs) tells how.
@@ -465,7 +305,6 @@ The loop check has these limits:
 
 - It reads the Daml in the layout that forge writes: one statement on each line, and `do` at the end of the line that opens a block.
   If forge changes its layout, the check can give wrong results.
-  The tests in `tests/test_loopcheck.py` run the loop check on the Daml that forge writes for each seed, so they show such a change first.
 - `L3` does not know whether the lost `return` changes the result. A lost `return` before code that does nothing is harmless.
 
 ### Run and compare
@@ -478,16 +317,7 @@ Then they compare the results and the contracts that each call creates.
 `BAD_RUN` means that the Daml does not do what the `.vy` code does.
 
 `--compare` needs dpm and the Daml SDK. [Install dpm and the Daml SDK](#install-dpm-and-the-daml-sdk) shows how to install them.
-Only the seeds that have a [calls file](#calls-files) are compared, so you choose the area with the seed folders, as for every run:
-
-```
-$ damlforge-fuzz run contracts/loop_* --compare --count 5000 --random-seed 1
-random seed 1, 5 seeds, 5000 inputs
-random seed 1: 5000 inputs, 852 OK, 2828 rejected, 4 crash, 1316 skipped
-loops: 2 inputs with loop findings, 1 loop group
-compare: 389 inputs compared, 0 differ, 0 run groups
-1 crash group, report in reports/2026-10-22T11-34-13Z
-```
+Only the seeds that have a [calls file](#calls-files) are compared, so you choose the area with the seed folders, as for every run.
 
 The `compare:` line comes after the `loops:` line:
 
@@ -495,17 +325,10 @@ The `compare:` line comes after the `loops:` line:
 - `differ`: the compared copies whose Daml does not do what the `.vy` code does in a call.
 - `run groups`: the number of groups of these copies. Copies with the same kind of difference and the same first loop check are one group.
 
-Here the run finds no difference, because this DamlForge writes these loops right.
-On a DamlForge with loop bugs, the same command found two run groups.
-Group `r01` was a lost `return` in `has_party`, which the loop check also finds (`L3`).
-Group `r02` was a copy with a `pass` above the `if` in the loop of `GiveAll`.
-forge dropped the `create` after the `pass`, the Daml built, and no loop check failed.
-That is bug b23. [b23 in `reports/2026-10-20T16-34-28Z/analysis/loops/`](reports/2026-10-20T16-34-28Z/analysis/loops/README.md#b23-pass-drops-the-rest-of-its-block) tells its cause.
-
 #### Why `--compare` is an option
 
 - **It finds bugs that the other checks miss.** The loop check finds only the shapes of wrong loops that are known: `L1` to `L4`. `damlc` only tells whether the Daml builds. For b23, forge drops an `assert`, the Daml builds, and no loop check fails. Only a run of both programs on the same data shows that the Daml accepts a negative number that the `.vy` code rejects.
-- **It is slow, and it needs dpm.** Without `--compare`, the run above took 3.3 seconds, and it does not need dpm. With `--compare`, it took 61 seconds. The compare step takes 51 seconds, and the check of the seeds before the first copy takes about 6.5 seconds. A plain run must stay fast and must work without the Daml SDK.
+- **It is slow, and it needs dpm.** The compare step builds and tests the Daml with dpm, in batches of 100 copies. In one run of 5000 inputs on the loop seeds, the run took 3.3 seconds without `--compare` and 61 seconds with it. A plain run must stay fast and must work without the Daml SDK.
 - **It is not part of `--damlc`.** `damlc` builds the Daml, and `--compare` runs it. They cost different amounts and answer different questions, so a run can use one of them or both. With both, the compare step uses the verdicts of `damlc` and does not build the Daml of the copies again.
 
 #### Calls files
@@ -583,31 +406,16 @@ The run does not compare these copies and calls:
 - A call of a plain function that fails in Python. In Daml, the `assert` of a plain function is an `error`, which Daml Script cannot catch.
 - A copy whose Daml or test module `damlc` rejects. The run counts it as dropped.
 
-In the run above, the compare step compared 367 of the 972 `OK` copies, and 4 of them differ.
-Python could run no call of 419 copies, and `damlc` rejected the Daml or the test module of 186 copies.
-
 With `check --compare`, each `OK` file that has a calls file next to it runs in the same way.
 A file whose Daml does not do what its `.vy` code does is `BAD_RUN`.
 The line gives the kind of the difference, the call, and what the `.vy` code does in Python.
 `BAD_RUN` comes before `BAD_LOOP`: a file with both prints `BAD_RUN`, and the line ends with its first loop check.
-b21, b22, and b23 in `reports/2026-10-20T16-34-28Z/analysis/loops/` have a calls file:
-
-```
-$ damlforge-fuzz check --compare reports/2026-10-20T16-34-28Z/analysis/loops
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b17_create_append.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b18_fetch_in_sum.vy  L1: foldlA at Daml line 20 with no import DA.Action
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b19_fetch_in_if_test.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
-BAD_LOOP emit   reports/2026-10-20T16-34-28Z/analysis/loops/b20_fetch_in_plain_function.vy  L2 L4: fetch at Daml line 9 in the pure foldl of line 7
-BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b21_return_in_create_loop.vy  contracts in Iou.GiveUntil #1: returns None, makes 1 contract: Iou(issuer=issuer, owner=alice, amount=1.0); loop check L3
-BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b22_return_in_inner_loop.vy  result in first_positive #1: returns 3; loop check L3
-BAD_RUN  emit   reports/2026-10-20T16-34-28Z/analysis/loops/b23_pass_in_loop.vy  daml_passes in Iou.Check #2: fails: positive
-```
 
 `--compare` has these limits:
 
 - The run does not shrink the run groups, because each try needs its own `dpm test`, about 4 seconds.
 - The stand-ins do not cover every difference between Python and Daml. For example, Python computes a `Decimal` with 28 digits and an `int` with no limit. Daml rounds a `Decimal` to 10 decimal places, and fails on an `Int` that does not fit in 64 bits, also in the middle of a call. The run skips only a result that does not fit.
-- A difference shows only when the data of a call makes it show. The `early_return` [change rule](#change-rules) inserts `if v == v:`, which is always true, so a lost `return` above a `create` changes nothing that a call can see. In the runs of `contracts/loop_*` with `--count 5000` and the random seeds 1, 2, and 3, no copy showed b21. With `--random-seed 4`, the run found b21 by the comparison: a `contracts` group whose first loop check is `L3`.
+- A difference shows only when the data of a call makes it show. The `early_return` [change rule](#change-rules) inserts `if v == v:`, which is always true, so a lost `return` above a `create` changes nothing that a call can see.
 
 ### Results
 
@@ -748,34 +556,15 @@ The run does not shrink the run groups.
 ### See a group again
 
 To see a crash again, run `check` on the input in the group folder.
-A folder argument also checks the shrunk input:
-
-```
-$ damlforge-fuzz check reports/2026-10-19T18-45-34Z/groups/g02
-CRASH    check  reports/2026-10-19T18-45-34Z/groups/g02/escrow.vy  AttributeError 'Subscript' object has no attribute 'id' at forge/semantics/analysis/types.py:644
-CRASH    check  reports/2026-10-19T18-45-34Z/groups/g02/shrunk/escrow.vy  AttributeError 'Subscript' object has no attribute 'id' at forge/semantics/analysis/types.py:644
-```
+A folder argument also checks the shrunk input.
 
 To see a `damlc` error again without the fuzzer, run `dpm build` in the bad Daml group folder.
 
 To see a loop bug again, run `check` on the input in the loop group folder.
 With `--damlc`, the line also gives the verdict of `damlc`.
 A folder argument also checks the shrunk input.
-This example uses the report of the `--damlc` run in [Loop check](#loop-check):
-
-```
-$ damlforge-fuzz check --damlc reports/2026-10-20T12-41-38Z/groups/l01
-BAD_LOOP emit   reports/2026-10-20T12-41-38Z/groups/l01/loop_pure.vy  L3: the return in a loop of function has_party at Daml line 37 is lost (2 loops with a return, 0 early-return helpers); damlc builds
-BAD_LOOP emit   reports/2026-10-20T12-41-38Z/groups/l01/shrunk/loop_pure.vy  L3: the return in a loop of function has_party at Daml line 3 is lost (2 loops with a return, 0 early-return helpers); damlc builds
-```
 
 To see a run difference again, run `check --compare` on the input in the run group folder.
-This example uses the report of the run in [Run and compare](#run-and-compare):
-
-```
-$ damlforge-fuzz check --compare reports/2026-10-20T15-55-09Z/groups/r02/loop_give.vy
-BAD_RUN  emit   reports/2026-10-20T15-55-09Z/groups/r02/loop_give.vy  contracts in Iou.GiveAll #1: returns None, makes 2 contracts: Iou(issuer=alice, owner=alice, amount=1.0), Iou(issuer=alice, owner=bob, amount=1.0)
-```
 
 To see what the Daml does, without the fuzzer, run `dpm test` in the run group folder.
 The scripts that fail show the difference.
@@ -804,30 +593,16 @@ After the last copy, the run shrinks the first input of each crash group:
 3. It stops when it cannot delete one more line.
 
 The shrunk input has only lines of the full input, in the same order, and no line is changed.
-For the 9 crash groups of the 2000-copy run in [Check the Daml with damlc](#check-the-daml-with-damlc), shrinking took about 0.06 seconds.
-The inputs of these groups have 19 to 42 lines, and the shrunk inputs have 1 to 8 lines.
 
 Then the run shrinks the first input of each loop group in the same way.
 It keeps a deletion only when forge still writes Daml and the first check of the [loop check](#loop-check) is the same.
 With `--damlc`, it also keeps a deletion only when `damlc` gives the same verdict on the Daml, `builds` or `rejects`.
 Without that, a group whose Daml builds can get a shrunk input whose Daml `damlc` rejects.
-[`damlforge-fuzz shrink`](#damlforge-fuzz-shrink) shows an example.
-
-For `damlforge-fuzz run contracts/loop_* --count 5000 --random-seed 1`, with and without `--damlc`:
-
-| Run | Loop groups | Lines of the inputs | Lines of the shrunk inputs | Time to shrink the loop groups |
-| --- | --- | --- | --- | --- |
-| Without `--damlc` | 4 | 19 to 40 | 4 to 10 | 0.13 seconds |
-| With `--damlc` | 5 | 19 to 43 | 5 to 13 | 30 seconds |
 
 With `--damlc`, each try that keeps the first check needs a `dpm build` of its Daml, about 0.7 seconds, unless an earlier try had the same Daml.
-The 5 loop groups needed 43 builds, 5 to 13 for each group.
-So this run took 37 seconds, and 30 of them were for the loop groups.
 
 For a group whose Daml `damlc` rejects, the shrunk input keeps the verdict, but not the error.
 `damlc` can reject the shrunk Daml for another reason.
-For example, in the `L4` group `l02` of that run, `damlc` rejects the Daml of the full input with `Tried to access nonexistent field ‘amount’ with type ‘Decimal’ on value of type ‘Update`.
-It rejects the Daml of the shrunk input with `Variable not in scope: issuer`, because the shrinker deleted the field `issuer`.
 
 The shrunk input is in `shrunk/` in the group folder, with the same file name as the full input.
 The same file name keeps the Daml module name.
@@ -911,12 +686,10 @@ To add a rule:
    - for a text rule, `_Rule("your_rule", your_function)`
 
    Do not put it first or in the middle.
-   In a test, a rule added last kept 1608 of the first 2000 copies the same, and the same rule added first kept 86.
-   The six loop rules, added last together, kept 25 of the first 2000 copies of random seed 1 on the nine seeds the same.
+   A rule in the first place or in the middle changes many more copies of every random seed than a rule in the last place.
 3. Add a row for the rule at the end of the table in [Change rules](#change-rules).
    A test checks that the table and `_RULES` list the same rules in the same order.
 4. In `tests/test_mutate.py`, add a test that applies the rule to a short text and compares the result with the exact text that it must give.
-   Change the expected input in `test_input_1_of_random_seed_1_on_a_two_line_text` to the new input 1.
 5. Run `pytest`.
 6. Compare the rules with and without the new rule:
 
@@ -1066,17 +839,6 @@ pytest
 ```
 
 The tests that need dpm skip when dpm or the Daml SDK is missing.
-
-`tests/loops/` has pairs of a `.vy` file and the Daml that forge wrote for it.
-`tests/loops/EXPECTED.tsv` has the loop checks that each pair must give.
-The pairs are frozen test data.
-The tests read them and do not run forge, so a pair keeps its loop bug when a new forge fixes the bug.
-Do not write the Daml of a pair again with a newer forge.
-To test the loop check on other Daml, add a new pair and its line in `EXPECTED.tsv`.
-
-A test of what `check`, `run`, or `shrink` does with a bug does not wait for forge to make the bug.
-The test plants the bug in the Daml that forge writes, with a function from `tests/planted_daml.py`.
-So a new forge that fixes a bug does not make these tests fail.
 
 ### Show the inputs of a run
 
