@@ -13,9 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The `damlforge-fuzz` command. Unit 2 adds `check`; unit 3 adds `run`; unit 4 adds its report;
-unit 5 adds shrinking and `shrink`; unit 6 adds --damlc; unit 8 adds the loop check; unit 10
-shrinks the loop groups; unit 11 adds --compare.
+"""The `damlforge-fuzz` command, with the subcommands `check`, `run`, and `shrink`.
 
     damlforge-fuzz check [--damlc] [--compare] PATH [PATH ...]
 
@@ -33,8 +31,9 @@ damlc's first error line:
 
     BAD_DAML emit   iou.vy  Variable not in scope: str : Decimal -> Text
 
-The loop check reads the Daml of each OK file, with no damlc. A file whose
-Daml has a loop bug prints BAD_LOOP, every check it fails, and the first bug:
+The loop check and the import check read the Daml of each OK file, with no
+damlc. A file whose Daml has a loop bug prints BAD_LOOP, and a file with an
+import bug prints BAD_IMP. The line gives every check it fails, and the first bug:
 
     BAD_LOOP emit   b19.vy  L2 L4: fetch at Daml line 22 in the pure foldl of line 20
 
@@ -55,7 +54,7 @@ check, `; loop check L3`. A file whose Daml damlc rejects cannot run, so it
 prints its line as without --compare, and so does a file with no calls file.
 
 Exit status: 0 when every file is OK, 1 when any file is REJECTED, CRASH,
-BAD_DAML, BAD_LOOP, or BAD_RUN, 2 for a usage error (a missing path, a folder
+BAD_DAML, BAD_LOOP, BAD_IMP, or BAD_RUN, 2 for a usage error (a missing path, a folder
 with no .vy file, an unreadable file, or DamlForge not installed; with --damlc,
 also a file with no daml.yaml, or dpm or its SDK missing; with --compare, also
 a calls file that does not fit its .vy file, a file with calls and no
@@ -127,7 +126,7 @@ shrinking: the groups not shrunk yet get "shrunk": null.
     damlforge-fuzz shrink [--damlc] FILE
 
 `shrink` compiles FILE as `check` does. When it crashes, it deletes lines while
-the text still crashes in the same group. When it is BAD_LOOP, it deletes lines
+the text still crashes in the same group. When it is BAD_LOOP or BAD_IMP, it deletes lines
 while the first loop check stays the same, and with --damlc also damlc's
 verdict on the Daml. It writes the result to shrunk/ next to FILE under the
 same name, and prints a line and the shrunk text:
@@ -178,7 +177,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     check = commands.add_parser(
         "check",
         help="compile .vy files with forge and sort each result",
-        description="Compile each .vy file with forge and print OK, REJECTED, or CRASH.",
+        description="Compile each .vy file with forge and print one result for each file: OK, "
+        "REJECTED, CRASH, BAD_DAML (with --damlc), BAD_LOOP, BAD_IMP, or BAD_RUN (with --compare).",
     )
     check.add_argument(
         "--damlc",
@@ -700,7 +700,7 @@ def _non_negative_int(text: str) -> int:
 def _vy_files(paths: Sequence[Path]) -> list[Path]:
     """Expand PATH arguments into .vy files, each listed once, in a fixed order.
 
-    The order is part of the contract: unit 3 picks seeds from this list, and
+    The order is part of the contract: `run` picks seeds from this list, and
     the same arguments must give the same list for --random-seed to repeat.
     Hidden folders, such as .daml/ and .venv/, are skipped.
 
