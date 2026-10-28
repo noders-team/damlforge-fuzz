@@ -48,43 +48,33 @@ python3 -m venv .venv
 . .venv/bin/activate
 ```
 
-### Install DamlForge
-
-DamlForge is on PyPI as `damlforge`.
-It installs the `forge` command and the `forge` Python package.
-
-> [!WARNING]
-> Do not run `pip install forge`.
-> The `forge` package on PyPI is a different project, a Django tool.
-
-Use one of these two methods:
-
-- Install the latest release from PyPI:
-
-  ```sh
-  pip install damlforge
-  ```
-
-- Install a local DamlForge checkout that you change. Your changes apply without a reinstall.
-
-  ```sh
-  git clone https://github.com/noders-team/damlforge.git
-  pip install -e ./damlforge
-  ```
-
-To check the install, run `forge --version` and `forge --help`.
-The help lists the `daml`, `dar`, `json`, and `stubs` commands.
-
 ### Install damlforge-fuzz
 
-Install the fuzzer into the virtual environment that has DamlForge.
 Run this command from the root of this repository:
 
 ```sh
 pip install -e ".[test]"
 ```
 
+This command also installs the latest release of DamlForge from PyPI, the `damlforge` package.
+DamlForge has the `forge` command and the `forge` Python package.
 The `test` extra also installs pytest.
+
+To check the install, run `forge --version` and `forge --help`.
+The help lists the `daml`, `dar`, `json`, and `stubs` commands.
+
+### Use a local DamlForge checkout
+
+This step is optional.
+To fuzz a DamlForge checkout that you change, install it in the same virtual environment:
+
+```sh
+git clone https://github.com/noders-team/damlforge.git
+pip install -e ./damlforge
+```
+
+The checkout replaces the release from PyPI.
+Your changes to the checkout apply without a reinstall.
 
 ### Install dpm and the Daml SDK
 

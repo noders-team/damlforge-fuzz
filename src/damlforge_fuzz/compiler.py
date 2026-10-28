@@ -55,8 +55,8 @@ try:
     from forge.semantics import analyze_module
 except ImportError as error:
     raise ImportError(
-        "damlforge-fuzz needs DamlForge's `forge` package. Install DamlForge first, "
-        "as README.md shows. `pip install forge` installs an unrelated Django tool. "
+        "damlforge-fuzz needs DamlForge's `forge` package. Install it with "
+        "`pip install damlforge`, as README.md shows. "
         f"({error})"
     ) from error
 

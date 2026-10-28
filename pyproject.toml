@@ -12,10 +12,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Ruslan Glaznyov", email = "ruslan.glaznyov@gmail.com" }]
 maintainers = [{ name = "Noders Team" }]
 requires-python = ">=3.11"
-# forge (DamlForge) is deliberately not listed. The PyPI project named "forge" is an
-# unrelated Django tool, so pip would install the wrong package. Install DamlForge
-# first, as README.md shows.
-dependencies = []
+dependencies = ["damlforge", "pyyaml"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
