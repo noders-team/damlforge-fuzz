@@ -18,8 +18,9 @@
 The damlc messages below are SDK 3.5.2's, the SDK in contracts/*/daml.yaml,
 not results of one forge version. No test names a count or a key that one
 forge version gives. The bad Daml comes from a hand-written module, or from a
-forge bug the test plants. Tests that build need the `dpm` fixture, which
-skips them when dpm or the SDK is missing.
+forge bug the test plants. The crashes are planted too (planted_crash.py).
+Tests that build need the `dpm` fixture, which skips them when dpm or the SDK
+is missing.
 """
 
 import contextlib
@@ -34,7 +35,7 @@ from pathlib import Path
 import forge.semantics.analysis.typecheck
 import pytest
 from conftest import CONTRACTS, PROJECT, copy_iou, hide_dpm
-from planted_crash import IN_LOWER, plant
+from planted_crash import IN_LOWER, IN_RUNS, plant
 
 from damlforge_fuzz import (
     DamlcUnavailable,
@@ -315,10 +316,12 @@ def run(reports, *argv):
 
 @pytest.fixture(scope="module")
 def runs(dpm, tmp_path_factory):
-    """`run --count 300 --random-seed 1`, with and without --damlc."""
+    """`run --count 300 --random-seed 1`, with and without --damlc, with the crashes of IN_RUNS."""
     reports = tmp_path_factory.mktemp("reports")
-    with_damlc = run(reports, "--count", "300", "--random-seed", "1", "--damlc")
-    without = run(reports, "--count", "300", "--random-seed", "1")
+    with pytest.MonkeyPatch.context() as patch:
+        plant(patch, *IN_RUNS)
+        with_damlc = run(reports, "--count", "300", "--random-seed", "1", "--damlc")
+        without = run(reports, "--count", "300", "--random-seed", "1")
     assert [g for g in with_damlc[3]["groups"] if g["kind"] == "bad_daml"], (
         "300 inputs should give forge Daml that damlc rejects at least once"
     )
@@ -461,6 +464,7 @@ def test_ctrl_c_during_damlc_keeps_the_finished_batches(dpm, tmp_path, monkeypat
 
     monkeypatch.setattr("damlforge_fuzz.damlc.BATCH", 5)
     monkeypatch.setattr("damlforge_fuzz.report.build_daml", interrupted_after_one_batch)
+    plant(monkeypatch, *IN_RUNS)
 
     status, lines, folder, doc = run(tmp_path, "--count", "300", "--random-seed", "1", "--damlc")
     assert status == 130

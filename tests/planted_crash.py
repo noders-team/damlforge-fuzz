@@ -69,6 +69,19 @@ IN_LOWER = Planted(
 )
 """One crash. A text that holds only the trigger line gets to lower on any forge version."""
 
+IN_RUNS = (
+    Planted("pass", Stage.CHECK, KeyError, "planted in check",
+            ForgeLine("forge/ir/lower.py", 40)),
+    Planted("for _k in range(0, 2):", Stage.PARSE, IndexError, "planted in parse",
+            ForgeLine("forge/ast/parse.py", 50)),
+)  # fmt: skip
+"""Two crashes, in two stages, for runs over the seeds in contracts/.
+
+The insert_statement rule writes `pass` lines, and the wrap_in_loop rule
+writes the other trigger, so a run of a few hundred inputs gets both crashes.
+No seed has either line, so every seed compiles as before.
+"""
+
 
 def plant(monkeypatch: pytest.MonkeyPatch, *crashes: Planted) -> None:
     """Make compile_and_sort crash as `crashes` say, until `monkeypatch` is undone.

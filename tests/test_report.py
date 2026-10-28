@@ -15,11 +15,11 @@
 
 """The run folder that `damlforge-fuzz run` writes: report.json, report.md, and groups/.
 
-No test names a crash that one DamlForge version gives, such as an exception,
-a forge line, or a group count. forge fixes bugs between versions (v0.0.10
-compiles `a // b`), and such a test would break on the next fix. The tests
-check relations instead: the report against the printed lines, against
-`check`, and against the input sequence.
+The crashes in these runs are planted (planted_crash.IN_RUNS), not forge bugs.
+forge fixes bugs between versions (0.0.13 rejects `count & 1`), so a test that
+needs a real crash breaks on the next fix. The tests check relations: the
+report against the printed lines, against `check`, and against the input
+sequence.
 """
 
 import contextlib
@@ -34,6 +34,7 @@ from pathlib import Path
 import forge
 import pytest
 from conftest import CONTRACTS, PROJECT, SEED_FILES
+from planted_crash import IN_RUNS, plant
 
 from damlforge_fuzz import (
     STAGE_TEXT,
@@ -101,15 +102,16 @@ def crash(doc):
 def counted(tmp_path_factory):
     """One `run --count 1000 --random-seed 1` over contracts/, shared by the read-only tests.
 
-    The first crash is at input 588 (scripts/measure_test_counts.py measures it again).
+    The run gets each crash of IN_RUNS, so it has one crash group per planted crash.
     """
     reports = tmp_path_factory.mktemp("reports")
     out = io.StringIO()
     with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
         patch.chdir(PROJECT)
+        plant(patch, *IN_RUNS)
         status = main(["run", "--count", "1000", "--random-seed", "1", "--reports", str(reports)])
     result = _result(status, out.getvalue())
-    assert result[3]["groups"], "1000 inputs should crash forge at least once"
+    assert len(crash(result[3])) == len(IN_RUNS), "1000 inputs should get each planted crash"
     return result
 
 
@@ -171,7 +173,8 @@ def test_group_counts_add_up_to_the_printed_crash_count(counted):
     assert report_line == f"{_groups(len(crash(doc)))}, report in {folder}"
 
 
-def test_each_saved_input_crashes_again_in_its_group(counted, capsys):
+def test_each_saved_input_crashes_again_in_its_group(counted, monkeypatch, capsys):
+    plant(monkeypatch, *IN_RUNS)
     _, _, folder, doc = counted
 
     for group in crash(doc):
@@ -183,7 +186,8 @@ def test_each_saved_input_crashes_again_in_its_group(counted, capsys):
             assert line.endswith(f" at {group['where']}"), line
 
 
-def test_each_shrunk_input_crashes_again_in_its_group(counted, capsys):
+def test_each_shrunk_input_crashes_again_in_its_group(counted, monkeypatch, capsys):
+    plant(monkeypatch, *IN_RUNS)
     _, _, folder, doc = counted
 
     for group in crash(doc):
@@ -352,7 +356,7 @@ def test_a_reports_path_that_is_a_file_returns_2_and_prints_nothing(
 
 
 def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, capsys):
-    # The first crash is at compile call 423 (scripts/measure_test_counts.py).
+    plant(monkeypatch, *IN_RUNS)
     calls = itertools.count(1)
 
     def interrupted_at_call_430(text, seed):
@@ -375,7 +379,7 @@ def test_ctrl_c_writes_the_report_for_the_inputs_so_far(tmp_path, monkeypatch, c
     assert "- Stopped early by Ctrl-C. The report covers the inputs so far." in (
         (folder / "report.md").read_text().splitlines()
     )
-    assert crash(doc), "429 inputs should crash forge at least once"
+    assert crash(doc), "429 inputs should get a planted crash"
     for group in crash(doc):
         assert (folder / group["shrunk_file"]).read_text() == group["shrunk"]
 
@@ -389,23 +393,23 @@ def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeyp
         return shrink(text, seed, keep)
 
     monkeypatch.setattr("damlforge_fuzz.report.shrink", interrupted_in_group_2)
+    plant(monkeypatch, *IN_RUNS)
     monkeypatch.chdir(PROJECT)
 
-    # The third crash group starts at input 1498 (scripts/measure_test_counts.py).
-    status, lines, folder, doc = run(capsys, tmp_path, "--count", "2000", "--random-seed", "1")
+    status, lines, folder, doc = run(capsys, tmp_path, "--count", "300", "--random-seed", "1")
     assert status == 130
     assert len(lines) == 4
     assert doc["run"]["interrupted"] is True
     first, *rest = crash(doc)
-    assert rest, "2000 inputs should crash forge in at least three groups"
+    assert rest, "300 inputs should get each planted crash"
     assert (folder / first["shrunk_file"]).read_text() == first["shrunk"]
     assert [(g["shrunk"], g["shrunk_file"]) for g in rest] == [(None, None)] * len(rest)
     # A shrunk folder also holds the seed's sibling .vy files, so count folders, not files.
     assert sorted(p.parent.name for p in folder.glob("groups/*/shrunk")) == [first["id"]]
     md = (folder / "report.md").read_text().splitlines()
-    assert all(
-        line.endswith(" | not shrunk |") for line in md if line.startswith(("| g02 |", "| g03 |"))
-    )
+    for group in rest:
+        [row] = [line for line in md if line.startswith(f"| {group['id']} |")]
+        assert row.endswith(" | not shrunk |"), row
 
 
 def test_ctrl_c_in_a_loop_group_leaves_it_not_shrunk_and_a_second_shrink_finishes_it(
@@ -468,8 +472,8 @@ def test_the_timeline_has_one_tick_per_second(tmp_path, monkeypatch, capsys):
     assert {key: timeline[-1][key] for key in COUNTS} == doc["totals"]
 
 
-def test_writing_again_leaves_no_stale_group_folder(tmp_path):
-    # The first group on iou alone starts at input 604 (scripts/measure_test_counts.py).
+def test_writing_again_leaves_no_stale_group_folder(tmp_path, monkeypatch):
+    plant(monkeypatch, *IN_RUNS)
     seed = Seed.load(CONTRACTS / "iou" / "iou.vy")
     report = Report.open([seed], 1, Count(1000), tmp_path)
     for tried in fuzz([seed], 1, Count(1000)):
