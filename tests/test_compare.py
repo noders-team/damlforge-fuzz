@@ -119,6 +119,33 @@ def test_a_calls_file_that_does_not_fit_its_seed_is_a_usage_error(
     assert err == f"damlforge-fuzz check: {vy.with_name(f'{name}.calls.yaml')}{error}\n"
 
 
+def test_check_compare_says_why_it_compared_nothing_when_python_skips_every_call(
+    tmp_path, capsys
+):
+    calls = "- function: grid_sum\n  args: {rows: [[9223372036854775807, 1]]}\n"
+    vy = copy_seed(tmp_path / "loop_pure", "loop_pure", calls=calls)
+
+    assert main(["check", "--compare", str(vy)]) == 0
+    assert capsys.readouterr().out == (
+        f"OK       emit   {vy}  not compared: grid_sum #1: Python's outcome does not fit"
+        " the seed's types: 9223372036854775808 is not a int\n"
+    )
+
+
+def test_check_compare_says_why_it_compared_nothing_when_damlc_rejects_the_test(
+    dpm, tmp_path, capsys
+):
+    # verify calls fetch, so forge makes it an Update function, which a script cannot call.
+    calls = "- function: verify\n  args: {cids: [], p: alice}\n"
+    vy = copy_seed(tmp_path / "loop_verify", "loop_verify", calls=calls)
+
+    assert main(["check", "--compare", str(vy)]) == 0
+    line = capsys.readouterr().out
+    assert line.startswith(
+        f"OK       emit   {vy}  not compared: damlc rejects: Couldn't match expected type ‘Update Decimal’"
+    ), line
+
+
 def test_run_compare_needs_a_seed_with_a_calls_file(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(PROJECT)
     reports = tmp_path / "reports"
