@@ -32,6 +32,7 @@ import time
 from pathlib import Path
 
 import forge
+import planted_daml
 import pytest
 from conftest import CONTRACTS, PROJECT, SEED_FILES
 from planted_crash import IN_RUNS, plant
@@ -415,11 +416,14 @@ def test_ctrl_c_while_shrinking_keeps_the_groups_shrunk_so_far(tmp_path, monkeyp
 def test_ctrl_c_in_a_loop_group_leaves_it_not_shrunk_and_a_second_shrink_finishes_it(
     tmp_path, monkeypatch
 ):
-    # The second check group starts at input 16460 (scripts/measure_test_counts.py).
-    seeds = [Seed.load(path) for path in SEED_FILES if "loop_" in path.name]
-    report = Report.open(seeds, 1, Count(17000), tmp_path)
-    for tried in fuzz(seeds, 1, Count(17000)):
+    loop_seeds = [path for path in SEED_FILES if "loop_" in path.name]
+    planted_daml.plant(monkeypatch, planted_daml.loop_bugs, spare=loop_seeds)
+    seeds = [Seed.load(path) for path in loop_seeds]
+    report = Report.open(seeds, 1, Count(100), tmp_path)
+    for tried in fuzz(seeds, 1, Count(100)):
         report.add(tried)
+    checks = {group.check for group in report.loop_groups()}
+    assert {"L1", "L3"} <= checks, "100 inputs should give an L1 and an L3 group"
     calls = itertools.count(1)
 
     def interrupted_in_loop_group_2(text, seed, keep):
@@ -427,10 +431,10 @@ def test_ctrl_c_in_a_loop_group_leaves_it_not_shrunk_and_a_second_shrink_finishe
             raise KeyboardInterrupt
         return shrink(text, seed, keep)
 
-    monkeypatch.setattr("damlforge_fuzz.report.shrink", interrupted_in_loop_group_2)
-    with pytest.raises(KeyboardInterrupt):
-        report.shrink()
-    monkeypatch.undo()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr("damlforge_fuzz.report.shrink", interrupted_in_loop_group_2)
+        with pytest.raises(KeyboardInterrupt):
+            report.shrink()
 
     first, second, *rest = report.loop_groups()
     assert first.shrunk is not None and first.shrunk_daml is not None
