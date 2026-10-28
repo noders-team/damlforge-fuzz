@@ -159,12 +159,12 @@ MANY = Seed.load(CONTRACTS / "loop_many" / "loop_many.vy")
         (
             "return cids\n",
             "return cids\nassert False\n",
-            ("line 21: a module-level statement, which forge does not run",),
+            ("line {new}: a module-level statement, which forge does not run",),
         ),
         (
             "    amount: Decimal\n",
             "    amount: Decimal\n    x = 1\n",
-            ("line 9: a statement in class Iou, which forge does not run",),
+            ("line {new}: a statement in class Iou, which forge does not run",),
         ),
         (
             "owners: list[Party]",
@@ -202,9 +202,12 @@ MANY = Seed.load(CONTRACTS / "loop_many" / "loop_many.vy")
 def test_python_skips_an_input_that_it_cannot_compare(old, new, reasons):
     assert MANY.text.count(old) == 1
     text = MANY.text.replace(old, new)
+    last_line_of_new = text[: text.index(new) + len(new)].count("\n")
     item = CompareInput(text, Ok("", "LoopMany"), MANY, load_calls(MANY))
 
-    assert list(run_and_compare({"input": item})) == [("input", Skipped(reasons))]
+    assert list(run_and_compare({"input": item})) == [
+        ("input", Skipped(tuple(reason.format(new=last_line_of_new) for reason in reasons)))
+    ]
 
 
 def test_a_daml_text_that_damlc_rejected_drops_the_input_without_a_build(tmp_path, monkeypatch):
