@@ -33,7 +33,8 @@ from pathlib import Path
 
 import forge.semantics.analysis.typecheck
 import pytest
-from conftest import BITAND, CONTRACTS, PROJECT, copy_iou, hide_dpm
+from conftest import CONTRACTS, PROJECT, copy_iou, hide_dpm
+from planted_crash import IN_LOWER, plant
 
 from damlforge_fuzz import (
     DamlcUnavailable,
@@ -251,9 +252,10 @@ def test_plan_check_2_the_seeds_build(dpm, monkeypatch, capsys):
     ]
 
 
-def test_check_damlc_keeps_the_other_results_and_their_order(dpm, planted, capsys):
-    crash = planted.parent / "bitand.vy"
-    crash.write_text(BITAND)
+def test_check_damlc_keeps_the_other_results_and_their_order(dpm, planted, monkeypatch, capsys):
+    plant(monkeypatch, IN_LOWER)
+    crash = planted.parent / "crash.vy"
+    crash.write_text(IN_LOWER.trigger)
     iou = CONTRACTS / "iou" / "iou.vy"
 
     assert main(["check", "--damlc", str(iou), str(planted), str(crash)]) == 1

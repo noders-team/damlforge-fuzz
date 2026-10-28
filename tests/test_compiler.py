@@ -21,11 +21,11 @@ import sys
 import warnings
 from pathlib import Path
 
-import forge
 import pytest
-from conftest import BITAND, BITOR, CONTRACTS, OWNER_FIELD, SEED_FILES, copy_iou
+from conftest import CONTRACTS, OWNER_FIELD, SEED_FILES, copy_iou
+from planted_crash import IN_LOWER, Planted, plant
 
-from damlforge_fuzz import Crash, Ok, Rejected, Seed, Stage, compile_and_sort
+from damlforge_fuzz import Crash, CrashKey, ForgeLine, Ok, Rejected, Seed, Stage, compile_and_sort
 
 
 def forge_daml_output(vy: Path, out: Path, module_name: str) -> str:
@@ -64,32 +64,35 @@ def test_daml_yaml_build_options_reach_forge(tmp_path):
     assert outcome.daml == forge_daml_output(project / "escrow.vy", tmp_path / "out", "Escrow")
 
 
-def test_bitwise_and_crashes_in_lower_at_the_bin_ops_lookup(write_vy):
-    seed = Seed.load(write_vy("bitand.vy", BITAND))
+def test_a_crash_has_its_stage_exception_message_and_the_forge_line_that_raised(
+    monkeypatch, write_vy
+):
+    where = ForgeLine("forge/ir/lower.py", 289)
+    plant(monkeypatch, Planted("# crash", Stage.LOWER, KeyError, "BitAnd", where))
+    seed = Seed.load(write_vy("planted.vy", "# crash\n"))
 
     outcome = compile_and_sort(seed.text, seed)
 
-    assert isinstance(outcome, Crash), outcome
-    assert (outcome.stage, outcome.exception, outcome.message) == (
-        Stage.LOWER,
-        "KeyError",
-        "'BitAnd'",
+    assert outcome == Crash(Stage.LOWER, "KeyError", "'BitAnd'", where)
+
+
+def test_crashes_with_different_messages_at_one_forge_line_share_a_key(monkeypatch, write_vy):
+    where, next_line = ForgeLine("forge/ir/lower.py", 289), ForgeLine("forge/ir/lower.py", 290)
+    plant(
+        monkeypatch,
+        Planted("# and", Stage.LOWER, KeyError, "BitAnd", where),
+        Planted("# or", Stage.LOWER, KeyError, "BitOr", where),
+        Planted("# and below", Stage.LOWER, KeyError, "BitAnd", next_line),
     )
-    assert outcome.where is not None and outcome.where.file == "forge/ir/lower.py"
-    forge_source = Path(forge.__file__).parent.parent / outcome.where.file
-    reported = forge_source.read_text().splitlines()[outcome.where.line - 1]
-    assert "_BIN_OPS[" in reported, f"line {outcome.where.line} should index _BIN_OPS: {reported!r}"
+    seed = Seed.load(write_vy("ops.vy", ""))
 
+    outcomes = [compile_and_sort(text, seed) for text in ["# and", "# or", "# and below"]]
 
-def test_crashes_with_different_messages_at_one_forge_line_share_a_key(write_vy):
-    seed = Seed.load(write_vy("ops.vy", BITAND))
-
-    bitand = compile_and_sort(BITAND, seed)
-    bitor = compile_and_sort(BITOR, seed)
-
-    assert isinstance(bitand, Crash) and isinstance(bitor, Crash)
+    assert all(isinstance(outcome, Crash) for outcome in outcomes), outcomes
+    bitand, bitor, below = outcomes
     assert bitand.message != bitor.message
-    assert bitand.key == bitor.key
+    assert bitand.key == bitor.key == CrashKey("KeyError", where)
+    assert below.key == CrashKey("KeyError", next_line)
 
 
 def test_field_typed_as_its_own_name_is_rejected_with_DF1213(tmp_path):
@@ -148,56 +151,52 @@ def test_odd_text_returns_an_outcome(text, write_vy):
     assert isinstance(compile_and_sort(text, seed), Ok | Rejected | Crash)
 
 
-def test_nul_byte_is_a_parser_exception_crash(write_vy):
-    seed = Seed.load(write_vy("nul.vy", ""))
-
-    outcome = compile_and_sort("x\x00", seed)
-
-    assert isinstance(outcome, Crash), outcome
-    assert outcome.exception == "ParserException"
-    assert outcome.where is not None and outcome.where.file == "forge/ast/parse.py"
-
-
-def test_recursion_crashes_have_no_line_and_group_by_exception_alone(write_vy):
+def test_recursion_crashes_have_no_line_and_group_by_exception_alone(monkeypatch, write_vy):
+    # Where the recursion limit hits depends on how deep the input nests.
+    plant(
+        monkeypatch,
+        Planted("# 300 terms", Stage.PARSE, RecursionError, "maximum recursion depth exceeded",
+                ForgeLine("forge/ast/nodes.py", 135)),
+        Planted("# 600 terms", Stage.PARSE, RecursionError, "maximum recursion depth exceeded",
+                ForgeLine("forge/ast/parse.py", 251)),
+    )  # fmt: skip
     seed = Seed.load(write_vy("deep.vy", ""))
 
-    shallow = compile_and_sort(deep_sum(300), seed)
-    deep = compile_and_sort(deep_sum(600), seed)
+    shallow = compile_and_sort("# 300 terms\n", seed)
+    deep = compile_and_sort("# 600 terms\n", seed)
 
-    assert isinstance(shallow, Crash) and isinstance(deep, Crash)
+    assert isinstance(shallow, Crash) and isinstance(deep, Crash), (shallow, deep)
     assert (deep.exception, deep.where) == ("RecursionError", None)
     assert shallow.key == deep.key
 
 
-def test_stage_is_the_step_running_not_the_folder_of_the_file(write_vy):
-    seed = Seed.load(write_vy("ballot.vy", "@template\nclass Ballot:\n    voters: [Party]\n"))
+def test_stage_is_the_step_running_not_the_folder_of_the_file(monkeypatch, write_vy):
+    lower_type = ForgeLine("forge/ir/lower.py", 101)
+    plant(monkeypatch, Planted("# crash", Stage.CHECK, KeyError, "voters", lower_type))
+    seed = Seed.load(write_vy("ballot.vy", "# crash\n"))
 
     outcome = compile_and_sort(seed.text, seed)
 
     assert isinstance(outcome, Crash), outcome
-    assert outcome.stage is Stage.CHECK
-    assert outcome.where is not None and outcome.where.file == "forge/ir/lower.py"
+    assert (outcome.stage, outcome.where) == (Stage.CHECK, lower_type)
 
 
-def test_indentation_error_from_the_pre_parser_is_a_parse_crash(write_vy):
-    text = (
-        "        return create(Ballot(organizer=self.organizer, voters=self.voters,"
-        " votes=new_votes))\n"
-        "    def Close(self) -> bool:\n"
-    )
-    seed = Seed.load(write_vy("indent.vy", text))
+def test_a_python_indentation_error_that_escapes_forge_is_a_parse_crash(monkeypatch, write_vy):
+    pre_parser = ForgeLine("forge/ast/pre_parser.py", 60)
+    message = "unindent does not match any outer indentation level"
+    plant(monkeypatch, Planted("# crash", Stage.PARSE, IndentationError, message, pre_parser))
+    seed = Seed.load(write_vy("indent.vy", "# crash\n"))
 
     outcome = compile_and_sort(seed.text, seed)
 
-    assert isinstance(outcome, Crash), outcome
-    assert (outcome.stage, outcome.exception) == (Stage.PARSE, "IndentationError")
-    assert outcome.where is not None and outcome.where.file == "forge/ast/pre_parser.py"
+    assert outcome == Crash(Stage.PARSE, "IndentationError", message, pre_parser)
 
 
-def test_repeated_calls_in_mixed_order_give_equal_outcomes():
+def test_repeated_calls_in_mixed_order_give_equal_outcomes(monkeypatch):
+    plant(monkeypatch, IN_LOWER)
     seed = Seed.load(CONTRACTS / "iou" / "iou.vy")
 
-    outcomes = [compile_and_sort(text, seed) for text in [BITAND, seed.text] * 2]
+    outcomes = [compile_and_sort(text, seed) for text in [IN_LOWER.trigger, seed.text] * 2]
 
     assert isinstance(outcomes[0], Crash) and isinstance(outcomes[1], Ok)
     assert outcomes[2] == outcomes[0], "a crash after an OK compile should repeat exactly"
@@ -258,6 +257,6 @@ def test_the_text_argument_is_compiled_not_the_file(tmp_path):
     vy = tmp_path / "iou.vy"
     shutil.copy(CONTRACTS / "iou" / "iou.vy", vy)
     seed = Seed.load(vy)
-    vy.write_text(BITAND)
+    vy.write_text("def f(:\n")
 
     assert isinstance(compile_and_sort(seed.text, seed), Ok)

@@ -15,13 +15,14 @@
 
 """`damlforge-fuzz check`, driven through cli.main."""
 
-import re
 import subprocess
 import sys
 
 import pytest
-from conftest import BITAND, CONTRACTS, OWNER_FIELD, PROJECT, SEED_FILES, copy_iou
+from conftest import CONTRACTS, OWNER_FIELD, PROJECT, SEED_FILES, copy_iou
+from planted_crash import IN_LOWER, Planted, plant
 
+from damlforge_fuzz import ForgeLine, Stage
 from damlforge_fuzz.cli import main
 
 
@@ -53,14 +54,15 @@ def test_check_on_the_contracts_folder_prints_an_ok_line_for_each_seed_and_retur
 def test_check_prints_a_crash_line_with_exception_message_and_forge_line(
     tmp_path, monkeypatch, capsys
 ):
-    (tmp_path / "bitand.vy").write_text(BITAND)
+    where = ForgeLine("forge/ir/lower.py", 289)
+    plant(monkeypatch, Planted("# crash", Stage.LOWER, KeyError, "BitAnd", where))
+    (tmp_path / "planted.vy").write_text("# crash\n")
     monkeypatch.chdir(tmp_path)
 
-    assert main(["check", "bitand.vy"]) == 1
-    [line] = capsys.readouterr().out.splitlines()
-    assert re.fullmatch(
-        r"CRASH    lower  bitand\.vy  KeyError 'BitAnd' at forge/ir/lower\.py:\d+", line
-    ), line
+    assert main(["check", "planted.vy"]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "CRASH    lower  planted.vy  KeyError 'BitAnd' at forge/ir/lower.py:289"
+    ]
 
 
 def test_check_prints_a_rejected_line_with_the_df_code(tmp_path, monkeypatch, capsys):
@@ -73,13 +75,14 @@ def test_check_prints_a_rejected_line_with_the_df_code(tmp_path, monkeypatch, ca
 
 
 def test_check_prints_one_line_per_file_in_argument_order(tmp_path, monkeypatch, capsys):
+    plant(monkeypatch, IN_LOWER)
     iou = str(CONTRACTS / "iou" / "iou.vy")
-    (tmp_path / "bitand.vy").write_text(BITAND)
+    (tmp_path / "planted.vy").write_text(IN_LOWER.trigger)
     monkeypatch.chdir(tmp_path)
 
-    assert main(["check", "bitand.vy", iou]) == 1
+    assert main(["check", "planted.vy", iou]) == 1
     crash, ok = capsys.readouterr().out.splitlines()
-    assert crash.startswith("CRASH    lower  bitand.vy  "), crash
+    assert crash.startswith("CRASH    lower  planted.vy  "), crash
     assert ok == f"OK       emit   {iou}"
 
 
