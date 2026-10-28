@@ -15,11 +15,10 @@
 
 """The shrinker, through shrink() and `damlforge-fuzz shrink FILE`.
 
-The crash tests make their own crash: they delete "Mod" from forge's _BIN_OPS
-table, so `a % b` crashes in lower on any forge version that has the table.
-No seed uses `%`, so the planted function is the only code that can keep the
-crash, and the test knows the exact lines that must come back. If forge
-renames the table, monkeypatch.delitem fails in the fixture, not in an assertion.
+The crash tests plant a crash in lower on the return line of PLANTED
+(planted_crash.py), so the crash is there on any forge version. No seed has
+that line, so the planted function is the only code that can keep the crash,
+and the test knows the exact lines that must come back.
 
 The loop tests use HAS_PARTY, with the shape of the loop bug b22 planted in
 forge's Daml (planted_daml.py), so the bug is there on any forge version.
@@ -29,7 +28,7 @@ import itertools
 import shutil
 from pathlib import Path, PurePosixPath
 
-import forge.ir.lower
+import planted_crash
 import pytest
 from conftest import CONTRACTS, copy_iou
 from planted_daml import lost_inner_return, plant, unit_for_no_return
@@ -37,9 +36,11 @@ from planted_daml import lost_inner_return, plant, unit_for_no_return
 from damlforge_fuzz import (
     Crash,
     DamlSource,
+    ForgeLine,
     LoopCheck,
     Ok,
     Seed,
+    Stage,
     build_daml,
     compile_and_sort,
     same_crash,
@@ -79,8 +80,10 @@ def has_party(ps: list[Party], p: Party) -> bool:
 
 @pytest.fixture
 def planted(tmp_path, monkeypatch):
-    """A copy of contracts/iou/ with PLANTED before `@template`, and `%` missing from forge."""
-    monkeypatch.delitem(forge.ir.lower._BIN_OPS, "Mod")
+    """A copy of contracts/iou/ with PLANTED before `@template`, and a crash on its return line."""
+    where = ForgeLine("forge/ir/lower.py", 289)
+    crash = planted_crash.Planted("return a % b", Stage.LOWER, KeyError, "Mod", where)
+    planted_crash.plant(monkeypatch, crash)
     return copy_iou(tmp_path / "iou", "@template", PLANTED + "\n\n@template", count=1)
 
 
