@@ -96,8 +96,9 @@ If your shell does not find `dpm` after the install, add `~/.dpm/bin` to your `P
 ## Quick start
 
 > [!NOTE]
-> All example output in this README is real output from DamlForge 0.0.11, the commit after the `v0.0.10` tag.
-> Another forge version gives other counts and other forge line numbers.
+> The example output in this README is real output, but your output can be different.
+> The counts, the results, and the forge line numbers depend on the DamlForge version.
+> A newer DamlForge can fix a crash or a loop bug that an example shows.
 
 Run these commands from the root of this repository.
 
@@ -180,7 +181,6 @@ CRASH    lower  bitand.vy  KeyError 'BitAnd' at forge/ir/lower.py:289
 ```
 
 forge has no entry for `&` in its table of operators.
-In DamlForge `v0.0.7`, the same crash is at `forge/ir/lower.py:244`.
 
 Each line has the [result](#results), the [stage](#stages), and the file.
 A `REJECTED`, `CRASH`, `BAD_DAML`, `BAD_LOOP`, or `BAD_RUN` line ends with the error.
@@ -389,7 +389,8 @@ An input that fails a check `L1` to `L4` is `BAD_LOOP`.
 The checks `I1` to `I4` are the import check, in `src/damlforge_fuzz/importcheck.py`. They read the import lines of forge's Daml and the `.vy` text, and an input that fails one is `BAD_IMP`. Their groups are `i01`, `i02`, ..., next to the loop groups `l01`, `l02`, ..., and the `loops:` line counts both.
 `check` prints every check that the file fails, and the first bug.
 The seven programs in [`bugs/loops/`](bugs/loops/) each show a forge loop bug.
-DamlForge 0.0.12 fixed all seven bugs, so this output is from DamlForge 0.0.11:
+DamlForge has fixed all seven bugs, so a newer DamlForge prints `OK` for each program.
+This is the output of a DamlForge with the bugs:
 
 ```
 $ damlforge-fuzz check bugs/loops
@@ -455,7 +456,7 @@ How a run uses the loop check:
   ```
 
   Here the one group, `i01` (`I1`), is Daml that `damlc` rejects.
-  On DamlForge 0.0.11, the same command gave five loop groups, and the `L3` inputs made two of them: `l01`, whose Daml `damlc` builds, and `l05`, whose Daml `damlc` rejects.
+  On a DamlForge with more loop bugs, the same command gave five loop groups, and the `L3` inputs made two of them: `l01`, whose Daml `damlc` builds, and `l05`, whose Daml `damlc` rejects.
 
 - After the crash groups, the run shrinks the first input of each loop group.
   [Shrunk inputs](#shrunk-inputs) tells how.
@@ -494,8 +495,8 @@ The `compare:` line comes after the `loops:` line:
 - `differ`: the compared copies whose Daml does not do what the `.vy` code does in a call.
 - `run groups`: the number of groups of these copies. Copies with the same kind of difference and the same first loop check are one group.
 
-On DamlForge 0.0.12 this run finds no difference: forge 0.0.12 writes these loops right.
-On DamlForge 0.0.11, the same command found two run groups.
+Here the run finds no difference, because this DamlForge writes these loops right.
+On a DamlForge with loop bugs, the same command found two run groups.
 Group `r01` was a lost `return` in `has_party`, which the loop check also finds (`L3`).
 Group `r02` was a copy with a `pass` above the `if` in the loop of `GiveAll`.
 forge dropped the `create` after the `pass`, the Daml built, and no loop check failed.
@@ -504,7 +505,7 @@ That is bug b23. [b23 in `bugs/loops/`](bugs/loops/README.md#b23-pass-drops-the-
 #### Why `--compare` is an option
 
 - **It finds bugs that the other checks miss.** The loop check finds only the shapes of wrong loops that are known: `L1` to `L4`. `damlc` only tells whether the Daml builds. For b23, forge drops an `assert`, the Daml builds, and no loop check fails. Only a run of both programs on the same data shows that the Daml accepts a negative number that the `.vy` code rejects.
-- **It is slow, and it needs dpm.** Without `--compare`, the run above took 3.3 seconds on DamlForge 0.0.11, and it does not need dpm. With `--compare`, it took 61 seconds. The compare step takes 51 seconds, and the check of the seeds before the first copy takes about 6.5 seconds. A plain run must stay fast and must work without the Daml SDK.
+- **It is slow, and it needs dpm.** Without `--compare`, the run above took 3.3 seconds, and it does not need dpm. With `--compare`, it took 61 seconds. The compare step takes 51 seconds, and the check of the seeds before the first copy takes about 6.5 seconds. A plain run must stay fast and must work without the Daml SDK.
 - **It is not part of `--damlc`.** `damlc` builds the Daml, and `--compare` runs it. They cost different amounts and answer different questions, so a run can use one of them or both. With both, the compare step uses the verdicts of `damlc` and does not build the Daml of the copies again.
 
 #### Calls files
@@ -1067,8 +1068,9 @@ pytest
 ```
 
 The tests that need dpm skip when dpm or the Daml SDK is missing.
-The Daml in `tests/loops/` is from DamlForge 0.0.11.
-The tests that compare it with the Daml that forge writes now skip on an older forge, such as `0.0.7`.
+The Daml in `tests/loops/` is the Daml that one DamlForge version wrote.
+The first lines of `tests/loops/EXPECTED.tsv` name that version.
+The tests that compare it with the Daml that forge writes skip on an older forge.
 On a newer forge that writes other Daml, they fail.
 Then run `python scripts/update_loop_fixtures.py`.
 It writes the Daml of each fixture again with the installed forge, puts the forge version in `tests/loops/EXPECTED.tsv`, and prints each fixture whose Daml or loop findings changed.
